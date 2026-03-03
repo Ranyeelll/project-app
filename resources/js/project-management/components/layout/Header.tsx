@@ -107,6 +107,21 @@ export function Header() {
         });
       }
 
+      // 2b. Budgets awaiting employee revision
+      const revisionBudgets = budgetRequests.filter((b) => b.status === 'revision_requested');
+      if (revisionBudgets.length > 0) {
+        notifs.push({
+          id: `admin-revision-budgets-${revisionBudgets.length}`,
+          icon: <ClockIcon size={14} />,
+          iconBg: 'bg-purple-500/15 text-purple-400',
+          title: 'Budgets Awaiting Revision',
+          description: `${revisionBudgets.length} request${revisionBudgets.length > 1 ? 's' : ''} sent back for revision`,
+          time: 'Waiting on employee',
+          navigateTo: 'admin-budget',
+          read: false,
+        });
+      }
+
       // 3. Overdue tasks
       const overdueTasks = tasks.filter(
         (t) => t.status !== 'completed' && t.endDate < todayStr
@@ -252,6 +267,7 @@ export function Header() {
       const approvedBudgets = myBudgets.filter((b) => b.status === 'approved');
       const rejectedBudgets = myBudgets.filter((b) => b.status === 'rejected');
       const pendingBudgets = myBudgets.filter((b) => b.status === 'pending');
+      const revisionBudgets = myBudgets.filter((b) => b.status === 'revision_requested');
 
       if (approvedBudgets.length > 0) {
         notifs.push({
@@ -285,6 +301,18 @@ export function Header() {
           title: 'Budget Pending',
           description: `${pendingBudgets.length} request${pendingBudgets.length > 1 ? 's' : ''} awaiting admin review`,
           time: 'Waiting',
+          navigateTo: 'employee-budget',
+          read: false,
+        });
+      }
+      if (revisionBudgets.length > 0) {
+        notifs.push({
+          id: `emp-budget-revision-${revisionBudgets.length}`,
+          icon: <AlertTriangleIcon size={14} />,
+          iconBg: 'bg-purple-500/15 text-purple-400',
+          title: 'Budget Revision Requested',
+          description: `${revisionBudgets.length} request${revisionBudgets.length > 1 ? 's need' : ' needs'} revision — check admin remarks`,
+          time: 'Action needed',
           navigateTo: 'employee-budget',
           read: false,
         });
@@ -376,6 +404,7 @@ export function Header() {
     'employee-budget': 'Budget Request',
     'employee-time': 'Log Time',
     'employee-issues': 'Report Issue',
+    'employee-resources': 'Resources',
   };
   const title = pageTitles[currentPage] || 'Project Management System';
 

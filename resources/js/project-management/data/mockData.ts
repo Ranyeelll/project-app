@@ -52,11 +52,14 @@ export interface BudgetRequest {
   requestedBy: string;
   amount: number;
   purpose: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'revision_requested';
   createdAt: string;
   reviewedAt?: string;
   reviewComment?: string;
   attachment?: string;
+  adminRemarks?: string;
+  originalAmount?: number | null;
+  revisionCount?: number;
 }
 
 export interface Issue {

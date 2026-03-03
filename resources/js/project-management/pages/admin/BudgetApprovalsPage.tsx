@@ -4,7 +4,9 @@ import {
   XIcon,
   DollarSignIcon,
   ClockIcon,
-  FilterIcon } from
+  FilterIcon,
+  MessageSquareIcon,
+  RotateCcwIcon } from
 'lucide-react';
 import { useData } from '../../context/AppContext';
 import { BudgetRequest } from '../../data/mockData';
@@ -17,7 +19,7 @@ export function BudgetApprovalsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [reviewModal, setReviewModal] = useState<{
     request: BudgetRequest;
-    action: 'approve' | 'reject';
+    action: 'approve' | 'reject' | 'revision';
   } | null>(null);
   const [reviewComment, setReviewComment] = useState('');
   const filtered = budgetRequests.filter(
@@ -31,9 +33,21 @@ export function BudgetApprovalsPage() {
   reduce((s, b) => s + b.amount, 0);
   const handleReview = async () => {
     if (!reviewModal) return;
-    const newStatus = reviewModal.action === 'approve' ? 'approved' : 'rejected';
+    const statusMap = {
+      approve: 'approved',
+      reject: 'rejected',
+      revision: 'revision_requested',
+    } as const;
+    const newStatus = statusMap[reviewModal.action];
     try {
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      const body: Record<string, any> = {
+        status: newStatus,
+        review_comment: reviewComment || null,
+      };
+      if (reviewModal.action === 'revision') {
+        body.admin_remarks = reviewComment || null;
+      }
       await fetch(`/api/budget-requests/${reviewModal.request.id}`, {
         method: 'PUT',
         headers: {
@@ -41,10 +55,7 @@ export function BudgetApprovalsPage() {
           'Accept': 'application/json',
           'X-CSRF-TOKEN': csrfToken,
         },
-        body: JSON.stringify({
-          status: newStatus,
-          review_comment: reviewComment || null,
-        }),
+        body: JSON.stringify(body),
       });
       refreshBudgetRequests();
     } catch {
@@ -57,6 +68,7 @@ export function BudgetApprovalsPage() {
                 status: newStatus as any,
                 reviewedAt: new Date().toISOString().split('T')[0],
                 reviewComment: reviewComment || undefined,
+                adminRemarks: reviewModal.action === 'revision' ? reviewComment : b.adminRemarks,
               }
             : b
         )
@@ -74,7 +86,7 @@ export function BudgetApprovalsPage() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
           <div className="text-xs dark:text-dark-muted text-light-muted mb-1">
             Pending Requests
@@ -84,6 +96,17 @@ export function BudgetApprovalsPage() {
           </div>
           <div className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
             {formatCurrency(totalPending)} total
+          </div>
+        </div>
+        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
+          <div className="text-xs dark:text-dark-muted text-light-muted mb-1">
+            Revision Requested
+          </div>
+          <div className="text-xl font-bold text-purple-400">
+            {budgetRequests.filter((b) => b.status === 'revision_requested').length}
+          </div>
+          <div className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
+            Awaiting employee revision
           </div>
         </div>
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
@@ -109,13 +132,13 @@ export function BudgetApprovalsPage() {
 
       {/* Filter */}
       <div className="flex gap-2">
-        {['all', 'pending', 'approved', 'rejected'].map((s) =>
+        {['all', 'pending', 'revision_requested', 'approved', 'rejected'].map((s) =>
         <button
           key={s}
           onClick={() => setStatusFilter(s)}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${statusFilter === s ? 'bg-green-primary text-black' : 'dark:bg-dark-card dark:border-dark-border dark:text-dark-muted dark:hover:text-dark-text bg-white border border-light-border text-light-muted hover:text-light-text'}`}>
 
-            {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+            {s === 'all' ? 'All' : s === 'revision_requested' ? 'Revision Requested' : s.charAt(0).toUpperCase() + s.slice(1)}
           </button>
         )}
       </div>
@@ -154,6 +177,30 @@ export function BudgetApprovalsPage() {
                   <p className="text-sm dark:text-dark-muted text-light-muted">
                     {req.purpose}
                   </p>
+                  {/* Revision info */}
+                  {req.originalAmount && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-xs dark:text-dark-subtle text-light-subtle line-through">
+                        {formatCurrency(req.originalAmount)}
+                      </span>
+                      <span className="text-xs text-green-primary font-medium">→ {formatCurrency(req.amount)}</span>
+                      {(req.revisionCount ?? 0) > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-medium">
+                          Revised {req.revisionCount}×
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {req.adminRemarks &&
+                  <div className="mt-2 px-3 py-2 dark:bg-amber-500/5 bg-amber-50 border dark:border-amber-500/20 border-amber-200 rounded-lg">
+                      <p className="text-xs font-medium text-amber-500">
+                        Admin Remarks:
+                      </p>
+                      <p className="text-xs dark:text-dark-muted text-light-muted mt-0.5">
+                        {req.adminRemarks}
+                      </p>
+                    </div>
+                  }
                   {req.reviewComment &&
                   <div className="mt-3 px-3 py-2 dark:bg-dark-card2 bg-light-card2 rounded-lg">
                       <p className="text-xs dark:text-dark-subtle text-light-subtle">
@@ -184,6 +231,20 @@ export function BudgetApprovalsPage() {
                       }}>
 
                         Reject
+                      </Button>
+                      <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<MessageSquareIcon size={12} />}
+                      onClick={() => {
+                        setReviewModal({
+                          request: req,
+                          action: 'revision'
+                        });
+                        setReviewComment('');
+                      }}>
+
+                        Request Revision
                       </Button>
                       <Button
                       variant="primary"
@@ -222,6 +283,8 @@ export function BudgetApprovalsPage() {
         title={
         reviewModal?.action === 'approve' ?
         'Approve Budget Request' :
+        reviewModal?.action === 'revision' ?
+        'Request Revision' :
         'Reject Budget Request'
         }
         size="sm"
@@ -231,11 +294,14 @@ export function BudgetApprovalsPage() {
               Cancel
             </Button>
             <Button
-            variant={reviewModal?.action === 'approve' ? 'primary' : 'danger'}
-            onClick={handleReview}>
+            variant={reviewModal?.action === 'approve' ? 'primary' : reviewModal?.action === 'revision' ? 'secondary' : 'danger'}
+            onClick={handleReview}
+            disabled={reviewModal?.action === 'revision' && !reviewComment.trim()}>
 
               {reviewModal?.action === 'approve' ?
             'Confirm Approval' :
+            reviewModal?.action === 'revision' ?
+            'Send Revision Request' :
             'Confirm Rejection'}
             </Button>
           </>
@@ -253,17 +319,26 @@ export function BudgetApprovalsPage() {
               <p className="text-xs dark:text-dark-muted text-light-muted mt-1">
                 {reviewModal.request.purpose}
               </p>
+              {reviewModal.action === 'revision' && (
+                <p className="text-xs text-amber-400 mt-2">
+                  The employee will be able to revise and resubmit this request.
+                </p>
+              )}
             </div>
           }
           <Textarea
             label={
             reviewModal?.action === 'reject' ?
             'Rejection Reason (required)' :
+            reviewModal?.action === 'revision' ?
+            'Remarks / Question (required)' :
             'Comment (optional)'
             }
             placeholder={
             reviewModal?.action === 'reject' ?
             'Explain why this request is rejected...' :
+            reviewModal?.action === 'revision' ?
+            'e.g. Why ₱2,500? Can it be reduced to ₱2,000?' :
             'Add a note for the requester...'
             }
             value={reviewComment}

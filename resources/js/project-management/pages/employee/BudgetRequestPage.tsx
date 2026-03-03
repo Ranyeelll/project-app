@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlusIcon, DollarSignIcon, EditIcon, TrashIcon } from 'lucide-react';
+import { PlusIcon, DollarSignIcon, EditIcon, TrashIcon, RotateCcwIcon, MessageSquareIcon } from 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { BudgetRequest } from '../../data/mockData';
 import { Button } from '../../components/ui/Button';
@@ -11,6 +11,7 @@ export function BudgetRequestPage() {
   const { currentUser } = useAuth();
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState<BudgetRequest | null>(null);
+  const [reviseModal, setReviseModal] = useState<BudgetRequest | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [form, setForm] = useState({
     projectId: projects[0]?.id || '',
@@ -84,6 +85,41 @@ export function BudgetRequestPage() {
     } catch { /* ignore */ }
     setDeleteConfirm(null);
   };
+  const openRevise = (req: BudgetRequest) => {
+    setReviseModal(req);
+    setForm({
+      projectId: req.projectId,
+      amount: String(req.amount),
+      purpose: req.purpose
+    });
+  };
+  const handleRevise = async () => {
+    if (!reviseModal) return;
+    try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      const res = await fetch(`/api/budget-requests/${reviseModal.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({
+          amount: Number(form.amount),
+          purpose: form.purpose,
+          status: 'pending',
+        }),
+      });
+      if (res.ok) {
+        refreshBudgetRequests();
+      }
+    } catch { /* ignore */ }
+    setReviseModal(null);
+    setForm({
+      projectId: projects[0]?.id || '',
+      amount: '',
+      purpose: ''
+    });
+  };
   const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -114,7 +150,7 @@ export function BudgetRequestPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
           <div className="text-xl font-bold text-yellow-400">
             {myRequests.filter((b) => b.status === 'pending').length}
@@ -128,6 +164,17 @@ export function BudgetRequestPage() {
               filter((b) => b.status === 'pending').
               reduce((s, b) => s + b.amount, 0)
             )}
+          </div>
+        </div>
+        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
+          <div className="text-xl font-bold text-purple-400">
+            {myRequests.filter((b) => b.status === 'revision_requested').length}
+          </div>
+          <div className="text-xs dark:text-dark-muted text-light-muted mt-0.5">
+            Needs Revision
+          </div>
+          <div className="text-xs dark:text-dark-subtle text-light-subtle">
+            Action needed
           </div>
         </div>
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
@@ -183,6 +230,33 @@ export function BudgetRequestPage() {
                     <p className="text-sm dark:text-dark-muted text-light-muted">
                       {req.purpose}
                     </p>
+                    {/* Revision info: original amount and revision count */}
+                    {req.originalAmount && (
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <span className="text-xs dark:text-dark-subtle text-light-subtle">
+                          Original: <span className="line-through">{formatCurrency(req.originalAmount)}</span>
+                        </span>
+                        {(req.revisionCount ?? 0) > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-medium">
+                            Revised {req.revisionCount}×
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {/* Admin remarks (revision requested) */}
+                    {req.adminRemarks && (
+                      <div className="mt-2 px-3 py-2 dark:bg-amber-500/5 bg-amber-50 border dark:border-amber-500/20 border-amber-200 rounded-lg">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <MessageSquareIcon size={12} className="text-amber-500" />
+                          <p className="text-xs font-medium text-amber-500">
+                            Admin Remarks:
+                          </p>
+                        </div>
+                        <p className="text-xs dark:text-dark-muted text-light-muted">
+                          {req.adminRemarks}
+                        </p>
+                      </div>
+                    )}
                     {req.reviewComment &&
                     <div className="mt-2 px-3 py-2 dark:bg-dark-card2 bg-light-card2 rounded-lg">
                         <p className="text-xs dark:text-dark-subtle text-light-subtle">
@@ -217,6 +291,15 @@ export function BudgetRequestPage() {
                       </button>
                     </div>
                   }
+                  {req.status === 'revision_requested' && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<RotateCcwIcon size={12} />}
+                      onClick={() => openRevise(req)}>
+                      Revise & Resubmit
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>);
@@ -380,6 +463,81 @@ export function BudgetRequestPage() {
         <p className="text-sm dark:text-dark-muted text-light-muted">
           Are you sure you want to delete this budget request?
         </p>
+      </Modal>
+
+      {/* Revise & Resubmit Modal */}
+      <Modal
+        isOpen={!!reviseModal}
+        onClose={() => setReviseModal(null)}
+        title="Revise & Resubmit"
+        size="md"
+        footer={
+        <>
+            <Button variant="secondary" onClick={() => setReviseModal(null)}>
+              Cancel
+            </Button>
+            <Button
+            variant="primary"
+            onClick={handleRevise}
+            disabled={!form.amount || !form.purpose}>
+
+              Resubmit Request
+            </Button>
+          </>
+        }>
+
+        <div className="space-y-4">
+          {/* Admin remarks */}
+          {reviseModal?.adminRemarks && (
+            <div className="px-3 py-3 dark:bg-amber-500/5 bg-amber-50 border dark:border-amber-500/20 border-amber-200 rounded-lg">
+              <div className="flex items-center gap-1.5 mb-1">
+                <MessageSquareIcon size={12} className="text-amber-500" />
+                <p className="text-xs font-semibold text-amber-500">Admin's Remarks:</p>
+              </div>
+              <p className="text-sm dark:text-dark-muted text-light-muted">
+                {reviseModal.adminRemarks}
+              </p>
+            </div>
+          )}
+
+          {/* Original amount reference */}
+          {reviseModal && (
+            <div className="dark:bg-dark-card2 bg-light-card2 rounded-lg p-3">
+              <p className="text-xs dark:text-dark-subtle text-light-subtle">
+                Previous amount: <span className="font-semibold dark:text-dark-text text-light-text">{formatCurrency(reviseModal.amount)}</span>
+              </p>
+              <p className="text-xs dark:text-dark-muted text-light-muted mt-1">
+                {reviseModal.purpose}
+              </p>
+            </div>
+          )}
+
+          <Input
+            label="Revised Amount (PHP)"
+            type="number"
+            placeholder="e.g. 2000"
+            value={form.amount}
+            onChange={(e) =>
+            setForm({
+              ...form,
+              amount: e.target.value
+            })
+            }
+            icon={<DollarSignIcon size={14} />} />
+
+          <Textarea
+            label="Updated Purpose / Justification"
+            placeholder="Explain the revised budget..."
+            value={form.purpose}
+            onChange={(e) =>
+            setForm({
+              ...form,
+              purpose: e.target.value
+            })
+            }
+            rows={4} />
+
+        </div>
       </Modal>
     </div>);
 

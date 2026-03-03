@@ -382,50 +382,58 @@ export function ViewGanttPage() {
         </div>
       )}
 
-      {/* ── Filters ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative">
-          <SearchIcon size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 dark:text-dark-subtle text-light-subtle" />
-          <input
-            type="text"
-            placeholder="Search tasks..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 pr-3 py-1.5 text-xs rounded-lg dark:bg-dark-card dark:border-dark-border dark:text-dark-text bg-white border border-light-border text-light-text w-48 focus:outline-none focus:ring-1 focus:ring-green-primary/50"
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-1.5 text-xs rounded-lg dark:bg-dark-card dark:border-dark-border dark:text-dark-muted bg-white border border-light-border text-light-muted focus:outline-none"
-        >
-          <option value="all">All Status</option>
-          <option value="todo">To Do</option>
-          <option value="in-progress">In Progress</option>
-          <option value="review">In Review</option>
-          <option value="completed">Completed</option>
-        </select>
-        <button
-          onClick={() => setShowMyOnly(!showMyOnly)}
-          className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
-            showMyOnly
-              ? 'bg-green-primary text-black'
-              : 'dark:bg-dark-card dark:border dark:border-dark-border dark:text-dark-muted bg-white border border-light-border text-light-muted'
-          }`}
-        >
-          My Tasks Only
-        </button>
-        <div className="ml-auto text-xs dark:text-dark-subtle text-light-subtle">
-          {filteredTasks.length} of {allProjectTasks.length} tasks
-        </div>
-      </div>
-
       {/* ── Gantt Chart ─────────────────────────────────────────────────── */}
       <div
         ref={chartRef}
         className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card overflow-hidden relative"
       >
-        <div ref={scrollContainerRef} className="overflow-x-auto">
+        {/* ── Filters (toolbar inside chart card) ─────────────────────── */}
+        <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 dark:border-dark-border border-b border-light-border">
+          <div className="relative">
+            <SearchIcon size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 dark:text-dark-subtle text-light-subtle" />
+            <input
+              type="text"
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 pr-3 py-1.5 text-xs rounded-lg dark:bg-dark-bg dark:border-dark-border dark:text-dark-text bg-gray-50 border border-light-border text-light-text w-48 focus:outline-none focus:ring-1 focus:ring-green-primary/50"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="pl-3 pr-7 py-1.5 text-xs rounded-lg dark:bg-dark-bg dark:border-dark-border dark:text-dark-muted bg-gray-50 border border-light-border text-light-muted focus:outline-none appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%239ca3af%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_6px_center] bg-no-repeat"
+          >
+            <option value="all">All Status</option>
+            <option value="todo">To Do</option>
+            <option value="in-progress">In Progress</option>
+            <option value="review">In Review</option>
+            <option value="completed">Completed</option>
+          </select>
+          <button
+            onClick={() => setShowMyOnly(!showMyOnly)}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+              showMyOnly
+                ? 'bg-green-primary text-black'
+                : 'dark:bg-dark-bg dark:border dark:border-dark-border dark:text-dark-muted bg-gray-50 border border-light-border text-light-muted'
+            }`}
+          >
+            My Tasks Only
+          </button>
+          <div className="ml-auto text-xs dark:text-dark-subtle text-light-subtle">
+            {filteredTasks.length} of {allProjectTasks.length} tasks
+          </div>
+        </div>
+        <div ref={scrollContainerRef} className="overflow-x-auto relative">
+          {/* Today Label */}
+          {todayOffset !== null && (
+            <div className="absolute top-0 z-30 pointer-events-none flex flex-col items-center" style={{ left: `${todayOffset + 260}px`, transform: 'translateX(-50%)' }}>
+              <div className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm whitespace-nowrap">
+                TODAY
+              </div>
+              <div className="w-0 h-0 border-l-[4px] border-r-[4px] border-t-[4px] border-l-transparent border-r-transparent border-t-red-500" />
+            </div>
+          )}
           <div style={{ minWidth: `${Math.max(totalWidth + 260, 900)}px` }}>
             {/* Column Headers */}
             <div className="flex dark:border-dark-border border-b border-light-border sticky top-0 z-10 dark:bg-dark-card bg-white">
@@ -627,7 +635,7 @@ export function ViewGanttPage() {
                             {/* Today line */}
                             {todayOffset !== null && (
                               <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: `${todayOffset}px` }}>
-                                <div className="w-px h-full bg-red-500/60" />
+                                <div className="w-0.5 h-full bg-red-500/40" style={{ backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 3px, rgb(239 68 68 / 0.5) 3px, rgb(239 68 68 / 0.5) 7px)' }} />
                               </div>
                             )}
                           </div>
@@ -648,12 +656,7 @@ export function ViewGanttPage() {
           </div>
         </div>
 
-        {/* Today Label */}
-        {todayOffset !== null && (
-          <div className="absolute top-0 z-30 pointer-events-none" style={{ left: `${todayOffset + 260}px` }}>
-            <div className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-b-md">TODAY</div>
-          </div>
-        )}
+
 
         {/* Tooltip */}
         {hoveredTaskObj && tooltipPos && (

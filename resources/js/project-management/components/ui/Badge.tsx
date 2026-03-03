@@ -103,6 +103,10 @@ export function StatusBadge({ status }: {status: string;}) {
       variant: 'danger',
       label: 'Rejected'
     },
+    revision_requested: {
+      variant: 'purple',
+      label: 'Revision Requested'
+    },
     open: {
       variant: 'danger',
       label: 'Open'

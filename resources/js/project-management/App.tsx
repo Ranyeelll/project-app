@@ -22,6 +22,7 @@ import { ViewGanttPage } from './pages/employee/ViewGanttPage';
 import { BudgetRequestPage } from './pages/employee/BudgetRequestPage';
 import { LogTimePage } from './pages/employee/LogTimePage';
 import { ReportIssuePage } from './pages/employee/ReportIssuePage';
+import { ResourcesPage } from './pages/employee/ResourcesPage';
 function AppContent() {
   const { currentUser } = useAuth();
   const { currentPage } = useNavigation();
@@ -72,6 +73,8 @@ function AppContent() {
           return <LogTimePage />;
         case 'employee-issues':
           return <ReportIssuePage />;
+        case 'employee-resources':
+          return <ResourcesPage />;
         default:
           return <EmployeeDashboard />;
       }

@@ -82,6 +82,7 @@ interface DataContextType {
   refreshTimeLogs: () => void;
   refreshBudgetRequests: () => void;
   refreshIssues: () => void;
+  refreshAll: () => void;
 }
 const DataContext = createContext<DataContextType>({
   users: [],
@@ -103,7 +104,8 @@ const DataContext = createContext<DataContextType>({
   refreshMedia: () => {},
   refreshTimeLogs: () => {},
   refreshBudgetRequests: () => {},
-  refreshIssues: () => {}
+  refreshIssues: () => {},
+  refreshAll: () => {}
 });
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 export function useTheme() {
@@ -254,6 +256,12 @@ export function AppProvider({ children }: AppProviderProps) {
   }, []);
 
   // ─── Refresh helpers (can be called from any page) ────────────────────────
+  const refreshUsers = () => {
+    fetch('/api/users')
+      .then((res) => res.json())
+      .then((data: User[]) => { if (Array.isArray(data) && data.length > 0) setUsers(data); })
+      .catch(() => {});
+  };
   const refreshProjects = () => {
     fetch('/api/projects')
       .then((res) => res.json())
@@ -290,35 +298,22 @@ export function AppProvider({ children }: AppProviderProps) {
       .then((data: Issue[]) => { if (Array.isArray(data)) setIssues(data); })
       .catch(() => {});
   };
+  const refreshAll = () => {
+    refreshUsers();
+    refreshProjects();
+    refreshTasks();
+    refreshMedia();
+    refreshTimeLogs();
+    refreshBudgetRequests();
+    refreshIssues();
+  };
 
-  // ─── Load projects from the database on mount ────────────────────────────
-  useEffect(() => { refreshProjects(); }, []);
+  // ─── Load all data from the database on mount ────────────────────────────
+  useEffect(() => { refreshAll(); }, []);
 
-  // ─── Load tasks from the database on mount ───────────────────────────────
-  useEffect(() => { refreshTasks(); }, []);
-
-  // ─── Load media from the database on mount ───────────────────────────────
-  useEffect(() => { refreshMedia(); }, []);
-
-  // ─── Load time logs from the database on mount ───────────────────────────
-  useEffect(() => { refreshTimeLogs(); }, []);
-
-  // ─── Load budget requests from the database on mount ─────────────────────
-  useEffect(() => { refreshBudgetRequests(); }, []);
-
-  // ─── Load issues from the database on mount ──────────────────────────────
-  useEffect(() => { refreshIssues(); }, []);
-
-  // ─── Auto-refresh every 30 seconds ───────────────────────────────────────
+  // ─── Auto-refresh every 10 seconds ───────────────────────────────────────
   useEffect(() => {
-    const interval = setInterval(() => {
-      refreshTasks();
-      refreshProjects();
-      refreshMedia();
-      refreshTimeLogs();
-      refreshBudgetRequests();
-      refreshIssues();
-    }, 30000);
+    const interval = setInterval(refreshAll, 10000);
     return () => clearInterval(interval);
   }, []);
   return (
@@ -363,7 +358,8 @@ export function AppProvider({ children }: AppProviderProps) {
               refreshMedia,
               refreshTimeLogs,
               refreshBudgetRequests,
-              refreshIssues
+              refreshIssues,
+              refreshAll
             }}>
 
             {children}

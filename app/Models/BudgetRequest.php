@@ -16,6 +16,9 @@ class BudgetRequest extends Model
         'review_comment',
         'reviewed_at',
         'attachment',
+        'admin_remarks',
+        'original_amount',
+        'revision_count',
     ];
 
     protected $casts = [

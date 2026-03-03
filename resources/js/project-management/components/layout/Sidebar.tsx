@@ -13,6 +13,7 @@ import {
   ClockIcon,
   AlertTriangleIcon,
   WalletIcon,
+  FolderOpenIcon,
   BarChart2Icon,
   ClipboardCheckIcon } from
 'lucide-react';
@@ -99,6 +100,11 @@ const EMPLOYEE_NAV: NavItem[] = [
   id: 'employee-issues',
   label: 'Report Issue',
   icon: <AlertTriangleIcon size={16} />
+},
+{
+  id: 'employee-resources',
+  label: 'Resources',
+  icon: <FolderOpenIcon size={16} />
 }];
 
 export function Sidebar() {
