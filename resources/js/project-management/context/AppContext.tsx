@@ -41,13 +41,15 @@ interface AuthContextType {
     error?: string;
   }>;
   logout: () => void;
+  updateCurrentUser: (user: User) => void;
 }
 const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   login: async () => ({
     success: false
   }),
-  logout: () => {}
+  logout: () => {},
+  updateCurrentUser: () => {}
 });
 // ─── Navigation Context ──────────────────────────────────────────────────────
 interface NavigationContextType {
@@ -195,6 +197,10 @@ export function AppProvider({ children }: AppProviderProps) {
     localStorage.removeItem('maptech-current-user');
     setCurrentPage('login');
   }, []);
+
+  const updateCurrentUser = useCallback((user: User) => {
+    setCurrentUser(user);
+  }, []);
   // Navigation — default to 'login'; will be updated once auth is checked
   const [currentPage, setCurrentPage] = useState<string>('login');
 
@@ -326,7 +332,8 @@ export function AppProvider({ children }: AppProviderProps) {
         value={{
           currentUser,
           login,
-          logout
+          logout,
+          updateCurrentUser
         }}>
 
         <NavigationContext.Provider

@@ -10,6 +10,7 @@ export interface User {
   position: string;
   status: 'active' | 'inactive';
   joinDate: string;
+  profilePhoto?: string | null;
 }
 
 export interface Project {

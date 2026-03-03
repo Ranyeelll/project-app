@@ -150,19 +150,8 @@ export function Sidebar() {
         </div>
       </nav>
 
-      {/* Bottom: role badge + logout */}
+      {/* Bottom: logout */}
       <div className="p-3 dark:border-dark-border border-t border-light-border flex-shrink-0">
-        <div className="px-3 py-2 dark:bg-dark-card2 bg-light-card2 rounded-lg mb-2">
-          <p className="text-xs dark:text-dark-subtle text-light-subtle">
-            Signed in as
-          </p>
-          <p className="text-xs font-semibold dark:text-dark-text text-light-text mt-0.5 truncate">
-            {currentUser?.name}
-          </p>
-          <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-xs font-medium bg-green-primary/15 text-green-primary capitalize">
-            {currentUser?.role}
-          </span>
-        </div>
         <button
           onClick={logout}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors">

@@ -13,6 +13,9 @@ import {
   FolderIcon,
   UserPlusIcon,
   CalendarIcon,
+  CameraIcon,
+  LogOutIcon,
+  UserIcon,
 } from 'lucide-react';
 import { useTheme, useAuth, useNavigation, useData } from '../../context/AppContext';
 
@@ -29,11 +32,13 @@ interface Notification {
 
 export function Header() {
   const { isDark, toggleTheme } = useTheme();
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, updateCurrentUser } = useAuth();
   const { currentPage, setCurrentPage } = useNavigation();
   const { tasks, projects, budgetRequests, issues, users } = useData();
 
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('maptech-dismissed-notifs');
@@ -41,17 +46,22 @@ export function Header() {
     } catch { return new Set(); }
   });
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowNotifications(false);
       }
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false);
+      }
     }
-    if (showNotifications) document.addEventListener('mousedown', handleClick);
+    if (showNotifications || showProfileMenu) document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [showNotifications]);
+  }, [showNotifications, showProfileMenu]);
 
   // Persist dismissed IDs
   useEffect(() => {
@@ -321,6 +331,35 @@ export function Header() {
     setShowNotifications(false);
   };
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+
+    setUploadingPhoto(true);
+    try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      const formData = new FormData();
+      formData.append('photo', file);
+
+      const res = await fetch(`/api/users/${currentUser.id}/profile-photo`, {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': csrfToken },
+        body: formData,
+      });
+
+      if (res.ok) {
+        const updatedUser = await res.json();
+        updateCurrentUser(updatedUser);
+      }
+    } catch (err) {
+      console.error('Photo upload failed:', err);
+    } finally {
+      setUploadingPhoto(false);
+      // Reset file input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const pageTitles: Record<string, string> = {
     'admin-dashboard': 'Dashboard',
     'admin-projects': 'Projects',
@@ -471,21 +510,122 @@ export function Header() {
         </button>
 
         {/* User menu */}
-        <div className="flex items-center gap-2.5 pl-2 ml-1 dark:border-dark-border border-l border-light-border">
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-black flex-shrink-0"
-            style={{ backgroundColor: '#63D44A' }}
+        <div className="relative" ref={profileRef}>
+          <button
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+            className="flex items-center gap-2.5 pl-2 ml-1 dark:border-dark-border border-l border-light-border cursor-pointer hover:opacity-80 transition-opacity"
           >
-            {currentUser?.avatar}
-          </div>
-          <div className="hidden sm:block">
-            <p className="text-xs font-medium dark:text-dark-text text-light-text leading-none">
-              {currentUser?.name}
-            </p>
-            <p className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
-              {currentUser?.position}
-            </p>
-          </div>
+            {/* Avatar / Photo */}
+            {currentUser?.profilePhoto ? (
+              <img
+                src={currentUser.profilePhoto}
+                alt={currentUser.name}
+                className="w-8 h-8 rounded-full object-cover flex-shrink-0 ring-2 ring-green-primary/30"
+              />
+            ) : (
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-black flex-shrink-0"
+                style={{ backgroundColor: '#63D44A' }}
+              >
+                {currentUser?.avatar}
+              </div>
+            )}
+            <div className="hidden sm:block text-left">
+              <p className="text-xs font-medium dark:text-dark-text text-light-text leading-none">
+                {currentUser?.name}
+              </p>
+              <p className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
+                {currentUser?.position}
+              </p>
+            </div>
+            <ChevronDownIcon size={14} className="dark:text-dark-muted text-light-muted hidden sm:block" />
+          </button>
+
+          {/* Profile Dropdown */}
+          {showProfileMenu && (
+            <div className="absolute right-0 top-full mt-2 w-64 dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-xl shadow-2xl overflow-hidden z-50">
+              {/* User info header */}
+              <div className="px-4 py-4 dark:border-dark-border border-b border-light-border">
+                <div className="flex items-center gap-3">
+                  {/* Profile photo with upload overlay */}
+                  <div className="relative group">
+                    {currentUser?.profilePhoto ? (
+                      <img
+                        src={currentUser.profilePhoto}
+                        alt={currentUser?.name}
+                        className="w-12 h-12 rounded-full object-cover ring-2 ring-green-primary/30"
+                      />
+                    ) : (
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold text-black"
+                        style={{ backgroundColor: '#63D44A' }}
+                      >
+                        {currentUser?.avatar}
+                      </div>
+                    )}
+                    {/* Camera overlay */}
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingPhoto}
+                      className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    >
+                      {uploadingPhoto ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <CameraIcon size={16} className="text-white" />
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold dark:text-dark-text text-light-text truncate">
+                      {currentUser?.name}
+                    </p>
+                    <p className="text-xs dark:text-dark-subtle text-light-subtle truncate mt-0.5">
+                      {currentUser?.email}
+                    </p>
+                    <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-primary/15 text-green-primary capitalize">
+                      {currentUser?.role}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload photo button */}
+              <div className="px-2 py-2 dark:border-dark-border border-b border-light-border">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors"
+                >
+                  <CameraIcon size={14} />
+                  {uploadingPhoto ? 'Uploading...' : currentUser?.profilePhoto ? 'Change Photo' : 'Upload Photo'}
+                </button>
+              </div>
+
+              {/* Logout */}
+              <div className="px-2 py-2">
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    logout();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors"
+                >
+                  <LogOutIcon size={14} />
+                  Logout
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Hidden file input for photo upload */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/jpg,image/gif,image/webp"
+            onChange={handlePhotoUpload}
+            className="hidden"
+          />
         </div>
       </div>
     </header>

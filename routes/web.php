@@ -33,6 +33,7 @@ Route::prefix('api')->group(function () {
     Route::post('/users', [UserController::class, 'store']);
     Route::put('/users/{user}', [UserController::class, 'update']);
     Route::delete('/users/{user}', [UserController::class, 'destroy']);
+    Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
 
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::post('/projects', [ProjectController::class, 'store']);

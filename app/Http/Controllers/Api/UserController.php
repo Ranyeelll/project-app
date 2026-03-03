@@ -7,28 +7,35 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
 {
     /**
      * List all users.
      */
+    private function formatUser(User $u): array
+    {
+        return [
+            'id'           => (string) $u->id,
+            'name'         => $u->name,
+            'email'        => $u->email,
+            'role'         => $u->role,
+            'avatar'       => collect(explode(' ', $u->name))->map(fn ($n) => strtoupper($n[0] ?? ''))->join(''),
+            'department'   => $u->department ?? '',
+            'position'     => $u->position ?? '',
+            'status'       => $u->status ?? 'active',
+            'joinDate'     => $u->created_at?->toDateString() ?? '',
+            'profilePhoto' => $u->profile_photo ? asset('storage/' . $u->profile_photo) : null,
+        ];
+    }
+
     public function index(): JsonResponse
     {
-        $users = User::select('id', 'name', 'email', 'role', 'department', 'position', 'status', 'created_at')
+        $users = User::select('id', 'name', 'email', 'role', 'department', 'position', 'status', 'profile_photo', 'created_at')
             ->orderBy('id')
             ->get()
-            ->map(fn ($u) => [
-                'id'         => (string) $u->id,
-                'name'       => $u->name,
-                'email'      => $u->email,
-                'role'       => $u->role,
-                'avatar'     => collect(explode(' ', $u->name))->map(fn ($n) => strtoupper($n[0] ?? ''))->join(''),
-                'department' => $u->department ?? '',
-                'position'   => $u->position ?? '',
-                'status'     => $u->status ?? 'active',
-                'joinDate'   => $u->created_at?->toDateString() ?? '',
-            ]);
+            ->map(fn ($u) => $this->formatUser($u));
 
         return response()->json($users);
     }
@@ -52,17 +59,7 @@ class UserController extends Controller
 
         $user = User::create($data);
 
-        return response()->json([
-            'id'         => (string) $user->id,
-            'name'       => $user->name,
-            'email'      => $user->email,
-            'role'       => $user->role,
-            'avatar'     => collect(explode(' ', $user->name))->map(fn ($n) => strtoupper($n[0] ?? ''))->join(''),
-            'department' => $user->department ?? '',
-            'position'   => $user->position ?? '',
-            'status'     => $user->status ?? 'active',
-            'joinDate'   => $user->created_at?->toDateString() ?? '',
-        ], 201);
+        return response()->json($this->formatUser($user), 201);
     }
 
     /**
@@ -89,17 +86,27 @@ class UserController extends Controller
 
         $user->update($data);
 
-        return response()->json([
-            'id'         => (string) $user->id,
-            'name'       => $user->name,
-            'email'      => $user->email,
-            'role'       => $user->role,
-            'avatar'     => collect(explode(' ', $user->name))->map(fn ($n) => strtoupper($n[0] ?? ''))->join(''),
-            'department' => $user->department ?? '',
-            'position'   => $user->position ?? '',
-            'status'     => $user->status ?? 'active',
-            'joinDate'   => $user->created_at?->toDateString() ?? '',
+        return response()->json($this->formatUser($user));
+    }
+
+    /**
+     * Upload a profile photo for a user.
+     */
+    public function uploadPhoto(Request $request, User $user): JsonResponse
+    {
+        $request->validate([
+            'photo' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
+
+        // Delete old photo if it exists
+        if ($user->profile_photo) {
+            Storage::disk('public')->delete($user->profile_photo);
+        }
+
+        $path = $request->file('photo')->store('profile-photos', 'public');
+        $user->update(['profile_photo' => $path]);
+
+        return response()->json($this->formatUser($user));
     }
 
     /**

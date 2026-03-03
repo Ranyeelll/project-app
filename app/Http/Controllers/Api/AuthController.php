@@ -39,15 +39,16 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'user'    => [
-                'id'         => (string) $user->id,
-                'name'       => $user->name,
-                'email'      => $user->email,
-                'role'       => $user->role,
-                'avatar'     => collect(explode(' ', $user->name))->map(fn ($n) => strtoupper($n[0] ?? ''))->join(''),
-                'department' => $user->department ?? '',
-                'position'   => $user->position ?? '',
-                'status'     => $user->status ?? 'active',
-                'joinDate'   => $user->created_at?->toDateString() ?? '',
+                'id'           => (string) $user->id,
+                'name'         => $user->name,
+                'email'        => $user->email,
+                'role'         => $user->role,
+                'avatar'       => collect(explode(' ', $user->name))->map(fn ($n) => strtoupper($n[0] ?? ''))->join(''),
+                'department'   => $user->department ?? '',
+                'position'     => $user->position ?? '',
+                'status'       => $user->status ?? 'active',
+                'joinDate'     => $user->created_at?->toDateString() ?? '',
+                'profilePhoto' => $user->profile_photo ? asset('storage/' . $user->profile_photo) : null,
             ],
         ]);
     }
