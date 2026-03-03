@@ -6,7 +6,8 @@ import {
   ClockIcon,
   FilterIcon,
   MessageSquareIcon,
-  RotateCcwIcon } from
+  RotateCcwIcon,
+  AlertTriangleIcon } from
 'lucide-react';
 import { useData } from '../../context/AppContext';
 import { BudgetRequest } from '../../data/mockData';
@@ -14,6 +15,7 @@ import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Textarea } from '../../components/ui/Input';
 import { Badge, StatusBadge } from '../../components/ui/Badge';
+import { ProgressBar } from '../../components/ui/ProgressBar';
 export function BudgetApprovalsPage() {
   const { budgetRequests, setBudgetRequests, projects, users, refreshBudgetRequests } = useData();
   const [statusFilter, setStatusFilter] = useState('all');
@@ -31,6 +33,39 @@ export function BudgetApprovalsPage() {
   const totalApproved = budgetRequests.
   filter((b) => b.status === 'approved').
   reduce((s, b) => s + b.amount, 0);
+
+  // Budget utilization helpers
+  const getProjectBudgetInfo = (projectId: string) => {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return { budget: 0, spent: 0, remaining: 0, pct: 0 };
+    const spent = budgetRequests
+      .filter((b) => b.projectId === projectId && b.status === 'approved')
+      .reduce((s, b) => s + b.amount, 0);
+    const remaining = project.budget - spent;
+    const pct = project.budget > 0 ? Math.round((spent / project.budget) * 100) : 0;
+    return { budget: project.budget, spent, remaining, pct };
+  };
+
+  const getApprovalWarning = (req: BudgetRequest) => {
+    const info = getProjectBudgetInfo(req.projectId);
+    const afterApproval = info.spent + req.amount;
+    if (info.budget <= 0) return null;
+    if (afterApproval > info.budget) {
+      return {
+        type: 'over' as const,
+        message: `Approving this will exceed the project budget by ${formatCurrency(afterApproval - info.budget)}`,
+        remaining: info.remaining,
+      };
+    }
+    if (afterApproval > info.budget * 0.9) {
+      return {
+        type: 'warn' as const,
+        message: `This will use ${Math.round((afterApproval / info.budget) * 100)}% of the project budget`,
+        remaining: info.remaining,
+      };
+    }
+    return null;
+  };
   const handleReview = async () => {
     if (!reviewModal) return;
     const statusMap = {
@@ -130,6 +165,47 @@ export function BudgetApprovalsPage() {
         </div>
       </div>
 
+      {/* Project Budget Overview */}
+      <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
+        <h3 className="text-xs font-semibold dark:text-dark-muted text-light-muted mb-3 uppercase tracking-wider">
+          Budget Utilization by Project
+        </h3>
+        <div className="space-y-3">
+          {projects.filter((p) => p.status !== 'archived').map((project) => {
+            const info = getProjectBudgetInfo(project.id);
+            if (info.budget <= 0) return null;
+            const isOver = info.pct > 100;
+            const isHigh = info.pct > 90 && info.pct <= 100;
+            return (
+              <div key={project.id} className="flex items-center gap-3">
+                <div className="w-36 flex-shrink-0">
+                  <p className="text-xs font-medium dark:text-dark-text text-light-text truncate">{project.name}</p>
+                </div>
+                <div className="flex-1">
+                  <div className="w-full h-2 rounded-full dark:bg-dark-card2 bg-gray-100 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        isOver ? 'bg-red-500' : isHigh ? 'bg-amber-500' : 'bg-green-primary'
+                      }`}
+                      style={{ width: `${Math.min(info.pct, 100)}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="w-40 flex-shrink-0 text-right">
+                  <span className={`text-xs font-semibold ${isOver ? 'text-red-400' : isHigh ? 'text-amber-400' : 'dark:text-dark-text text-light-text'}`}>
+                    {formatCurrency(info.spent)}
+                  </span>
+                  <span className="text-xs dark:text-dark-subtle text-light-subtle"> / {formatCurrency(info.budget)}</span>
+                  {isOver && (
+                    <span className="text-[10px] text-red-400 ml-1">({info.pct}%)</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Filter */}
       <div className="flex gap-2">
         {['all', 'pending', 'revision_requested', 'approved', 'rejected'].map((s) =>
@@ -174,6 +250,32 @@ export function BudgetApprovalsPage() {
                       </p>
                     </div>
                   </div>
+                  {/* Budget warning */}
+                  {req.status === 'pending' && (() => {
+                    const warning = getApprovalWarning(req);
+                    const info = getProjectBudgetInfo(req.projectId);
+                    return warning ? (
+                      <div className={`mt-2 px-3 py-2 rounded-lg border flex items-start gap-2 ${
+                        warning.type === 'over'
+                          ? 'dark:bg-red-500/5 bg-red-50 dark:border-red-500/20 border-red-200'
+                          : 'dark:bg-amber-500/5 bg-amber-50 dark:border-amber-500/20 border-amber-200'
+                      }`}>
+                        <AlertTriangleIcon size={13} className={`mt-0.5 flex-shrink-0 ${warning.type === 'over' ? 'text-red-400' : 'text-amber-500'}`} />
+                        <div>
+                          <p className={`text-xs font-medium ${warning.type === 'over' ? 'text-red-400' : 'text-amber-500'}`}>
+                            {warning.message}
+                          </p>
+                          <p className="text-[10px] dark:text-dark-subtle text-light-subtle mt-0.5">
+                            Project budget: {formatCurrency(info.budget)} · Spent: {formatCurrency(info.spent)} · Remaining: {formatCurrency(Math.max(info.remaining, 0))}
+                          </p>
+                        </div>
+                      </div>
+                    ) : info.budget > 0 ? (
+                      <div className="mt-2 text-[10px] dark:text-dark-subtle text-light-subtle">
+                        Remaining budget: {formatCurrency(info.remaining)} of {formatCurrency(info.budget)}
+                      </div>
+                    ) : null;
+                  })()}
                   <p className="text-sm dark:text-dark-muted text-light-muted">
                     {req.purpose}
                   </p>
@@ -326,6 +428,40 @@ export function BudgetApprovalsPage() {
               )}
             </div>
           }
+          {/* Budget overage warning in modal */}
+          {reviewModal?.action === 'approve' && (() => {
+            const warning = getApprovalWarning(reviewModal.request);
+            const info = getProjectBudgetInfo(reviewModal.request.projectId);
+            const project = projects.find((p) => p.id === reviewModal.request.projectId);
+            return (
+              <div className={`px-3 py-2.5 rounded-lg border ${
+                warning?.type === 'over'
+                  ? 'dark:bg-red-500/10 bg-red-50 dark:border-red-500/30 border-red-200'
+                  : warning?.type === 'warn'
+                  ? 'dark:bg-amber-500/10 bg-amber-50 dark:border-amber-500/30 border-amber-200'
+                  : 'dark:bg-green-primary/5 bg-green-50 dark:border-green-primary/20 border-green-200'
+              }`}>
+                {warning?.type === 'over' && (
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <AlertTriangleIcon size={13} className="text-red-400" />
+                    <p className="text-xs font-semibold text-red-400">⚠ Budget Overage Warning</p>
+                  </div>
+                )}
+                {warning?.type === 'warn' && (
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <AlertTriangleIcon size={13} className="text-amber-500" />
+                    <p className="text-xs font-semibold text-amber-500">Approaching budget limit</p>
+                  </div>
+                )}
+                <p className="text-xs dark:text-dark-muted text-light-muted">
+                  <span className="font-medium">{project?.name}</span>: {formatCurrency(info.spent)} spent of {formatCurrency(info.budget)} budget
+                </p>
+                <p className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
+                  After approval: {formatCurrency(info.spent + reviewModal.request.amount)} ({Math.round(((info.spent + reviewModal.request.amount) / (info.budget || 1)) * 100)}%)
+                </p>
+              </div>
+            );
+          })()}
           <Textarea
             label={
             reviewModal?.action === 'reject' ?

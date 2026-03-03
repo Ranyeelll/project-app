@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 export function LogTimePage() {
-  const { tasks, timeLogs, setTimeLogs, refreshTimeLogs, refreshTasks } = useData();
+  const { tasks, projects, timeLogs, setTimeLogs, refreshTimeLogs, refreshTasks } = useData();
   const { currentUser } = useAuth();
   const [createModal, setCreateModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -15,8 +15,8 @@ export function LogTimePage() {
     description: '',
     date: new Date().toISOString().split('T')[0]
   });
+  const myProjectIds = projects.filter((p) => p.teamIds?.includes(currentUser?.id || '')).map((p) => p.id);
   const myTasks = tasks.filter((t) => t.assignedTo === currentUser?.id);
-  const allAvailableTasks = myTasks.length > 0 ? myTasks : tasks;
   const myLogs = timeLogs.filter((l) => l.userId === currentUser?.id);
   const totalHours = myLogs.reduce((s, l) => s + l.hours, 0);
   const thisWeekLogs = myLogs.filter((l) => {
@@ -230,7 +230,7 @@ export function LogTimePage() {
               value: '',
               label: 'Select a task...'
             },
-            ...allAvailableTasks.map((t) => ({
+            ...myTasks.map((t) => ({
               value: t.id,
               label: t.title
             }))]

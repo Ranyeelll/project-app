@@ -9,23 +9,28 @@ import {
   FolderOpenIcon,
 } from 'lucide-react';
 import { MediaUpload } from '../../data/mockData';
-import { useData } from '../../context/AppContext';
+import { useData, useAuth } from '../../context/AppContext';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 
 export function ResourcesPage() {
   const { media, projects, users } = useData();
+  const { currentUser } = useAuth();
 
   const [projectFilter, setProjectFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [previewItem, setPreviewItem] = useState<MediaUpload | null>(null);
 
-  // Only show media uploaded by admins
+  // Only show media uploaded by admins AND visible to this employee
   const adminMedia = media.filter((m) => {
     const uploader = users.find((u) => u.id === m.uploadedBy);
-    return uploader?.role === 'admin';
+    if (uploader?.role !== 'admin') return false;
+    // If visibleTo is empty/null, visible to all employees
+    if (!m.visibleTo || m.visibleTo.length === 0) return true;
+    // Otherwise, only show if current user is in the list
+    return m.visibleTo.includes(currentUser?.id || '');
   });
 
   const filtered = adminMedia.filter((m) => {

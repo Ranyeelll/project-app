@@ -50,6 +50,7 @@ class MediaController extends Controller
             'title'       => 'required|string|max:255',
             'content'     => 'nullable|string',
             'file'        => 'nullable|file|max:512000', // 500 MB max
+            'visible_to'  => 'nullable|string',
         ]);
 
         $filePath = null;
@@ -64,6 +65,12 @@ class MediaController extends Controller
             $fileSize = $this->formatBytes($bytes);
         }
 
+        // Parse visible_to from comma-separated string to array
+        $visibleTo = null;
+        if (!empty($data['visible_to'])) {
+            $visibleTo = array_map('trim', explode(',', $data['visible_to']));
+        }
+
         $media = Media::create([
             'project_id'        => $data['project_id'],
             'task_id'           => $data['task_id'] ?? null,
@@ -74,6 +81,7 @@ class MediaController extends Controller
             'file_path'         => $filePath,
             'original_filename' => $originalFilename,
             'file_size'         => $fileSize,
+            'visible_to'        => $visibleTo,
         ]);
 
         return response()->json($this->formatMedia($media), 201);
@@ -125,6 +133,7 @@ class MediaController extends Controller
             'filePath'         => $m->file_path ? Storage::url($m->file_path) : null,
             'originalFilename' => $m->original_filename,
             'fileSize'         => $m->file_size,
+            'visibleTo'        => $m->visible_to ?? [],
             'createdAt'        => $m->created_at?->toDateString() ?? '',
         ];
     }

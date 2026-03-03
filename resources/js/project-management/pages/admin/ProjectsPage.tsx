@@ -27,6 +27,7 @@ export function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
@@ -145,6 +146,44 @@ export function ProjectsPage() {
   const resetTaskForm = () => {
     setTaskForm({ title: '', description: '', priority: 'medium', assignedTo: '', startDate: '', endDate: '', estimatedHours: '' });
     setShowTaskForm(false);
+    setEditingTaskId(null);
+  };
+  const openEditTask = (task: Task) => {
+    setEditingTaskId(task.id);
+    setShowTaskForm(false);
+    setTaskForm({
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      assignedTo: task.assignedTo || '',
+      startDate: task.startDate || '',
+      endDate: task.endDate || '',
+      estimatedHours: task.estimatedHours ? String(task.estimatedHours) : '',
+    });
+  };
+  const handleEditTask = async () => {
+    if (!editingTaskId || !taskForm.title) return;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    try {
+      const res = await fetch(`/api/tasks/${editingTaskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+        body: JSON.stringify({
+          title: taskForm.title,
+          description: taskForm.description,
+          priority: taskForm.priority,
+          assigned_to: taskForm.assignedTo || null,
+          start_date: taskForm.startDate || null,
+          end_date: taskForm.endDate || null,
+          estimated_hours: Number(taskForm.estimatedHours) || 0,
+        }),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        setTasks((prev) => prev.map((t) => t.id === editingTaskId ? saved : t));
+        resetTaskForm();
+      }
+    } catch { /* silently fail */ }
   };
   const handleAddTask = async () => {
     if (!selectedProject || !taskForm.title) return;
@@ -634,7 +673,11 @@ export function ProjectsPage() {
                 <h4 className="text-sm font-medium dark:text-dark-text text-light-text">
                   Tasks
                 </h4>
-                <Button variant="primary" size="sm" icon={<PlusIcon size={12} />} onClick={() => setShowTaskForm(true)}>
+                <Button variant="primary" size="sm" icon={<PlusIcon size={12} />} onClick={() => {
+                  const teamMembers = users.filter((u) => selectedProject?.teamIds?.includes(u.id));
+                  setTaskForm({ title: '', description: '', priority: 'medium', assignedTo: teamMembers.length === 1 ? teamMembers[0].id : '', startDate: '', endDate: '', estimatedHours: '' });
+                  setShowTaskForm(true);
+                }}>
                   Add Task
                 </Button>
               </div>
@@ -667,11 +710,11 @@ export function ProjectsPage() {
                       ]}
                     />
                     <Select
-                      label="Assign To"
+                      label="Assign To (Optional)"
                       value={taskForm.assignedTo}
                       onChange={(e) => setTaskForm({ ...taskForm, assignedTo: e.target.value })}
                       options={[
-                        { value: '', label: 'Unassigned' },
+                        { value: '', label: 'All Team Members' },
                         ...users.filter((u) => selectedProject?.teamIds?.includes(u.id)).map((u) => ({
                           value: u.id,
                           label: u.name,
@@ -679,6 +722,9 @@ export function ProjectsPage() {
                       ]}
                     />
                   </div>
+                  <p className="text-[10px] dark:text-dark-subtle text-light-subtle -mt-1">
+                    Tasks are visible to all team members. Use "Assign To" to designate a specific person.
+                  </p>
                   <div className="grid grid-cols-3 gap-3">
                     <Input
                       label="Start Date"
@@ -712,6 +758,73 @@ export function ProjectsPage() {
               filter((t) => t.projectId === selectedProject.id).
               map((task) => {
                 const assignee = users.find((u) => u.id === task.assignedTo);
+                if (editingTaskId === task.id) {
+                  return (
+                    <div key={task.id} className="dark:bg-dark-card2 bg-light-card2 rounded-lg p-4 space-y-3 border dark:border-green-primary/30 border-green-primary/30">
+                      <Input
+                        label="Task Title"
+                        value={taskForm.title}
+                        onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                      />
+                      <Textarea
+                        label="Description"
+                        placeholder="Describe the task..."
+                        value={taskForm.description}
+                        onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                      />
+                      <div className="grid grid-cols-2 gap-3">
+                        <Select
+                          label="Priority"
+                          value={taskForm.priority}
+                          onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}
+                          options={[
+                            { value: 'low', label: 'Low' },
+                            { value: 'medium', label: 'Medium' },
+                            { value: 'high', label: 'High' },
+                            { value: 'critical', label: 'Critical' },
+                          ]}
+                        />
+                        <Select
+                          label="Assign To (Optional)"
+                          value={taskForm.assignedTo}
+                          onChange={(e) => setTaskForm({ ...taskForm, assignedTo: e.target.value })}
+                          options={[
+                            { value: '', label: 'All Team Members' },
+                            ...users.filter((u) => selectedProject?.teamIds?.includes(u.id)).map((u) => ({
+                              value: u.id,
+                              label: u.name,
+                            })),
+                          ]}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <Input
+                          label="Start Date"
+                          type="date"
+                          value={taskForm.startDate}
+                          onChange={(e) => setTaskForm({ ...taskForm, startDate: e.target.value })}
+                        />
+                        <Input
+                          label="End Date"
+                          type="date"
+                          value={taskForm.endDate}
+                          onChange={(e) => setTaskForm({ ...taskForm, endDate: e.target.value })}
+                        />
+                        <Input
+                          label="Est. Hours"
+                          type="number"
+                          placeholder="0"
+                          value={taskForm.estimatedHours}
+                          onChange={(e) => setTaskForm({ ...taskForm, estimatedHours: e.target.value })}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="secondary" size="sm" onClick={resetTaskForm}>Cancel</Button>
+                        <Button variant="primary" size="sm" onClick={handleEditTask}>Save Changes</Button>
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                   <div
                     key={task.id}
@@ -722,13 +835,20 @@ export function ProjectsPage() {
                             {task.title}
                           </p>
                           <p className="text-xs dark:text-dark-subtle text-light-subtle">
-                            {assignee?.name}
+                            {assignee?.name || 'All Team Members'}
                           </p>
                         </div>
                         <StatusBadge status={task.status} />
                         <span className="text-xs dark:text-dark-muted text-light-muted w-8 text-right">
                           {task.progress}%
                         </span>
+                        <button
+                          onClick={() => openEditTask(task)}
+                          className="p-1 rounded dark:text-dark-muted dark:hover:bg-dark-card dark:hover:text-green-primary text-light-muted hover:bg-light-card hover:text-green-primary transition-colors"
+                          title="Edit task"
+                        >
+                          <EditIcon size={12} />
+                        </button>
                         <button
                           onClick={() => handleDeleteTask(task.id)}
                           className="p-1 rounded dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors"

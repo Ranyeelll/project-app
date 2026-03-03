@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Project;
+use App\Models\Task;
+use App\Models\BudgetRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -46,7 +48,26 @@ class ProjectController extends Controller
 
         $project = Project::create($data);
 
-        return response()->json($this->formatProject($project), 201);
+        // Auto-create a task for each team member so it appears in their My Tasks
+        foreach ($data['team_ids'] as $memberId) {
+            Task::create([
+                'project_id'               => $project->id,
+                'title'                    => $data['name'],
+                'description'              => $data['description'] ?? '',
+                'status'                   => 'todo',
+                'priority'                 => $data['priority'] ?? 'medium',
+                'assigned_to'              => $memberId,
+                'start_date'               => $data['start_date'] ?? null,
+                'end_date'                 => $data['end_date'] ?? null,
+                'estimated_hours'          => 0,
+                'progress'                 => 0,
+                'logged_hours'             => 0,
+                'allow_employee_edit'      => false,
+                'completion_report_status' => 'none',
+            ]);
+        }
+
+        return response()->json($this->formatProject($project->fresh()), 201);
     }
 
     /**
@@ -54,6 +75,8 @@ class ProjectController extends Controller
      */
     public function update(Request $request, Project $project): JsonResponse
     {
+        $oldTeamIds = $project->team_ids ?? [];
+
         $data = $request->validate([
             'name'        => 'sometimes|string|max:255',
             'description' => 'nullable|string',
@@ -70,6 +93,37 @@ class ProjectController extends Controller
         ]);
 
         $project->update($data);
+
+        // Auto-create tasks for newly added team members
+        if (isset($data['team_ids'])) {
+            $newTeamIds = $data['team_ids'];
+            $addedMembers = array_diff($newTeamIds, $oldTeamIds);
+
+            foreach ($addedMembers as $memberId) {
+                // Only create if this member doesn't already have a task in this project
+                $existing = Task::where('project_id', $project->id)
+                    ->where('assigned_to', $memberId)
+                    ->exists();
+
+                if (!$existing) {
+                    Task::create([
+                        'project_id'               => $project->id,
+                        'title'                    => $project->name,
+                        'description'              => $project->description ?? '',
+                        'status'                   => 'todo',
+                        'priority'                 => $project->priority ?? 'medium',
+                        'assigned_to'              => $memberId,
+                        'start_date'               => $project->start_date,
+                        'end_date'                 => $project->end_date,
+                        'estimated_hours'          => 0,
+                        'progress'                 => 0,
+                        'logged_hours'             => 0,
+                        'allow_employee_edit'      => false,
+                        'completion_report_status' => 'none',
+                    ]);
+                }
+            }
+        }
 
         return response()->json($this->formatProject($project->fresh()));
     }
@@ -88,6 +142,18 @@ class ProjectController extends Controller
      */
     private function formatProject(Project $p): array
     {
+        // Compute progress from tasks
+        $projectTasks = Task::where('project_id', $p->id)->get();
+        $totalTasks = $projectTasks->count();
+        $completedTasks = $projectTasks->where('status', 'completed')->count();
+        $computedProgress = $totalTasks > 0 ? (int) round(($completedTasks / $totalTasks) * 100) : (int) $p->progress;
+
+        // Compute spent from approved budget requests
+        $approvedSpent = BudgetRequest::where('project_id', $p->id)
+            ->where('status', 'approved')
+            ->sum('amount');
+        $computedSpent = $approvedSpent > 0 ? (float) $approvedSpent : (float) $p->spent;
+
         return [
             'id'          => (string) $p->id,
             'name'        => $p->name,
@@ -97,8 +163,8 @@ class ProjectController extends Controller
             'startDate'   => $p->start_date?->toDateString() ?? '',
             'endDate'     => $p->end_date?->toDateString() ?? '',
             'budget'      => (float) $p->budget,
-            'spent'       => (float) $p->spent,
-            'progress'    => (int) $p->progress,
+            'spent'       => $computedSpent,
+            'progress'    => $computedProgress,
             'managerId'   => (string) ($p->manager_id ?? ''),
             'teamIds'     => $p->team_ids ?? [],
             'createdAt'   => $p->created_at?->toDateString() ?? '',

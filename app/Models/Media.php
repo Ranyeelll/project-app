@@ -19,12 +19,14 @@ class Media extends Model
         'file_path',
         'original_filename',
         'file_size',
+        'visible_to',
     ];
 
     protected $casts = [
         'project_id'  => 'integer',
         'task_id'     => 'integer',
         'uploaded_by' => 'integer',
+        'visible_to'  => 'array',
     ];
 
     public function project(): BelongsTo

@@ -8,7 +8,8 @@ import {
   UploadIcon,
   CalendarIcon,
   EyeIcon,
-  DownloadIcon } from
+  DownloadIcon,
+  UsersIcon } from
 'lucide-react';
 import { MediaUpload } from '../../data/mockData';
 import { useData, useAuth } from '../../context/AppContext';
@@ -30,8 +31,12 @@ export function ReportsMediaPage() {
     projectId: projects[0]?.id || '',
     type: 'text',
     title: '',
-    content: ''
+    content: '',
+    visibleTo: [] as string[]
   });
+
+  // Get employees for visibility selector
+  const employees = users.filter((u) => u.role === 'employee');
   const filtered = media.filter((m) => {
     const matchProject =
     projectFilter === 'all' || m.projectId === projectFilter;
@@ -48,6 +53,9 @@ export function ReportsMediaPage() {
       formData.append('type', form.type);
       formData.append('title', form.title);
       formData.append('content', form.content);
+      if (form.visibleTo.length > 0) {
+        formData.append('visible_to', form.visibleTo.join(','));
+      }
       if (uploadFile) {
         formData.append('file', uploadFile);
       }
@@ -72,7 +80,8 @@ export function ReportsMediaPage() {
         projectId: projects[0]?.id || '',
         type: 'text',
         title: '',
-        content: ''
+        content: '',
+        visibleTo: []
       });
     }
   };
@@ -212,6 +221,23 @@ export function ReportsMediaPage() {
                           </span>
                         </>
                       }
+                      {item.visibleTo && item.visibleTo.length > 0 ? (
+                        <>
+                          <span className="text-xs dark:text-dark-subtle text-light-subtle">·</span>
+                          <span className="flex items-center gap-1 text-xs text-amber-500">
+                            <UsersIcon size={10} />
+                            {item.visibleTo.length} employee{item.visibleTo.length !== 1 ? 's' : ''}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-xs dark:text-dark-subtle text-light-subtle">·</span>
+                          <span className="flex items-center gap-1 text-xs text-green-primary">
+                            <UsersIcon size={10} />
+                            All employees
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -389,6 +415,46 @@ export function ReportsMediaPage() {
               </label>
             </div>
           }
+
+          {/* Employee Visibility Selector */}
+          <div>
+            <label className="block text-sm font-medium dark:text-dark-text text-light-text mb-2">
+              Visible To
+            </label>
+            <p className="text-xs dark:text-dark-subtle text-light-subtle mb-2">
+              {form.visibleTo.length === 0
+                ? 'All employees can see this (default)'
+                : `${form.visibleTo.length} employee${form.visibleTo.length !== 1 ? 's' : ''} selected`}
+            </p>
+            <div className="max-h-40 overflow-y-auto border dark:border-dark-border border-light-border rounded-lg divide-y dark:divide-dark-border divide-light-border">
+              {employees.map((emp) => (
+                <label
+                  key={emp.id}
+                  className="flex items-center gap-3 px-3 py-2 cursor-pointer dark:hover:bg-dark-card2 hover:bg-light-card2 transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.visibleTo.includes(emp.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setForm({ ...form, visibleTo: [...form.visibleTo, emp.id] });
+                      } else {
+                        setForm({ ...form, visibleTo: form.visibleTo.filter((id) => id !== emp.id) });
+                      }
+                    }}
+                    className="w-3.5 h-3.5 rounded accent-green-primary"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm dark:text-dark-text text-light-text truncate">{emp.name}</p>
+                    <p className="text-[10px] dark:text-dark-subtle text-light-subtle truncate">{emp.position || emp.email}</p>
+                  </div>
+                </label>
+              ))}
+              {employees.length === 0 && (
+                <p className="text-xs dark:text-dark-subtle text-light-subtle p-3">No employees found</p>
+              )}
+            </div>
+          </div>
         </div>
       </Modal>
 

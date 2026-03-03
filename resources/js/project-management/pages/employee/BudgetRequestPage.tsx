@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlusIcon, DollarSignIcon, EditIcon, TrashIcon, RotateCcwIcon, MessageSquareIcon } from 'lucide-react';
+import { PlusIcon, DollarSignIcon, EditIcon, TrashIcon, RotateCcwIcon, MessageSquareIcon, InfoIcon } from 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { BudgetRequest } from '../../data/mockData';
 import { Button } from '../../components/ui/Button';
@@ -126,6 +126,23 @@ export function BudgetRequestPage() {
     currency: 'PHP',
     maximumFractionDigits: 0
   }).format(n);
+
+  // Budget info for selected project
+  const getProjectBudgetInfo = (projectId: string) => {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return null;
+    const spent = budgetRequests
+      .filter((b) => b.projectId === projectId && b.status === 'approved')
+      .reduce((s, b) => s + b.amount, 0);
+    const pending = budgetRequests
+      .filter((b) => b.projectId === projectId && b.status === 'pending')
+      .reduce((s, b) => s + b.amount, 0);
+    const remaining = project.budget - spent;
+    const pct = project.budget > 0 ? Math.round((spent / project.budget) * 100) : 0;
+    return { budget: project.budget, spent, pending, remaining, pct, name: project.name };
+  };
+
+  const selectedBudgetInfo = getProjectBudgetInfo(form.projectId);
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -351,6 +368,37 @@ export function BudgetRequestPage() {
               value: p.id,
               label: p.name
             }))} />
+
+          {/* Project budget info */}
+          {selectedBudgetInfo && selectedBudgetInfo.budget > 0 && (
+            <div className="px-3 py-2.5 rounded-lg dark:bg-dark-card2 bg-light-card2 border dark:border-dark-border border-light-border">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <InfoIcon size={12} className="text-green-primary" />
+                <p className="text-xs font-medium dark:text-dark-text text-light-text">Project Budget</p>
+              </div>
+              <div className="w-full h-1.5 rounded-full dark:bg-dark-bg bg-gray-200 overflow-hidden mb-1.5">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    selectedBudgetInfo.pct > 100 ? 'bg-red-500' : selectedBudgetInfo.pct > 90 ? 'bg-amber-500' : 'bg-green-primary'
+                  }`}
+                  style={{ width: `${Math.min(selectedBudgetInfo.pct, 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px]">
+                <span className="dark:text-dark-subtle text-light-subtle">
+                  Spent: {formatCurrency(selectedBudgetInfo.spent)} of {formatCurrency(selectedBudgetInfo.budget)}
+                </span>
+                <span className={`font-medium ${selectedBudgetInfo.remaining <= 0 ? 'text-red-400' : 'text-green-primary'}`}>
+                  Remaining: {formatCurrency(Math.max(selectedBudgetInfo.remaining, 0))}
+                </span>
+              </div>
+              {selectedBudgetInfo.pending > 0 && (
+                <p className="text-[10px] dark:text-dark-subtle text-light-subtle mt-1">
+                  {formatCurrency(selectedBudgetInfo.pending)} in pending requests
+                </p>
+              )}
+            </div>
+          )}
 
           <Input
             label="Amount (PHP)"

@@ -6,7 +6,10 @@ import {
   ClockIcon,
   FileTextIcon,
   VideoIcon,
-  TypeIcon } from
+  TypeIcon,
+  FolderKanbanIcon,
+  UserIcon,
+  UsersIcon } from
 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { Task } from '../../data/mockData';
@@ -16,10 +19,11 @@ import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 export function MyTasksPage() {
-  const { tasks, setTasks, projects, media, refreshMedia } = useData();
+  const { tasks, setTasks, projects, users, media, refreshMedia } = useData();
   const { currentUser } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [projectFilter, setProjectFilter] = useState('all');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [progressModal, setProgressModal] = useState<Task | null>(null);
   const [reportModal, setReportModal] = useState<Task | null>(null);
@@ -31,11 +35,16 @@ export function MyTasksPage() {
   });
   const [reportFile, setReportFile] = useState<File | null>(null);
   const [submittingReport, setSubmittingReport] = useState(false);
+  const [teamModal, setTeamModal] = useState<string | null>(null); // project id
+  const myProjects = projects.filter((p) => p.teamIds?.includes(currentUser?.id || ''));
+  const myProjectIds = myProjects.map((p) => p.id);
+  // Show only tasks assigned to the current user
   const myTasks = tasks.filter((t) => t.assignedTo === currentUser?.id);
   const filtered = myTasks.filter((t) => {
     const matchSearch = t.title.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || t.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchProject = projectFilter === 'all' || t.projectId === projectFilter;
+    return matchSearch && matchStatus && matchProject;
   });
   const openProgress = (task: Task) => {
     setProgressModal(task);
@@ -123,6 +132,48 @@ export function MyTasksPage() {
   };
   return (
     <div className="space-y-5">
+      {/* My Projects Summary */}
+      {myProjects.length > 1 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {myProjects.map((project) => {
+            const projectTasks = tasks.filter((t) => t.projectId === project.id);
+            const taskCount = projectTasks.length;
+            const completedCount = projectTasks.filter((t) => t.status === 'completed').length;
+            return (
+              <button
+                key={project.id}
+                onClick={() => setProjectFilter(projectFilter === project.id ? 'all' : project.id)}
+                className={`dark:bg-dark-card dark:border-dark-border bg-white border rounded-card p-4 text-left transition-all ${
+                  projectFilter === project.id
+                    ? 'border-green-primary ring-1 ring-green-primary/30'
+                    : 'border-light-border hover:border-green-primary/40'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 mb-2">
+                  <div className="w-7 h-7 rounded-lg bg-green-primary/15 flex items-center justify-center flex-shrink-0">
+                    <FolderKanbanIcon size={13} className="text-green-primary" />
+                  </div>
+                  <p className="text-sm font-medium dark:text-dark-text text-light-text truncate">
+                    {project.name}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 text-xs dark:text-dark-muted text-light-muted">
+                  <span>{taskCount} task{taskCount !== 1 ? 's' : ''}</span>
+                  <span>{completedCount} done</span>
+                  <StatusBadge status={project.status} />
+                </div>
+                {taskCount > 0 && (
+                  <ProgressBar value={Math.round((completedCount / taskCount) * 100)} size="sm" className="mt-2" />
+                )}
+                {taskCount === 0 && (
+                  <p className="text-[10px] dark:text-dark-subtle text-light-subtle mt-2 italic">No tasks created yet</p>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex gap-3 flex-wrap">
         <div className="flex-1 max-w-xs">
@@ -133,6 +184,19 @@ export function MyTasksPage() {
             icon={<SearchIcon size={14} />} />
 
         </div>
+        <Select
+          options={[
+          {
+            value: 'all',
+            label: 'All Projects'
+          },
+          ...myProjects.map((p) => ({
+            value: p.id,
+            label: p.name
+          }))]}
+          value={projectFilter}
+          onChange={(e) => setProjectFilter(e.target.value)}
+          className="w-44" />
         <Select
           options={[
           {
@@ -177,9 +241,20 @@ export function MyTasksPage() {
                   <h3 className="text-sm font-semibold dark:text-dark-text text-light-text">
                     {task.title}
                   </h3>
-                  <p className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
-                    {project?.name}
-                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-xs dark:text-dark-subtle text-light-subtle">
+                      {project?.name}
+                    </p>
+                    {project && (project.teamIds?.length || 0) > 1 && (
+                      <button
+                        onClick={() => setTeamModal(project.id)}
+                        className="flex items-center gap-1 text-[10px] text-green-primary hover:text-green-600 transition-colors font-medium"
+                      >
+                        <UsersIcon size={10} />
+                        View Team ({project.teamIds?.length})
+                      </button>
+                    )}
+                  </div>
                   <p className="text-xs dark:text-dark-muted text-light-muted mt-1 line-clamp-2">
                     {task.description}
                   </p>
@@ -277,7 +352,13 @@ export function MyTasksPage() {
         {filtered.length === 0 &&
         <div className="flex flex-col items-center justify-center py-16 dark:text-dark-subtle text-light-subtle">
             <CheckCircleIcon size={40} className="mb-3 opacity-30" />
-            <p className="text-sm">No tasks found</p>
+            <p className="text-sm">
+              {projectFilter !== 'all'
+                ? `No tasks in "${projects.find((p) => p.id === projectFilter)?.name || 'this project'}" yet`
+                : myTasks.length === 0
+                  ? 'No tasks in your projects yet'
+                  : 'No tasks match your filters'}
+            </p>
           </div>
         }
       </div>
@@ -433,6 +514,65 @@ export function MyTasksPage() {
             </div>
           }
         </div>
+      </Modal>
+
+      {/* Team Members Modal */}
+      <Modal
+        isOpen={!!teamModal}
+        onClose={() => setTeamModal(null)}
+        title="Team Members"
+        size="sm"
+        footer={
+          <Button variant="secondary" onClick={() => setTeamModal(null)}>
+            Close
+          </Button>
+        }>
+        {(() => {
+          const project = projects.find((p) => p.id === teamModal);
+          if (!project) return null;
+          const teamMembers = (project.teamIds || [])
+            .map((id: string) => users.find((u) => u.id === id))
+            .filter(Boolean);
+          return (
+            <div className="space-y-2">
+              <div className="px-3 py-2 dark:bg-dark-card2 bg-light-card2 rounded-lg mb-3">
+                <p className="text-xs dark:text-dark-subtle text-light-subtle">Project</p>
+                <p className="text-sm font-medium dark:text-dark-text text-light-text mt-0.5">
+                  {project.name}
+                </p>
+              </div>
+              {teamMembers.map((member: any) => (
+                <div
+                  key={member.id}
+                  className="flex items-center gap-3 px-3 py-2.5 dark:bg-dark-card2 bg-light-card2 rounded-lg"
+                >
+                  <div className="w-8 h-8 rounded-full bg-green-primary/15 flex items-center justify-center flex-shrink-0">
+                    {member.profilePhoto ? (
+                      <img
+                        src={member.profilePhoto}
+                        alt={member.name}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <UserIcon size={14} className="text-green-primary" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium dark:text-dark-text text-light-text truncate">
+                      {member.name}
+                      {member.id === currentUser?.id && (
+                        <span className="text-[10px] text-green-primary ml-1.5">(You)</span>
+                      )}
+                    </p>
+                    <p className="text-xs dark:text-dark-subtle text-light-subtle truncate">
+                      {member.email}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </Modal>
     </div>);
 

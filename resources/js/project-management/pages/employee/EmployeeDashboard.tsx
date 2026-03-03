@@ -15,6 +15,9 @@ export function EmployeeDashboard() {
   const { tasks, projects, timeLogs, budgetRequests } = useData();
   const { currentUser } = useAuth();
   const { setCurrentPage } = useNavigation();
+  const myProjects = projects.filter((p) => p.teamIds?.includes(currentUser?.id || ''));
+  const myProjectIds = myProjects.map((p) => p.id);
+  // Show only tasks assigned to the current user
   const myTasks = tasks.filter((t) => t.assignedTo === currentUser?.id);
   const myTimeLogs = timeLogs.filter((t) =>
   myTasks.some((mt) => mt.id === t.taskId)
@@ -28,7 +31,6 @@ export function EmployeeDashboard() {
   ).length;
   const totalHours = myTimeLogs.reduce((s, l) => s + l.hours, 0);
   const pendingBudgets = myBudgets.filter((b) => b.status === 'pending').length;
-  const myProjects = projects.filter((p) => p.teamIds?.includes(currentUser?.id || ''));
   const recentTasks = [...myTasks].slice(0, 4);
   return (
     <div className="space-y-6">

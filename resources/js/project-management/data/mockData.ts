@@ -87,6 +87,7 @@ export interface MediaUpload {
   filePath?: string | null;
   originalFilename?: string | null;
   fileSize?: string | null;
+  visibleTo?: string[];
   createdAt: string;
 }
 
