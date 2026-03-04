@@ -197,7 +197,7 @@ export function AppProvider({ children }: AppProviderProps) {
   const logout = useCallback(() => {
     setCurrentUser(null);
     localStorage.removeItem('maptech-current-user');
-    setCurrentPage('login');
+    navigate('login');
   }, []);
 
   const updateCurrentUser = useCallback((user: User) => {
@@ -206,14 +206,87 @@ export function AppProvider({ children }: AppProviderProps) {
   // Navigation — default to 'login'; will be updated once auth is checked
   const [currentPage, setCurrentPage] = useState<string>('login');
 
-  // Once auth state changes, set the right default page
+  // Map internal page keys to URL paths
+  const pageToPath = (page: string) => {
+    switch (page) {
+      case 'login':
+        return '/';
+      case 'forgot-password':
+        return '/forgot-password';
+      case 'admin-dashboard':
+        return '/admin';
+      case 'employee-dashboard':
+        return '/dashboard';
+      default:
+        return `/${page}`.replace('//', '/');
+    }
+  };
+
+  // Wrapper to navigate: updates state and browser URL (pushState)
+  const navigate = (page: string) => {
+    setCurrentPage(page);
+    try {
+      const path = pageToPath(page);
+      if (window.location.pathname !== path) {
+        window.history.pushState({}, '', path);
+      }
+    } catch (e) {
+      // server-side rendering / unavailable window
+    }
+  };
+
+  // Once auth state changes, set the right default page and push URL
   useEffect(() => {
     if (currentUser) {
-      setCurrentPage(
-        currentUser.role === 'admin' ? 'admin-dashboard' : 'employee-dashboard'
-      );
+      const target = currentUser.role === 'admin' ? 'admin-dashboard' : 'employee-dashboard';
+      navigate(target);
     }
   }, [currentUser]);
+
+  // Sync navigation on back/forward and on initial load
+  // SECURITY: only allow protected pages if user is authenticated
+  useEffect(() => {
+    const syncFromPath = () => {
+      try {
+        const p = window.location.pathname;
+        if (p === '/' || p === '/login') {
+          setCurrentPage('login');
+          return;
+        }
+
+        // Allow forgot-password without auth
+        if (p === '/forgot-password') {
+          setCurrentPage('forgot-password');
+          return;
+        }
+
+        // If user is NOT logged in, block access and redirect to login
+        const savedUser = localStorage.getItem('maptech-current-user');
+        if (!savedUser) {
+          setCurrentPage('login');
+          window.history.replaceState({}, '', '/');
+          return;
+        }
+
+        // User is authenticated — resolve page from path
+        if (p.startsWith('/admin')) {
+          const key = p.replace(/^\//, '') || 'admin-dashboard';
+          setCurrentPage(key);
+        } else if (p === '/dashboard' || p.startsWith('/employee')) {
+          const key = p.replace(/^\//, '') || 'employee-dashboard';
+          setCurrentPage(key);
+        } else {
+          const key = p.replace(/^\//, '') || 'login';
+          setCurrentPage(key);
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    };
+    syncFromPath();
+    window.addEventListener('popstate', syncFromPath);
+    return () => window.removeEventListener('popstate', syncFromPath);
+  }, []);
 
   // ─── Helper: load from localStorage with fallback to mock data ───────────
   function loadState<T>(key: string, fallback: T): T {
@@ -334,7 +407,7 @@ export function AppProvider({ children }: AppProviderProps) {
         <NavigationContext.Provider
           value={{
             currentPage,
-            setCurrentPage
+            setCurrentPage: navigate
           }}>
 
           <DataContext.Provider

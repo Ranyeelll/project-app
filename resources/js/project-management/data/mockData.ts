@@ -11,6 +11,7 @@ export interface User {
   status: 'active' | 'inactive';
   joinDate: string;
   profilePhoto?: string | null;
+  mustChangePassword?: boolean;
 }
 
 export interface Project {

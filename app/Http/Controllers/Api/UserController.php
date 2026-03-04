@@ -56,10 +56,18 @@ class UserController extends Controller
         ]);
 
         $data['password'] = Hash::make($data['password'] ?? 'password123');
+        $data['must_change_password'] = 1;
+
+        // Generate a recovery code (plain shown once, hashed stored)
+        $plainCode = implode('-', str_split(bin2hex(random_bytes(16)), 4));
+        $data['recovery_code'] = Hash::make($plainCode);
 
         $user = User::create($data);
 
-        return response()->json($this->formatUser($user), 201);
+        $payload = $this->formatUser($user);
+        $payload['recovery_code'] = $plainCode; // shown ONCE to the admin
+
+        return response()->json($payload, 201);
     }
 
     /**
@@ -107,6 +115,23 @@ class UserController extends Controller
         $user->update(['profile_photo' => $path]);
 
         return response()->json($this->formatUser($user));
+    }
+
+    /**
+     * Regenerate recovery code for a user (admin action).
+     */
+    public function regenerateRecovery(User $user): JsonResponse
+    {
+        $plainCode = implode('-', str_split(bin2hex(random_bytes(16)), 4));
+        $user->recovery_code = Hash::make($plainCode);
+        $user->save();
+
+        return response()->json([
+            'success'       => true,
+            'recovery_code' => $plainCode,
+            'user_id'       => (string) $user->id,
+            'user_name'     => $user->name,
+        ]);
     }
 
     /**

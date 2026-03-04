@@ -22,6 +22,11 @@ Route::get('/', function () {
     return view('project-management');
 })->name('project-management');
 
+// Override the default Breeze /login so it serves the SPA instead
+Route::get('/login', function () {
+    return view('project-management');
+})->name('login');
+
 /*
 |--------------------------------------------------------------------------
 | API routes for the Project Management SPA
@@ -29,11 +34,15 @@ Route::get('/', function () {
 */
 Route::prefix('api')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/change-password', [AuthController::class, 'changePassword']);
+    Route::post('/verify-recovery', [AuthController::class, 'verifyRecovery']);
+    Route::post('/reset-password-offline', [AuthController::class, 'resetPasswordOffline']);
     Route::get('/users', [UserController::class, 'index']);
     Route::post('/users', [UserController::class, 'store']);
     Route::put('/users/{user}', [UserController::class, 'update']);
     Route::delete('/users/{user}', [UserController::class, 'destroy']);
     Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
+    Route::post('/users/{user}/regenerate-recovery', [UserController::class, 'regenerateRecovery']);
 
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::post('/projects', [ProjectController::class, 'store']);
@@ -76,3 +85,13 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__.'/auth.php';
+
+/*
+|--------------------------------------------------------------------------
+| SPA Catch-All — serves the React SPA for any client-side route
+|--------------------------------------------------------------------------
+| Must be the LAST route so it does not override API or auth routes.
+*/
+Route::get('/{any}', function () {
+    return view('project-management');
+})->where('any', '.*');

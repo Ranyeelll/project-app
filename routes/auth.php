@@ -17,8 +17,9 @@ Route::middleware('guest')->group(function () {
 
     Route::post('register', [RegisteredUserController::class, 'store']);
 
-    Route::get('login', [AuthenticatedSessionController::class, 'create'])
-        ->name('login');
+    // GET /login is handled by the SPA in web.php — only keep POST for API form submissions
+    // Route::get('login', [AuthenticatedSessionController::class, 'create'])
+    //     ->name('login');
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
 

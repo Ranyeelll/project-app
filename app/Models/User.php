@@ -26,6 +26,8 @@ class User extends Authenticatable
         'position',
         'status',
         'profile_photo',
+        'recovery_code',
+        'must_change_password',
     ];
 
     /**
@@ -36,6 +38,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'recovery_code',
     ];
 
     /**

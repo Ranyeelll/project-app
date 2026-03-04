@@ -5,7 +5,11 @@ import {
   EditIcon,
   TrashIcon,
   UserCheckIcon,
-  UserXIcon } from
+  UserXIcon,
+  KeyIcon,
+  ClipboardCopyIcon,
+  CheckCircleIcon,
+  ShieldCheckIcon } from
 'lucide-react';
 import { useData } from '../../context/AppContext';
 import { User } from '../../data/mockData';
@@ -20,6 +24,8 @@ export function TeamManagementPage() {
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [recoveryInfo, setRecoveryInfo] = useState<{ code: string; name: string; id: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -80,8 +86,13 @@ export function TeamManagementPage() {
           }),
         });
         if (res.ok) {
-          const newUser: User = await res.json();
+          const data = await res.json();
+          const newUser: User = data;
           setUsers((prev) => [...prev, newUser]);
+          // Show recovery code to admin
+          if (data.recovery_code) {
+            setRecoveryInfo({ code: data.recovery_code, name: data.name || form.name, id: data.id || '' });
+          }
         }
       } catch { /* network error — silent fail */ }
     } else if (modalMode === 'edit' && selectedUser) {
@@ -135,6 +146,21 @@ export function TeamManagementPage() {
         u.id === id ? { ...u, status: newStatus } : u
       )
     );
+  };
+  const handleRegenerate = async (id: string, name: string) => {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    try {
+      const res = await fetch(`/api/users/${id}/regenerate-recovery`, {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': csrfToken },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.recovery_code) {
+          setRecoveryInfo({ code: data.recovery_code, name: data.user_name || name, id: data.user_id || id });
+        }
+      }
+    } catch { /* silent */ }
   };
   const DEPT_COLORS: Record<string, string> = {
     Engineering: '#63D44A',
@@ -220,6 +246,9 @@ export function TeamManagementPage() {
             <thead>
               <tr className="dark:border-dark-border border-b border-light-border">
                 <th className="text-left px-5 py-3 text-xs font-medium dark:text-dark-muted text-light-muted">
+                  ID
+                </th>
+                <th className="text-left px-5 py-3 text-xs font-medium dark:text-dark-muted text-light-muted">
                   Employee
                 </th>
                 <th className="text-left px-5 py-3 text-xs font-medium dark:text-dark-muted text-light-muted">
@@ -242,6 +271,11 @@ export function TeamManagementPage() {
             <tbody className="divide-y dark:divide-dark-border divide-light-border">
               {filtered.map((user) =>
               <tr key={user.id} className="table-row-hover">
+                  <td className="px-5 py-3.5">
+                    <span className="text-sm font-mono dark:text-dark-muted text-light-muted">
+                      {user.id}
+                    </span>
+                  </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <div
@@ -310,6 +344,13 @@ export function TeamManagementPage() {
                       title="Edit">
 
                         <EditIcon size={13} />
+                      </button>
+                      <button
+                      onClick={() => handleRegenerate(user.id, user.name)}
+                      className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-blue-500/10 dark:hover:text-blue-400 text-light-muted hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                      title="Regenerate Recovery Code">
+
+                        <KeyIcon size={13} />
                       </button>
                       <button
                       onClick={() => setDeleteConfirm(user.id)}
@@ -476,6 +517,57 @@ export function TeamManagementPage() {
           Are you sure you want to remove this employee? This action cannot be
           undone.
         </p>
+      </Modal>
+
+      {/* Recovery Code Display Modal */}
+      <Modal
+        isOpen={!!recoveryInfo}
+        onClose={() => { setRecoveryInfo(null); setCopied(false); }}
+        title="Recovery Code"
+        size="sm">
+        {recoveryInfo && (
+          <div>
+            <div className="flex flex-col items-center mb-4">
+              <div className="w-14 h-14 rounded-full bg-green-500/15 flex items-center justify-center mb-3">
+                <ShieldCheckIcon size={28} className="text-green-400" />
+              </div>
+              <p className="text-sm dark:text-dark-text text-light-text text-center font-medium">
+                Recovery Code for {recoveryInfo.name}
+              </p>
+              <p className="text-xs dark:text-dark-muted text-light-muted mt-1 text-center">
+                Employee ID: <span className="font-mono font-semibold">{recoveryInfo.id}</span>
+              </p>
+              <p className="text-xs text-red-400 font-semibold mt-2 text-center">
+                Save this now — it will not be shown again.
+              </p>
+            </div>
+            <div className="mb-4 p-3 rounded-lg dark:bg-dark-card2 bg-gray-50 border dark:border-dark-border border-light-border">
+              <p className="text-xs dark:text-dark-muted text-light-muted mb-1 uppercase tracking-wide font-semibold">
+                Recovery Code
+              </p>
+              <p className="text-sm font-mono dark:text-green-400 text-green-600 break-all select-all leading-relaxed">
+                {recoveryInfo.code}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(recoveryInfo.code).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                });
+              }}
+              className="w-full mb-3 flex items-center justify-center gap-2 px-3 py-2 rounded-btn text-sm font-medium dark:bg-dark-card2 dark:border-dark-border dark:text-dark-text dark:hover:bg-dark-border/50 bg-gray-100 border border-light-border text-light-text hover:bg-gray-200 transition-colors">
+              {copied ? (
+                <><CheckCircleIcon size={15} className="text-green-400" /> Copied!</>
+              ) : (
+                <><ClipboardCopyIcon size={15} /> Copy Code</>
+              )}
+            </button>
+            <Button variant="primary" fullWidth onClick={() => { setRecoveryInfo(null); setCopied(false); }}>
+              Done
+            </Button>
+          </div>
+        )}
       </Modal>
     </div>);
 

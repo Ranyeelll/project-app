@@ -7,12 +7,13 @@ import {
   LockIcon,
   MailIcon } from
 'lucide-react';
-import { useAuth, useTheme } from '../context/AppContext';
+import { useAuth, useTheme, useNavigation } from '../context/AppContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 export function LoginPage() {
   const { login } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const { setCurrentPage } = useNavigation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -143,6 +144,7 @@ export function LoginPage() {
               </label>
               <button
                 type="button"
+                onClick={() => setCurrentPage('forgot-password')}
                 className="text-sm text-green-interactive hover:text-green-primary transition-colors">
 
                 Forgot password?

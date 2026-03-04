@@ -16,7 +16,9 @@ import {
   CameraIcon,
   LogOutIcon,
   UserIcon,
+  KeyIcon,
 } from 'lucide-react';
+import { ChangePasswordModal } from '../ui/ChangePasswordModal';
 import { useTheme, useAuth, useNavigation, useData } from '../../context/AppContext';
 
 interface Notification {
@@ -39,6 +41,7 @@ export function Header() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('maptech-dismissed-notifs');
@@ -612,9 +615,14 @@ export function Header() {
                     <p className="text-xs dark:text-dark-subtle text-light-subtle truncate mt-0.5">
                       {currentUser?.email}
                     </p>
-                    <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-primary/15 text-green-primary capitalize">
-                      {currentUser?.role}
-                    </span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-primary/15 text-green-primary capitalize">
+                        {currentUser?.role}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium dark:bg-dark-card2 dark:text-dark-muted bg-gray-100 text-gray-500">
+                        ID: {currentUser?.id}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -628,6 +636,13 @@ export function Header() {
                 >
                   <CameraIcon size={14} />
                   {uploadingPhoto ? 'Uploading...' : currentUser?.profilePhoto ? 'Change Photo' : 'Upload Photo'}
+                </button>
+                <button
+                  onClick={() => { setShowProfileMenu(false); setShowChangePassword(true); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors"
+                >
+                  <KeyIcon size={14} />
+                  Change Password
                 </button>
               </div>
 
@@ -657,6 +672,12 @@ export function Header() {
           />
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={showChangePassword}
+        onClose={() => setShowChangePassword(false)}
+      />
     </header>
   );
 }

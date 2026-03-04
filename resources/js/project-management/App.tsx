@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AppProvider,
   useAuth,
@@ -7,6 +7,8 @@ import {
 './context/AppContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ChangePasswordModal } from './components/ui/ChangePasswordModal';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { ProjectsPage } from './pages/admin/ProjectsPage';
 import { GanttPage } from './pages/admin/GanttPage';
@@ -27,8 +29,21 @@ function AppContent() {
   const { currentUser } = useAuth();
   const { currentPage } = useNavigation();
   const { isDark } = useTheme();
-  // Not logged in → show login
+
+  // Force password-change modal when must_change_password is set
+  const [showForceChange, setShowForceChange] = useState(false);
+
+  useEffect(() => {
+    if (currentUser?.mustChangePassword) {
+      setShowForceChange(true);
+    }
+  }, [currentUser]);
+
+  // Not logged in → show login or forgot-password
   if (!currentUser) {
+    if (currentPage === 'forgot-password') {
+      return <ForgotPasswordPage />;
+    }
     return <LoginPage />;
   }
   // Render page based on current navigation
@@ -81,7 +96,16 @@ function AppContent() {
     }
     return <LoginPage />;
   };
-  return <AppLayout>{renderPage()}</AppLayout>;
+  return (
+    <>
+      <AppLayout>{renderPage()}</AppLayout>
+      <ChangePasswordModal
+        isOpen={showForceChange}
+        onClose={() => setShowForceChange(false)}
+        forced={true}
+      />
+    </>
+  );
 }
 export function App() {
   return (
