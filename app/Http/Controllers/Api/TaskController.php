@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Task;
+use App\Models\Project;
+use App\Models\BudgetRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -76,9 +78,20 @@ class TaskController extends Controller
             'logged_hours'             => 'nullable|numeric|min:0',
             'allow_employee_edit'      => 'nullable|boolean',
             'completion_report_status' => 'sometimes|in:none,pending,approved,rejected',
+            'report_cost'              => 'nullable|numeric|min:0',
         ]);
 
+        $oldStatus = $task->completion_report_status;
         $task->update($data);
+
+        // When a report is approved, auto-recalculate project.spent
+        if (isset($data['completion_report_status']) && $data['completion_report_status'] === 'approved' && $oldStatus !== 'approved') {
+            $this->recalcProjectSpent($task->project_id);
+        }
+        // If report is un-approved (rejected after approval), recalc too
+        if (isset($data['completion_report_status']) && $oldStatus === 'approved' && $data['completion_report_status'] !== 'approved') {
+            $this->recalcProjectSpent($task->project_id);
+        }
 
         return response()->json($this->formatTask($task->fresh()));
     }
@@ -112,6 +125,28 @@ class TaskController extends Controller
             'loggedHours'            => (float) $t->logged_hours,
             'allowEmployeeEdit'      => (bool) $t->allow_employee_edit,
             'completionReportStatus' => $t->completion_report_status,
+            'reportCost'             => (float) $t->report_cost,
         ];
+    }
+
+    /**
+     * Recalculate project.spent from approved budget requests + approved task report costs.
+     */
+    private function recalcProjectSpent(int $projectId): void
+    {
+        $project = Project::find($projectId);
+        if (!$project) return;
+
+        $budgetSpent = BudgetRequest::where('project_id', $projectId)
+            ->where('status', 'approved')
+            ->where('type', 'spending')
+            ->sum('amount');
+
+        $reportCosts = Task::where('project_id', $projectId)
+            ->where('completion_report_status', 'approved')
+            ->sum('report_cost');
+
+        $project->spent = $budgetSpent + $reportCosts;
+        $project->save();
     }
 }

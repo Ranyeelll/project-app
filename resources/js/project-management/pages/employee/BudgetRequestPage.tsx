@@ -16,6 +16,7 @@ export function BudgetRequestPage() {
   const [form, setForm] = useState({
     projectId: projects[0]?.id || '',
     amount: '',
+    type: 'spending' as 'spending' | 'additional_budget',
     purpose: ''
   });
   const myRequests = budgetRequests.filter(
@@ -31,6 +32,7 @@ export function BudgetRequestPage() {
           project_id: form.projectId,
           requested_by: currentUser?.id || '',
           amount: Number(form.amount),
+          type: form.type,
           purpose: form.purpose,
         }),
       });
@@ -42,6 +44,7 @@ export function BudgetRequestPage() {
     setForm({
       projectId: projects[0]?.id || '',
       amount: '',
+      type: 'spending',
       purpose: ''
     });
   };
@@ -55,6 +58,7 @@ export function BudgetRequestPage() {
         body: JSON.stringify({
           project_id: form.projectId,
           amount: Number(form.amount),
+          type: form.type,
           purpose: form.purpose,
         }),
       });
@@ -69,6 +73,7 @@ export function BudgetRequestPage() {
     setForm({
       projectId: req.projectId,
       amount: String(req.amount),
+      type: req.type || 'spending',
       purpose: req.purpose
     });
   };
@@ -90,6 +95,7 @@ export function BudgetRequestPage() {
     setForm({
       projectId: req.projectId,
       amount: String(req.amount),
+      type: req.type || 'spending',
       purpose: req.purpose
     });
   };
@@ -117,6 +123,7 @@ export function BudgetRequestPage() {
     setForm({
       projectId: projects[0]?.id || '',
       amount: '',
+      type: 'spending',
       purpose: ''
     });
   };
@@ -132,7 +139,7 @@ export function BudgetRequestPage() {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return null;
     const spent = budgetRequests
-      .filter((b) => b.projectId === projectId && b.status === 'approved')
+      .filter((b) => b.projectId === projectId && b.status === 'approved' && (b.type || 'spending') === 'spending')
       .reduce((s, b) => s + b.amount, 0);
     const pending = budgetRequests
       .filter((b) => b.projectId === projectId && b.status === 'pending')
@@ -240,6 +247,15 @@ export function BudgetRequestPage() {
                         {formatCurrency(req.amount)}
                       </span>
                       <StatusBadge status={req.status} />
+                      {req.type === 'additional_budget' ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 font-medium">
+                          Additional Budget
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/15 dark:text-dark-muted text-light-muted font-medium">
+                          Spending
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs dark:text-dark-subtle text-light-subtle mb-1">
                       {project?.name}
@@ -400,6 +416,20 @@ export function BudgetRequestPage() {
             </div>
           )}
 
+          <Select
+            label="Request Type"
+            value={form.type}
+            onChange={(e) =>
+            setForm({
+              ...form,
+              type: e.target.value as 'spending' | 'additional_budget'
+            })
+            }
+            options={[
+              { value: 'spending', label: 'Spending / Expense' },
+              { value: 'additional_budget', label: 'Additional Budget' },
+            ]} />
+
           <Input
             label="Amount (PHP)"
             type="number"
@@ -461,6 +491,20 @@ export function BudgetRequestPage() {
               value: p.id,
               label: p.name
             }))} />
+
+          <Select
+            label="Request Type"
+            value={form.type}
+            onChange={(e) =>
+            setForm({
+              ...form,
+              type: e.target.value as 'spending' | 'additional_budget'
+            })
+            }
+            options={[
+              { value: 'spending', label: 'Spending / Expense' },
+              { value: 'additional_budget', label: 'Additional Budget' },
+            ]} />
 
           <Input
             label="Amount (PHP)"
@@ -559,6 +603,20 @@ export function BudgetRequestPage() {
               </p>
             </div>
           )}
+
+          <Select
+            label="Request Type"
+            value={form.type}
+            onChange={(e) =>
+            setForm({
+              ...form,
+              type: e.target.value as 'spending' | 'additional_budget'
+            })
+            }
+            options={[
+              { value: 'spending', label: 'Spending / Expense' },
+              { value: 'additional_budget', label: 'Additional Budget' },
+            ]} />
 
           <Input
             label="Revised Amount (PHP)"

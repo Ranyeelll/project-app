@@ -397,6 +397,7 @@ export function Header() {
     'admin-gantt': 'Gantt Hub',
     'admin-monitor': 'Monitor & Control',
     'admin-budget': 'Budget Approvals',
+    'admin-budget-report': 'Budget Report',
     'admin-team': 'Team Management',
     'admin-reports': 'Reports & Media',
     'admin-reviews': 'Task Reviews',

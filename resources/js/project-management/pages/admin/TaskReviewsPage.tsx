@@ -9,7 +9,9 @@ import {
   VideoIcon,
   ImageIcon,
   FileIcon,
-  UserIcon } from
+  UserIcon,
+  DollarSignIcon,
+  AlertTriangleIcon } from
 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { Task } from '../../data/mockData';
@@ -194,6 +196,38 @@ export function TaskReviewsPage() {
                   <div className="text-xs dark:text-dark-subtle text-light-subtle mt-1">
                     {task.loggedHours}h / {task.estimatedHours}h logged
                   </div>
+
+                  {/* Reported Cost */}
+                  {task.reportCost > 0 && (() => {
+                    const proj = projects.find((p) => p.id === task.projectId);
+                    // If task report is already approved, its cost is already in proj.spent
+                    const alreadyCounted = task.completionReportStatus === 'approved' ? (task.reportCost || 0) : 0;
+                    const remaining = proj ? proj.budget - proj.spent + alreadyCounted : 0;
+                    const wouldExceed = proj && task.completionReportStatus === 'pending' && task.reportCost > remaining;
+                    return (
+                      <>
+                        <div className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
+                          wouldExceed
+                            ? 'dark:bg-red-500/10 bg-red-50 border dark:border-red-500/20 border-red-200'
+                            : 'dark:bg-green-500/10 bg-green-50 border dark:border-green-500/20 border-green-200'
+                        }`}>
+                          <DollarSignIcon size={12} className={wouldExceed ? 'text-red-500' : 'text-green-500'} />
+                          <span className={`text-xs font-semibold ${wouldExceed ? 'text-red-500' : 'text-green-500'}`}>
+                            Reported Cost: {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(task.reportCost)}
+                          </span>
+                          {task.completionReportStatus === 'approved' && (
+                            <span className="text-[10px] dark:text-green-400 text-green-600 ml-1">(added to project spent)</span>
+                          )}
+                        </div>
+                        {wouldExceed && (
+                          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-red-400">
+                            <AlertTriangleIcon size={12} />
+                            <span>Exceeds remaining budget ({new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(remaining)}) by {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(task.reportCost - remaining)}</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {/* Attached reports/media */}
                   {taskMedia.length > 0 && (

@@ -11,6 +11,7 @@ class BudgetRequest extends Model
         'project_id',
         'requested_by',
         'amount',
+        'type',
         'purpose',
         'status',
         'review_comment',

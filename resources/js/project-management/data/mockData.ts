@@ -45,6 +45,7 @@ export interface Task {
   loggedHours: number;
   allowEmployeeEdit: boolean;
   completionReportStatus: 'none' | 'pending' | 'approved' | 'rejected';
+  reportCost: number;
 }
 
 export interface BudgetRequest {
@@ -52,6 +53,7 @@ export interface BudgetRequest {
   projectId: string;
   requestedBy: string;
   amount: number;
+  type: 'spending' | 'additional_budget';
   purpose: string;
   status: 'pending' | 'approved' | 'rejected' | 'revision_requested';
   createdAt: string;

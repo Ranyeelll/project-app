@@ -14,6 +14,7 @@ import { ProjectsPage } from './pages/admin/ProjectsPage';
 import { GanttPage } from './pages/admin/GanttPage';
 import { MonitorControlPage } from './pages/admin/MonitorControlPage';
 import { BudgetApprovalsPage } from './pages/admin/BudgetApprovalsPage';
+import { BudgetReportPage } from './pages/admin/BudgetReportPage';
 import { TeamManagementPage } from './pages/admin/TeamManagementPage';
 import { ReportsMediaPage } from './pages/admin/ReportsMediaPage';
 import { TaskReviewsPage } from './pages/admin/TaskReviewsPage';
@@ -61,6 +62,8 @@ function AppContent() {
           return <MonitorControlPage />;
         case 'admin-budget':
           return <BudgetApprovalsPage />;
+        case 'admin-budget-report':
+          return <BudgetReportPage />;
         case 'admin-team':
           return <TeamManagementPage />;
         case 'admin-reports':

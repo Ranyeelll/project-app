@@ -148,11 +148,15 @@ class ProjectController extends Controller
         $completedTasks = $projectTasks->where('status', 'completed')->count();
         $computedProgress = $totalTasks > 0 ? (int) round(($completedTasks / $totalTasks) * 100) : (int) $p->progress;
 
-        // Compute spent from approved budget requests
+        // Compute spent from approved spending budget requests + approved task report costs
         $approvedSpent = BudgetRequest::where('project_id', $p->id)
             ->where('status', 'approved')
+            ->where('type', 'spending')
             ->sum('amount');
-        $computedSpent = $approvedSpent > 0 ? (float) $approvedSpent : (float) $p->spent;
+        $reportCosts = Task::where('project_id', $p->id)
+            ->where('completion_report_status', 'approved')
+            ->sum('report_cost');
+        $computedSpent = (float) ($approvedSpent + $reportCosts);
 
         return [
             'id'          => (string) $p->id,

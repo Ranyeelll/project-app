@@ -17,7 +17,7 @@ import { Textarea } from '../../components/ui/Input';
 import { Badge, StatusBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 export function BudgetApprovalsPage() {
-  const { budgetRequests, setBudgetRequests, projects, users, refreshBudgetRequests } = useData();
+  const { budgetRequests, setBudgetRequests, projects, users, refreshBudgetRequests, refreshProjects } = useData();
   const [statusFilter, setStatusFilter] = useState('all');
   const [reviewModal, setReviewModal] = useState<{
     request: BudgetRequest;
@@ -39,7 +39,7 @@ export function BudgetApprovalsPage() {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return { budget: 0, spent: 0, remaining: 0, pct: 0 };
     const spent = budgetRequests
-      .filter((b) => b.projectId === projectId && b.status === 'approved')
+      .filter((b) => b.projectId === projectId && b.status === 'approved' && (b.type || 'spending') === 'spending')
       .reduce((s, b) => s + b.amount, 0);
     const remaining = project.budget - spent;
     const pct = project.budget > 0 ? Math.round((spent / project.budget) * 100) : 0;
@@ -47,6 +47,7 @@ export function BudgetApprovalsPage() {
   };
 
   const getApprovalWarning = (req: BudgetRequest) => {
+    if ((req.type || 'spending') === 'additional_budget') return null;
     const info = getProjectBudgetInfo(req.projectId);
     const afterApproval = info.spent + req.amount;
     if (info.budget <= 0) return null;
@@ -93,6 +94,7 @@ export function BudgetApprovalsPage() {
         body: JSON.stringify(body),
       });
       refreshBudgetRequests();
+      refreshProjects();
     } catch {
       // Fallback to local update
       setBudgetRequests((prev) =>
@@ -244,6 +246,15 @@ export function BudgetApprovalsPage() {
                           {formatCurrency(req.amount)}
                         </span>
                         <StatusBadge status={req.status} />
+                        {req.type === 'additional_budget' ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 font-medium">
+                            Additional Budget
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/15 dark:text-dark-muted text-light-muted font-medium">
+                            Spending
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs dark:text-dark-subtle text-light-subtle">
                         {project?.name} · Requested by {requester?.name}
@@ -252,8 +263,18 @@ export function BudgetApprovalsPage() {
                   </div>
                   {/* Budget warning */}
                   {req.status === 'pending' && (() => {
-                    const warning = getApprovalWarning(req);
                     const info = getProjectBudgetInfo(req.projectId);
+
+                    // Additional budget requests don't need overage warnings
+                    if (req.type === 'additional_budget') {
+                      return info.budget > 0 ? (
+                        <div className="mt-2 text-[10px] text-blue-400">
+                          Will add {formatCurrency(req.amount)} to project budget (currently {formatCurrency(info.budget)})
+                        </div>
+                      ) : null;
+                    }
+
+                    const warning = getApprovalWarning(req);
                     return warning ? (
                       <div className={`mt-2 px-3 py-2 rounded-lg border flex items-start gap-2 ${
                         warning.type === 'over'
@@ -417,10 +438,20 @@ export function BudgetApprovalsPage() {
                 style: 'currency',
                 currency: 'PHP'
               }).format(reviewModal.request.amount)}
+                {reviewModal.request.type === 'additional_budget' && (
+                  <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 font-medium">
+                    Additional Budget
+                  </span>
+                )}
               </p>
               <p className="text-xs dark:text-dark-muted text-light-muted mt-1">
                 {reviewModal.request.purpose}
               </p>
+              {reviewModal.action === 'approve' && reviewModal.request.type === 'additional_budget' && (
+                <p className="text-xs text-blue-400 mt-2">
+                  This will add {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'PHP' }).format(reviewModal.request.amount)} to the project's total budget.
+                </p>
+              )}
               {reviewModal.action === 'revision' && (
                 <p className="text-xs text-amber-400 mt-2">
                   The employee will be able to revise and resubmit this request.
@@ -430,9 +461,24 @@ export function BudgetApprovalsPage() {
           }
           {/* Budget overage warning in modal */}
           {reviewModal?.action === 'approve' && (() => {
-            const warning = getApprovalWarning(reviewModal.request);
-            const info = getProjectBudgetInfo(reviewModal.request.projectId);
             const project = projects.find((p) => p.id === reviewModal.request.projectId);
+            const info = getProjectBudgetInfo(reviewModal.request.projectId);
+
+            // Additional budget requests increase budget, so no overage warning needed
+            if (reviewModal.request.type === 'additional_budget') {
+              return (
+                <div className="px-3 py-2.5 rounded-lg border dark:bg-blue-500/5 bg-blue-50 dark:border-blue-500/20 border-blue-200">
+                  <p className="text-xs dark:text-dark-muted text-light-muted">
+                    <span className="font-medium">{project?.name}</span>: Current budget {formatCurrency(info.budget)}
+                  </p>
+                  <p className="text-xs text-blue-400 mt-0.5">
+                    After approval: {formatCurrency(info.budget + reviewModal.request.amount)} total budget
+                  </p>
+                </div>
+              );
+            }
+
+            const warning = getApprovalWarning(reviewModal.request);
             return (
               <div className={`px-3 py-2.5 rounded-lg border ${
                 warning?.type === 'over'
@@ -444,7 +490,7 @@ export function BudgetApprovalsPage() {
                 {warning?.type === 'over' && (
                   <div className="flex items-center gap-1.5 mb-1">
                     <AlertTriangleIcon size={13} className="text-red-400" />
-                    <p className="text-xs font-semibold text-red-400">⚠ Budget Overage Warning</p>
+                    <p className="text-xs font-semibold text-red-400">Budget Overage Warning</p>
                   </div>
                 )}
                 {warning?.type === 'warn' && (

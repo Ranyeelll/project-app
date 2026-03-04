@@ -21,6 +21,7 @@ class Task extends Model
         'logged_hours',
         'allow_employee_edit',
         'completion_report_status',
+        'report_cost',
     ];
 
     protected $casts = [
@@ -28,6 +29,7 @@ class Task extends Model
         'end_date'            => 'date',
         'estimated_hours'     => 'decimal:2',
         'logged_hours'        => 'decimal:2',
+        'report_cost'         => 'decimal:2',
         'allow_employee_edit' => 'boolean',
     ];
 

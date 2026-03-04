@@ -50,6 +50,11 @@ const ADMIN_NAV: NavItem[] = [
   icon: <DollarSignIcon size={16} />
 },
 {
+  id: 'admin-budget-report',
+  label: 'Budget Report',
+  icon: <BarChart2Icon size={16} />
+},
+{
   id: 'admin-team',
   label: 'Team Management',
   icon: <UsersIcon size={16} />

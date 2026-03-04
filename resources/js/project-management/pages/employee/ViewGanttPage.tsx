@@ -104,7 +104,6 @@ export function ViewGanttPage() {
     const el = scrollContainerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       setZoomScale((prev) => {
         const delta = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP;

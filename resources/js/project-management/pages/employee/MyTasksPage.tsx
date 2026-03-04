@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   SearchIcon,
   UploadIcon,
@@ -9,7 +9,8 @@ import {
   TypeIcon,
   FolderKanbanIcon,
   UserIcon,
-  UsersIcon } from
+  UsersIcon,
+  AlertTriangleIcon } from
 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { Task } from '../../data/mockData';
@@ -19,7 +20,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 export function MyTasksPage() {
-  const { tasks, setTasks, projects, users, media, refreshMedia } = useData();
+  const { tasks, setTasks, projects, users, media, refreshMedia, refreshProjects } = useData();
   const { currentUser } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -31,7 +32,8 @@ export function MyTasksPage() {
   const [reportForm, setReportForm] = useState({
     type: 'text',
     title: '',
-    content: ''
+    content: '',
+    cost: ''
   });
   const [reportFile, setReportFile] = useState<File | null>(null);
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -102,7 +104,7 @@ export function MyTasksPage() {
       });
 
       if (res.ok) {
-        // Update task completion report status via API
+        // Update task completion report status and cost via API
         await fetch(`/api/tasks/${reportModal.id}`, {
           method: 'PUT',
           headers: {
@@ -110,14 +112,18 @@ export function MyTasksPage() {
             'Accept': 'application/json',
             'X-CSRF-TOKEN': csrfToken,
           },
-          body: JSON.stringify({ completion_report_status: 'pending' }),
+          body: JSON.stringify({
+            completion_report_status: 'pending',
+            report_cost: Number(reportForm.cost) || 0,
+          }),
         });
 
-        // Refresh media and tasks from server
+        // Refresh media, tasks, and projects from server
         refreshMedia();
+        refreshProjects();
         setTasks((prev) =>
           prev.map((t) =>
-            t.id === reportModal.id ? { ...t, completionReportStatus: 'pending' } : t
+            t.id === reportModal.id ? { ...t, completionReportStatus: 'pending', reportCost: Number(reportForm.cost) || 0 } : t
           )
         );
       }
@@ -126,7 +132,7 @@ export function MyTasksPage() {
     } finally {
       setSubmittingReport(false);
       setReportModal(null);
-      setReportForm({ type: 'text', title: '', content: '' });
+      setReportForm({ type: 'text', title: '', content: '', cost: '' });
       setReportFile(null);
     }
   };
@@ -334,16 +340,14 @@ export function MyTasksPage() {
 
                   Update Progress
                 </Button>
-                {task.completionReportStatus !== 'approved' &&
                 <Button
                   variant="outline"
                   size="sm"
                   icon={<UploadIcon size={12} />}
-                  onClick={() => setReportModal(task)}>
+                  onClick={() => { refreshProjects(); setReportModal(task); }}>
 
-                      Submit Report
+                      {task.completionReportStatus !== 'none' ? 'Resubmit Report' : 'Submit Report'}
                     </Button>
-                }
               </div>
             </div>);
 
@@ -489,6 +493,55 @@ export function MyTasksPage() {
             })
             }
             rows={4} />
+
+          <Input
+            label="Total Cost (PHP)"
+            type="number"
+            placeholder="0"
+            value={reportForm.cost}
+            onChange={(e) =>
+            setReportForm({
+              ...reportForm,
+              cost: e.target.value
+            })
+            } />
+
+          {/* Budget context & over-budget warning */}
+          {reportModal && (() => {
+            const proj = projects.find((p) => p.id === reportModal.projectId);
+            if (!proj) return null;
+            const costNum = Number(reportForm.cost) || 0;
+            // proj.spent is always computed from approved items by the API
+            // so remaining = budget - approved spent
+            const remaining = proj.budget - proj.spent;
+            const wouldExceed = costNum > 0 && costNum > remaining;
+            return (
+              <div className={`px-3 py-2 rounded-lg text-xs ${
+                wouldExceed
+                  ? 'bg-red-500/10 border border-red-500/30'
+                  : 'dark:bg-dark-card2 bg-light-card2'
+              }`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="dark:text-dark-muted text-light-muted">Project Budget:</span>
+                  <span className="font-medium dark:text-dark-text text-light-text">
+                    ₱{proj.budget.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="dark:text-dark-muted text-light-muted">Remaining:</span>
+                  <span className={`font-medium ${remaining < 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    ₱{remaining.toLocaleString()}
+                  </span>
+                </div>
+                {wouldExceed && (
+                  <div className="flex items-center gap-1.5 mt-2 text-red-400">
+                    <AlertTriangleIcon size={12} />
+                    <span>This cost exceeds the remaining budget by ₱{(costNum - remaining).toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {reportForm.type !== 'text' &&
           <div className="border-2 border-dashed dark:border-dark-border border-light-border rounded-lg p-5 text-center">

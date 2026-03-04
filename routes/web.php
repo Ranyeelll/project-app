@@ -67,6 +67,7 @@ Route::prefix('api')->group(function () {
     Route::post('/budget-requests', [BudgetRequestController::class, 'store']);
     Route::put('/budget-requests/{budget_request}', [BudgetRequestController::class, 'update']);
     Route::delete('/budget-requests/{budget_request}', [BudgetRequestController::class, 'destroy']);
+    Route::get('/budget-report', [BudgetRequestController::class, 'report']);
 
     Route::get('/issues', [IssueController::class, 'index']);
     Route::post('/issues', [IssueController::class, 'store']);
