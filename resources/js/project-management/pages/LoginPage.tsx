@@ -161,11 +161,11 @@ export function LoginPage() {
             </Button>
           </form>
 
-          {/* Demo credentials removed */}
+          {}
         </div>
 
         <p className="text-center text-xs dark:text-dark-subtle text-light-subtle mt-6">
-          © 2025 Maptech Information Solutions Inc. All rights reserved.
+          © 2026 Maptech Information Solutions Inc. All rights reserved.
         </p>
       </div>
     </div>);
