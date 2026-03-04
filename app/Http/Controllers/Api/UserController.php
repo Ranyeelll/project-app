@@ -139,6 +139,15 @@ class UserController extends Controller
      */
     public function destroy(User $user): JsonResponse
     {
+        // Protect the primary admin (lowest-ID admin) from deletion
+        $primaryAdmin = User::where('role', 'admin')->orderBy('id')->first();
+        if ($primaryAdmin && $user->id === $primaryAdmin->id) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'The primary administrator account cannot be deleted.',
+            ], 403);
+        }
+
         $user->delete();
 
         return response()->json(['message' => 'User deleted.']);

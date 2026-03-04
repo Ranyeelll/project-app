@@ -9,7 +9,8 @@ import {
   KeyIcon,
   ClipboardCopyIcon,
   CheckCircleIcon,
-  ShieldCheckIcon } from
+  ShieldCheckIcon,
+  ShieldIcon } from
 'lucide-react';
 import { useData } from '../../context/AppContext';
 import { User } from '../../data/mockData';
@@ -350,15 +351,32 @@ export function TeamManagementPage() {
                       className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-blue-500/10 dark:hover:text-blue-400 text-light-muted hover:bg-blue-50 hover:text-blue-500 transition-colors"
                       title="Regenerate Recovery Code">
 
-                        <KeyIcon size={13} />
+                      <KeyIcon size={13} />
                       </button>
-                      <button
-                      onClick={() => setDeleteConfirm(user.id)}
-                      className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors"
-                      title="Delete">
-
-                        <TrashIcon size={13} />
-                      </button>
+                      {(() => {
+                        // Find the primary admin (lowest ID among admins)
+                        const primaryAdminId = users
+                          .filter((u) => u.role === 'admin')
+                          .reduce((min, u) => {
+                            const uid = parseInt(u.id, 10);
+                            const mid = parseInt(min, 10);
+                            return uid < mid ? u.id : min;
+                          }, '999999999');
+                        return user.id === primaryAdminId ? (
+                          <span
+                            className="p-1.5 rounded dark:text-green-400 text-green-600 cursor-default"
+                            title="Primary Admin — cannot be deleted">
+                            <ShieldIcon size={13} />
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirm(user.id)}
+                            className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors"
+                            title="Delete">
+                            <TrashIcon size={13} />
+                          </button>
+                        );
+                      })()}
                     </div>
                   </td>
                 </tr>

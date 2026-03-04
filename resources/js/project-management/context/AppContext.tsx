@@ -328,6 +328,25 @@ export function AppProvider({ children }: AppProviderProps) {
       .catch(() => { /* fallback to localStorage / mock data already loaded */ });
   }, []);
 
+  // ─── Keep currentUser in sync with latest user data from DB ──────────────
+  useEffect(() => {
+    if (!currentUser) return;
+    const fresh = users.find((u) => u.id === currentUser.id);
+    if (!fresh) return;
+    // Update currentUser if any displayed field changed
+    if (
+      fresh.name !== currentUser.name ||
+      fresh.email !== currentUser.email ||
+      fresh.role !== currentUser.role ||
+      fresh.department !== currentUser.department ||
+      fresh.position !== currentUser.position ||
+      fresh.status !== currentUser.status ||
+      fresh.profilePhoto !== currentUser.profilePhoto
+    ) {
+      setCurrentUser((prev) => prev ? { ...prev, ...fresh } : prev);
+    }
+  }, [users]);
+
   // ─── Refresh helpers (can be called from any page) ────────────────────────
   const refreshUsers = () => {
     fetch('/api/users')
