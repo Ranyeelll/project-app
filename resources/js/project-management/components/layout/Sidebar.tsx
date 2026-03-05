@@ -3,7 +3,7 @@ import {
   LayoutDashboardIcon,
   FolderKanbanIcon,
   GanttChartIcon,
-  ActivityIcon,
+
   DollarSignIcon,
   UsersIcon,
   FileTextIcon,
@@ -41,8 +41,8 @@ const ADMIN_NAV: NavItem[] = [
 },
 {
   id: 'admin-monitor',
-  label: 'Monitor & Control',
-  icon: <ActivityIcon size={16} />
+  label: 'Analytics',
+  icon: <BarChart2Icon size={16} />
 },
 {
   id: 'admin-budget',

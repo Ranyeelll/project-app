@@ -27,6 +27,7 @@
     },
     "dependencies": {
         "@emotion/react": "^11.14.0",
-        "lucide-react": "^0.522.0"
+        "lucide-react": "^0.522.0",
+        "recharts": "^3.7.0"
     }
 }

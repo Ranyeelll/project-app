@@ -395,7 +395,7 @@ export function Header() {
     'admin-dashboard': 'Dashboard',
     'admin-projects': 'Projects',
     'admin-gantt': 'Gantt Hub',
-    'admin-monitor': 'Monitor & Control',
+    'admin-monitor': 'Analytics',
     'admin-budget': 'Budget Approvals',
     'admin-budget-report': 'Budget Report',
     'admin-team': 'Team Management',
