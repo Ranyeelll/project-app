@@ -82,6 +82,15 @@ class TaskController extends Controller
         ]);
 
         $oldStatus = $task->completion_report_status;
+
+        // When re-submitting a report for an already-approved task,
+        // ADD the new cost to the existing approved cost (accumulate, not replace)
+        if (isset($data['completion_report_status']) && $data['completion_report_status'] === 'pending'
+            && $oldStatus === 'approved'
+            && isset($data['report_cost']) && (float) $task->report_cost > 0) {
+            $data['report_cost'] = (float) $task->report_cost + (float) $data['report_cost'];
+        }
+
         $task->update($data);
 
         // When a report is approved, auto-recalculate project.spent

@@ -511,8 +511,9 @@ export function MyTasksPage() {
             const proj = projects.find((p) => p.id === reportModal.projectId);
             if (!proj) return null;
             const costNum = Number(reportForm.cost) || 0;
-            // proj.spent is always computed from approved items by the API
-            // so remaining = budget - approved spent
+            // When re-submitting for an already-approved task, the new cost is ADDED
+            // to the existing approved cost. proj.spent already includes the old cost,
+            // so remaining already accounts for previously approved report costs.
             const remaining = proj.budget - proj.spent;
             const wouldExceed = costNum > 0 && costNum > remaining;
             return (

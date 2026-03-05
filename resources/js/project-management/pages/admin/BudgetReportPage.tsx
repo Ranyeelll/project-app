@@ -13,6 +13,8 @@ import {
   CheckCircleIcon,
   ClockIcon,
   XCircleIcon,
+  DownloadIcon,
+  FileTextIcon,
 } from 'lucide-react';
 import { useData } from '../../context/AppContext';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -88,6 +90,9 @@ export function BudgetReportPage() {
   const [sortField, setSortField] = useState<'name' | 'percentUsed' | 'totalApproved' | 'remaining'>('percentUsed');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [exportPeriod, setExportPeriod] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const fetchReport = async () => {
     setLoading(true);
@@ -109,6 +114,31 @@ export function BudgetReportPage() {
   useEffect(() => {
     fetchReport();
   }, []);
+
+  const handleExportPdf = async (period: 'weekly' | 'monthly' | 'yearly') => {
+    setExporting(true);
+    setShowExportMenu(false);
+    try {
+      const res = await fetch(`/api/budget-report/export-pdf?period=${period}`, {
+        headers: { Accept: 'application/pdf' },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `budget-report-${period}-${new Date().toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setExporting(false);
+    }
+  };
 
   /* ── Derived ──────────────────────────────────────────────────────── */
   const filteredProjects = useMemo(() => {
@@ -241,13 +271,51 @@ export function BudgetReportPage() {
             </button>
           ))}
         </div>
-        <button
-          onClick={fetchReport}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg dark:bg-dark-card dark:border dark:border-dark-border dark:text-dark-muted dark:hover:text-dark-text bg-white border border-light-border text-light-muted hover:text-light-text transition-colors">
-
-          <RefreshCwIcon size={12} /> Refresh
-        </button>
-
+        <div className="flex items-center gap-2">
+          {/* Export PDF dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-green-primary text-black font-medium hover:bg-green-primary/90 transition-colors disabled:opacity-50">
+              {exporting ? (
+                <RefreshCwIcon size={12} className="animate-spin" />
+              ) : (
+                <DownloadIcon size={12} />
+              )}
+              Export PDF
+            </button>
+            {showExportMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 w-48 dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg shadow-lg overflow-hidden">
+                  <div className="px-3 py-2 text-xs font-semibold dark:text-dark-muted text-light-muted border-b dark:border-dark-border border-light-border">
+                    <FileTextIcon size={12} className="inline mr-1.5" />
+                    Select Report Period
+                  </div>
+                  {([
+                    { value: 'weekly' as const, label: 'Weekly Report', desc: 'Current week' },
+                    { value: 'monthly' as const, label: 'Monthly Report', desc: 'Current month' },
+                    { value: 'yearly' as const, label: 'Yearly Report', desc: 'Current year' },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleExportPdf(opt.value)}
+                      className="w-full text-left px-3 py-2.5 text-xs dark:text-dark-text text-light-text dark:hover:bg-dark-card2 hover:bg-gray-50 transition-colors">
+                      <div className="font-medium">{opt.label}</div>
+                      <div className="dark:text-dark-subtle text-light-subtle text-[10px]">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            onClick={fetchReport}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg dark:bg-dark-card dark:border dark:border-dark-border dark:text-dark-muted dark:hover:text-dark-text bg-white border border-light-border text-light-muted hover:text-light-text transition-colors">
+            <RefreshCwIcon size={12} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* ── Project Budget Table ──────────────────────────────────────── */}
