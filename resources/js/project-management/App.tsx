@@ -3,12 +3,14 @@ import {
   AppProvider,
   useAuth,
   useNavigation,
-  useTheme } from
+  useTheme,
+  useData } from
 './context/AppContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ChangePasswordModal } from './components/ui/ChangePasswordModal';
+import { OverdueWarningModal } from './components/ui/OverdueWarningModal';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { ProjectsPage } from './pages/admin/ProjectsPage';
 import { GanttPage } from './pages/admin/GanttPage';
@@ -30,15 +32,44 @@ function AppContent() {
   const { currentUser } = useAuth();
   const { currentPage } = useNavigation();
   const { isDark } = useTheme();
+  const { tasks } = useData();
 
   // Force password-change modal when must_change_password is set
   const [showForceChange, setShowForceChange] = useState(false);
+
+  // Overdue warning modal — shows once per login session for employees
+  const [showOverdueWarning, setShowOverdueWarning] = useState(false);
 
   useEffect(() => {
     if (currentUser?.mustChangePassword) {
       setShowForceChange(true);
     }
   }, [currentUser]);
+
+  // Show overdue warning when data is loaded AND employee has overdue tasks
+  useEffect(() => {
+    if (
+      currentUser &&
+      currentUser.role === 'employee' &&
+      !currentUser.mustChangePassword &&
+      tasks.length > 0
+    ) {
+      const key = `overdue-dismissed-${currentUser.id}`;
+      if (sessionStorage.getItem(key)) return;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const hasOverdue = tasks.some((t) => {
+        if (String(t.assignedTo) !== String(currentUser.id)) return false;
+        if (t.status === 'completed') return false;
+        const end = new Date(t.endDate + 'T00:00:00');
+        return end < today;
+      });
+      if (hasOverdue) {
+        setShowOverdueWarning(true);
+      }
+    }
+  }, [currentUser, tasks]);
 
   // Not logged in → show login or forgot-password
   if (!currentUser) {
@@ -106,6 +137,15 @@ function AppContent() {
         isOpen={showForceChange}
         onClose={() => setShowForceChange(false)}
         forced={true}
+      />
+      <OverdueWarningModal
+        isOpen={showOverdueWarning && !showForceChange}
+        onClose={() => {
+          setShowOverdueWarning(false);
+          if (currentUser) {
+            sessionStorage.setItem(`overdue-dismissed-${currentUser.id}`, 'true');
+          }
+        }}
       />
     </>
   );

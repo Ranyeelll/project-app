@@ -195,10 +195,14 @@ export function AppProvider({ children }: AppProviderProps) {
   );
 
   const logout = useCallback(() => {
+    // Clear overdue-dismissed flag so modal shows again on next login
+    if (currentUser) {
+      sessionStorage.removeItem(`overdue-dismissed-${currentUser.id}`);
+    }
     setCurrentUser(null);
     localStorage.removeItem('maptech-current-user');
     navigate('login');
-  }, []);
+  }, [currentUser]);
 
   const updateCurrentUser = useCallback((user: User) => {
     setCurrentUser(user);

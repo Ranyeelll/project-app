@@ -38,9 +38,21 @@ export function LoginPage() {
     }
   };
   return (
-    <div className="min-h-screen w-full dark:bg-dark-bg bg-light-bg flex flex-col items-center justify-center p-4 relative">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Background video */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover z-0"
+        src="/login-embed.mp4"
+      />
+      {/* Dark overlay so the form stays readable */}
+      <div className="absolute inset-0 z-[1] bg-black/50 dark:bg-black/60" />
+
       {/* Theme toggle */}
-      <div className="absolute top-4 right-4">
+      <div className="absolute top-4 right-4 z-20">
         <button
           onClick={toggleTheme}
           className="p-2.5 rounded-lg dark:bg-dark-card dark:border-dark-border dark:text-dark-muted dark:hover:text-dark-text bg-light-card border border-light-border text-light-muted hover:text-light-text transition-colors"
@@ -51,17 +63,14 @@ export function LoginPage() {
       </div>
 
       {/* Card */}
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm relative z-10">
         {/* Logo */}
         <div className="flex flex-col items-center justify-center mb-8">
           <img
             src="/Maptech_Official_Logo_version2_(1).png"
             alt="Maptech Information Solutions Inc."
-            className="h-20 w-auto object-contain"
-            style={{
-              filter: isDark ? 'brightness(1.5) contrast(1.1)' : 'brightness(1)'
-            }} />
-          <p className="mt-2 text-sm font-medium tracking-wide dark:text-dark-muted text-gray-500 text-center">
+            className="h-20 w-auto object-contain brightness-150 drop-shadow-lg" />
+          <p className="mt-2 text-sm font-medium tracking-wide text-white/80 text-center drop-shadow-md">
             Maptech Information Solutions Inc.
           </p>
         </div>
@@ -166,7 +175,7 @@ export function LoginPage() {
           {}
         </div>
 
-        <p className="text-center text-xs dark:text-dark-subtle text-light-subtle mt-6">
+        <p className="text-center text-xs text-white/50 mt-6 drop-shadow-sm">
           © 2026 Maptech Information Solutions Inc. All rights reserved.
         </p>
       </div>
