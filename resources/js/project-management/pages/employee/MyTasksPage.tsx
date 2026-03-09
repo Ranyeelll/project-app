@@ -10,10 +10,12 @@ import {
   FolderKanbanIcon,
   UserIcon,
   UsersIcon,
-  AlertTriangleIcon } from
+  AlertTriangleIcon,
+  EyeIcon,
+  DownloadIcon } from
 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
-import { Task } from '../../data/mockData';
+import { Task, MediaUpload } from '../../data/mockData';
 import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
@@ -28,6 +30,7 @@ export function MyTasksPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [progressModal, setProgressModal] = useState<Task | null>(null);
   const [reportModal, setReportModal] = useState<Task | null>(null);
+  const [previewItem, setPreviewItem] = useState<MediaUpload | null>(null);
   const [newProgress, setNewProgress] = useState(0);
   const [reportForm, setReportForm] = useState({
     type: 'text',
@@ -80,8 +83,6 @@ export function MyTasksPage() {
     if (!reportModal) return;
     setSubmittingReport(true);
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-
     try {
       const formData = new FormData();
       formData.append('project_id', reportModal.projectId);
@@ -98,25 +99,27 @@ export function MyTasksPage() {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
         },
         body: formData,
       });
 
       if (res.ok) {
         // Update task completion report status and cost via API
-        await fetch(`/api/tasks/${reportModal.id}`, {
+        const taskRes = await fetch(`/api/tasks/${reportModal.id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'X-CSRF-TOKEN': csrfToken,
           },
           body: JSON.stringify({
             completion_report_status: 'pending',
             report_cost: Number(reportForm.cost) || 0,
           }),
         });
+
+        if (!taskRes.ok) {
+          alert('Report uploaded but failed to update task status.');
+        }
 
         // Refresh media, tasks, and projects from server
         refreshMedia();
@@ -126,9 +129,12 @@ export function MyTasksPage() {
             t.id === reportModal.id ? { ...t, completionReportStatus: 'pending', reportCost: Number(reportForm.cost) || 0 } : t
           )
         );
+      } else {
+        const err = await res.json().catch(() => null);
+        alert('Report submission failed: ' + (err?.message || res.statusText));
       }
-    } catch {
-      /* continue with local update as fallback */
+    } catch (e: any) {
+      alert('Report submission failed: ' + (e?.message || 'Network error'));
     } finally {
       setSubmittingReport(false);
       setReportModal(null);
@@ -321,6 +327,54 @@ export function MyTasksPage() {
                   <StatusBadge status={task.completionReportStatus} />
                 </div>
               }
+
+              {/* Submitted reports / media for this task */}
+              {taskMedia.length > 0 && (
+                <div className="mb-3 space-y-1.5">
+                  <p className="text-xs font-medium dark:text-dark-muted text-light-muted">
+                    Submitted Reports ({taskMedia.length})
+                  </p>
+                  {taskMedia.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-2 dark:bg-dark-card2 bg-light-card2 rounded-lg px-3 py-2"
+                    >
+                      {item.type === 'video' ? <VideoIcon size={14} className="text-purple-400 flex-shrink-0" /> :
+                       item.type === 'file' ? <FileTextIcon size={14} className="text-blue-400 flex-shrink-0" /> :
+                       <TypeIcon size={14} className="text-green-primary flex-shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs dark:text-dark-text text-light-text truncate">{item.title}</p>
+                        {item.type === 'text' && item.content && (
+                          <p className="text-[10px] dark:text-dark-subtle text-light-subtle line-clamp-1 mt-0.5">{item.content}</p>
+                        )}
+                        {item.originalFilename && (
+                          <p className="text-[10px] dark:text-dark-subtle text-light-subtle">{item.originalFilename}{item.fileSize ? ` · ${item.fileSize}` : ''}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {item.filePath && (
+                          <>
+                            <button
+                              onClick={() => setPreviewItem(item)}
+                              className="p-1 rounded dark:text-dark-muted dark:hover:text-green-primary text-light-muted hover:text-green-600 transition-colors"
+                              title="Preview"
+                            >
+                              <EyeIcon size={13} />
+                            </button>
+                            <a
+                              href={`/api/media/${item.id}/download`}
+                              className="p-1 rounded dark:text-dark-muted dark:hover:text-blue-400 text-light-muted hover:text-blue-500 transition-colors"
+                              title="Download"
+                            >
+                              <DownloadIcon size={13} />
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex items-center gap-2 flex-wrap pt-1 dark:border-dark-border border-t border-light-border">
@@ -568,6 +622,66 @@ export function MyTasksPage() {
             </div>
           }
         </div>
+      </Modal>
+
+      {/* Media Preview Modal */}
+      <Modal
+        isOpen={!!previewItem}
+        onClose={() => setPreviewItem(null)}
+        title={previewItem?.title || 'Preview'}
+        size="xl"
+        footer={
+          <>
+            {previewItem?.filePath && (
+              <a
+                href={`/api/media/${previewItem.id}/download`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-green-primary text-white hover:opacity-90 transition-opacity">
+                <DownloadIcon size={14} />
+                Download
+              </a>
+            )}
+            <Button variant="secondary" onClick={() => setPreviewItem(null)}>Close</Button>
+          </>
+        }>
+        {previewItem && (
+          <div className="flex items-center justify-center min-h-[200px]">
+            {(() => {
+              const ext = previewItem.originalFilename?.split('.').pop()?.toLowerCase() || '';
+              const url = previewItem.filePath;
+              if (previewItem.type === 'video' && url) {
+                return (
+                  <video controls className="max-w-full max-h-[60vh] rounded-lg">
+                    <source src={url} type={`video/${ext || 'mp4'}`} />
+                  </video>
+                );
+              }
+              if (ext === 'pdf' && url) {
+                return <iframe src={url} className="w-full rounded-lg" style={{ height: '60vh' }} title={previewItem.title} />;
+              }
+              if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext) && url) {
+                return <img src={url} alt={previewItem.title} className="max-w-full max-h-[60vh] rounded-lg object-contain" />;
+              }
+              if (previewItem.type === 'text' && previewItem.content) {
+                return (
+                  <div className="w-full dark:bg-dark-card2 bg-light-card2 rounded-lg p-4">
+                    <p className="text-sm dark:text-dark-text text-light-text whitespace-pre-wrap">{previewItem.content}</p>
+                  </div>
+                );
+              }
+              return (
+                <div className="text-center py-8">
+                  <FileTextIcon size={48} className="mx-auto mb-3 dark:text-dark-muted text-light-muted opacity-30" />
+                  <p className="text-sm dark:text-dark-muted text-light-muted">Preview not available</p>
+                  {url && (
+                    <a href={`/api/media/${previewItem.id}/download`} className="text-sm text-green-primary hover:underline mt-2 inline-block">
+                      Download instead
+                    </a>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </Modal>
 
       {/* Team Members Modal */}

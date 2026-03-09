@@ -44,11 +44,16 @@ export function ReportsMediaPage() {
     return matchProject && matchType;
   });
   const handleUpload = async () => {
+    // Ensure a valid project is selected
+    const projectId = form.projectId || projects[0]?.id || '';
+    if (!projectId) {
+      alert('Please select a project first.');
+      return;
+    }
     setSubmitting(true);
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
       const formData = new FormData();
-      formData.append('project_id', form.projectId);
+      formData.append('project_id', projectId);
       formData.append('uploaded_by', currentUser?.id || '');
       formData.append('type', form.type);
       formData.append('title', form.title);
@@ -64,15 +69,19 @@ export function ReportsMediaPage() {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
         },
         body: formData,
       });
 
       if (res.ok) {
         refreshMedia();
+      } else {
+        const err = await res.json().catch(() => null);
+        alert('Upload failed: ' + (err?.message || res.statusText));
       }
-    } catch { /* ignore */ } finally {
+    } catch (e: any) {
+      alert('Upload failed: ' + (e?.message || 'Network error'));
+    } finally {
       setSubmitting(false);
       setUploadModal(false);
       setUploadFile(null);
@@ -86,15 +95,16 @@ export function ReportsMediaPage() {
     }
   };
   const handleDelete = async (id: string) => {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      await fetch(`/api/media/${id}`, {
+      const res = await fetch(`/api/media/${id}`, {
         method: 'DELETE',
         headers: {
           'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
         },
       });
+      if (!res.ok) {
+        alert('Failed to delete media.');
+      }
       refreshMedia();
     } catch { /* ignore */ }
     setDeleteConfirm(null);
@@ -156,7 +166,10 @@ export function ReportsMediaPage() {
         <Button
           variant="primary"
           icon={<UploadIcon size={14} />}
-          onClick={() => setUploadModal(true)}>
+          onClick={() => {
+            setForm(prev => ({ ...prev, projectId: prev.projectId || projects[0]?.id || '' }));
+            setUploadModal(true);
+          }}>
 
           Upload Media
         </Button>

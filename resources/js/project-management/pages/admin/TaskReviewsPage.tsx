@@ -49,17 +49,19 @@ export function TaskReviewsPage() {
     if (!reviewModal) return;
     const newStatus = reviewModal.action === 'approve' ? 'approved' : 'rejected';
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      await fetch(`/api/tasks/${reviewModal.task.id}`, {
+      const res = await fetch(`/api/tasks/${reviewModal.task.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
         },
         body: JSON.stringify({ completion_report_status: newStatus }),
       });
-      refreshTasks();
+      if (res.ok) {
+        refreshTasks();
+      } else {
+        alert('Failed to update task review status.');
+      }
     } catch {
       // Fallback to local update
       setTasks((prev) =>
