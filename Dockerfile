@@ -33,9 +33,10 @@ RUN npm run build
 # Cache views only (config/route cache at runtime when env vars are available)
 RUN php artisan view:cache
 
-# Start script: cache config, run migrations, link storage, then serve
+# Start script: cache config, run migrations, seed, link storage, then serve
 CMD php artisan config:cache && \
     php artisan route:cache && \
     php artisan migrate --force && \
+    php artisan db:seed --force && \
     php artisan storage:link 2>/dev/null; \
     php artisan serve --host=0.0.0.0 --port=${PORT:-8080}
