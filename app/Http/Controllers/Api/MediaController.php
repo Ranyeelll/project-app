@@ -118,6 +118,18 @@ class MediaController extends Controller
     }
 
     /**
+     * Serve / stream a media file inline (for previews).
+     */
+    public function serve(Media $medium)
+    {
+        if (!$medium->file_path || !Storage::disk('public')->exists($medium->file_path)) {
+            return response()->json(['error' => 'File not found'], 404);
+        }
+
+        return Storage::disk('public')->response($medium->file_path);
+    }
+
+    /**
      * Format a media record for the frontend (camelCase).
      */
     private function formatMedia(Media $m): array
@@ -130,7 +142,7 @@ class MediaController extends Controller
             'type'             => $m->type,
             'title'            => $m->title,
             'content'          => $m->content ?? '',
-            'filePath'         => $m->file_path ? Storage::url($m->file_path) : null,
+            'filePath'         => $m->file_path ? '/api/media/' . $m->id . '/serve' : null,
             'originalFilename' => $m->original_filename,
             'fileSize'         => $m->file_size,
             'visibleTo'        => $m->visible_to ?? [],

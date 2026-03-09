@@ -414,7 +414,7 @@ export function TaskReviewsPage() {
                 ?.split('.')
                 .pop()
                 ?.toLowerCase() || '';
-              const url = `/storage/${previewItem.filePath}`;
+              const url = previewItem.filePath;
               if (['mp4', 'webm', 'ogg'].includes(ext)) {
                 return (
                   <video controls className="max-w-full max-h-[70vh] rounded-lg">

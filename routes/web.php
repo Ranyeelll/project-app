@@ -58,6 +58,7 @@ Route::prefix('api')->group(function () {
     Route::post('/media', [MediaController::class, 'store']);
     Route::delete('/media/{medium}', [MediaController::class, 'destroy']);
     Route::get('/media/{medium}/download', [MediaController::class, 'download']);
+    Route::get('/media/{medium}/serve', [MediaController::class, 'serve']);
 
     Route::get('/time-logs', [TimeLogController::class, 'index']);
     Route::post('/time-logs', [TimeLogController::class, 'store']);
