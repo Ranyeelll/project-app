@@ -26,7 +26,7 @@ class UserController extends Controller
             'position'     => $u->position ?? '',
             'status'       => $u->status ?? 'active',
             'joinDate'     => $u->created_at?->toDateString() ?? '',
-            'profilePhoto' => $u->profile_photo ? asset('storage/' . $u->profile_photo) : null,
+            'profilePhoto' => $u->profile_photo ? '/api/users/' . $u->id . '/photo' : null,
         ];
     }
 
@@ -151,5 +151,17 @@ class UserController extends Controller
         $user->delete();
 
         return response()->json(['message' => 'User deleted.']);
+    }
+
+    /**
+     * Serve a user's profile photo.
+     */
+    public function servePhoto(User $user)
+    {
+        if (!$user->profile_photo || !Storage::disk('public')->exists($user->profile_photo)) {
+            abort(404);
+        }
+
+        return Storage::disk('public')->response($user->profile_photo);
     }
 }

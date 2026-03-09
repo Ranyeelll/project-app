@@ -28,7 +28,7 @@ class AuthController extends Controller
             'status'          => $user->status ?? 'active',
             'joinDate'        => $user->created_at?->toDateString() ?? '',
             'profilePhoto'    => $user->profile_photo
-                                    ? asset('storage/' . $user->profile_photo)
+                                    ? '/api/users/' . $user->id . '/photo'
                                     : null,
             'mustChangePassword' => (bool) $user->must_change_password,
         ];

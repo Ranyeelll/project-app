@@ -42,6 +42,7 @@ Route::prefix('api')->group(function () {
     Route::put('/users/{user}', [UserController::class, 'update']);
     Route::delete('/users/{user}', [UserController::class, 'destroy']);
     Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
+    Route::get('/users/{user}/photo', [UserController::class, 'servePhoto']);
     Route::post('/users/{user}/regenerate-recovery', [UserController::class, 'regenerateRecovery']);
 
     Route::get('/projects', [ProjectController::class, 'index']);
