@@ -244,7 +244,8 @@ export const MOCK_TASKS: Task[] = [
   estimatedHours: 40,
   loggedHours: 38,
   allowEmployeeEdit: false,
-  completionReportStatus: 'approved'
+  completionReportStatus: 'approved',
+  reportCost: 0
 },
 {
   id: 't2',
@@ -261,7 +262,8 @@ export const MOCK_TASKS: Task[] = [
   estimatedHours: 120,
   loggedHours: 78,
   allowEmployeeEdit: true,
-  completionReportStatus: 'none'
+  completionReportStatus: 'none',
+  reportCost: 0
 },
 {
   id: 't3',
@@ -278,7 +280,8 @@ export const MOCK_TASKS: Task[] = [
   estimatedHours: 80,
   loggedHours: 0,
   allowEmployeeEdit: false,
-  completionReportStatus: 'none'
+  completionReportStatus: 'none',
+  reportCost: 0
 },
 {
   id: 't4',
@@ -295,7 +298,8 @@ export const MOCK_TASKS: Task[] = [
   estimatedHours: 60,
   loggedHours: 24,
   allowEmployeeEdit: false,
-  completionReportStatus: 'none'
+  completionReportStatus: 'none',
+  reportCost: 0
 },
 {
   id: 't5',
@@ -312,7 +316,8 @@ export const MOCK_TASKS: Task[] = [
   estimatedHours: 50,
   loggedHours: 52,
   allowEmployeeEdit: false,
-  completionReportStatus: 'pending'
+  completionReportStatus: 'pending',
+  reportCost: 0
 },
 {
   id: 't6',
@@ -329,7 +334,8 @@ export const MOCK_TASKS: Task[] = [
   estimatedHours: 200,
   loggedHours: 60,
   allowEmployeeEdit: true,
-  completionReportStatus: 'none'
+  completionReportStatus: 'none',
+  reportCost: 0
 }];
 
 
@@ -339,6 +345,7 @@ export const MOCK_BUDGET_REQUESTS: BudgetRequest[] = [
   projectId: 'p1',
   requestedBy: 'u2',
   amount: 15000,
+  type: 'additional_budget',
   purpose:
   'Additional cloud infrastructure for WebSocket server scaling during peak load testing phase.',
   status: 'pending',
@@ -349,6 +356,7 @@ export const MOCK_BUDGET_REQUESTS: BudgetRequest[] = [
   projectId: 'p2',
   requestedBy: 'u2',
   amount: 8500,
+  type: 'spending',
   purpose:
   'Third-party mapping SDK license for offline map tile caching in mobile app.',
   status: 'approved',
@@ -361,6 +369,7 @@ export const MOCK_BUDGET_REQUESTS: BudgetRequest[] = [
   projectId: 'p1',
   requestedBy: 'u3',
   amount: 3200,
+  type: 'spending',
   purpose:
   'Design tool licenses (Figma Enterprise) for team collaboration on UI redesign.',
   status: 'rejected',
@@ -374,6 +383,7 @@ export const MOCK_BUDGET_REQUESTS: BudgetRequest[] = [
   projectId: 'p3',
   requestedBy: 'u4',
   amount: 5000,
+  type: 'spending',
   purpose: 'Testing environment setup and automated testing tool licenses.',
   status: 'pending',
   createdAt: '2025-03-01'
