@@ -12,14 +12,8 @@
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-        <!-- Preload small previews and poster so they begin fetching immediately -->
-        <link rel="preload" href="/login-embed2-preview.webm" as="video" type="video/webm">
+        <!-- Preload only the tiny preview so it plays the moment the page opens -->
         <link rel="preload" href="/login-embed2-preview.mp4" as="video" type="video/mp4">
-        <link rel="preload" href="/login-embed2-instant.mp4" as="video" type="video/mp4">
-        <link rel="preload" href="/login-embed-preview.webm" as="video" type="video/webm">
-        <link rel="preload" href="/login-embed-preview.mp4" as="video" type="video/mp4">
-        <link rel="preload" href="/login-embed2.mp4" as="video" type="video/mp4">
-        <link rel="preload" href="/login-embed.mp4" as="video" type="video/mp4">
         <link rel="preload" href="/Maptech_Official_Logo_version2_(1).png" as="image" type="image/png">
 
         <!-- Scripts & Styles -->

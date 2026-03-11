@@ -43,11 +43,10 @@ export function LoginPage() {
     const v = videoRef.current;
     if (!v) return;
 
-    // Explicitly play the preview (belt-and-suspenders over autoPlay)
+    // Preview is already in browser cache (preloaded via <head>), play immediately.
     v.play().catch(() => {});
 
-    // Only start downloading the main video AFTER the preview is actually playing,
-    // so it gets all the bandwidth and shows instantly.
+    // After preview starts, quietly fetch the full-quality video in the background.
     let loader: HTMLVideoElement | null = null;
     const onPlaying = () => {
       loader = document.createElement('video');
@@ -55,12 +54,11 @@ export function LoginPage() {
       loader.preload = 'auto';
       loader.muted = true;
       loader.addEventListener('canplaythrough', () => {
-        if (!videoRef.current || !loader) return;
-        // Seamless swap: main video is fully buffered, switch source
-        videoRef.current.src = '/login-embed2.mp4';
-        videoRef.current.loop = true;
-        videoRef.current.muted = true;
-        videoRef.current.play().catch(() => {});
+        const el = videoRef.current;
+        if (!el || !loader) return;
+        el.src = '/login-embed2.mp4';
+        el.play().catch(() => {});
+        loader = null;
       }, { once: true });
     };
     v.addEventListener('playing', onPlaying, { once: true });
