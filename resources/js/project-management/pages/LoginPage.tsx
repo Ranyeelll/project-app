@@ -38,30 +38,43 @@ export function LoginPage() {
     }
   };
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const mainVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    // Preview plays via autoPlay — no JS needed, browser starts it immediately.
-    // Only wire up the canplay listener for the main video fade-in.
-    const main = mainVideoRef.current;
-    const preview = videoRef.current;
-    if (!main) return;
+    const v = videoRef.current;
+    if (!v) return;
 
-    const onCanPlay = () => {
-      main.style.opacity = '1';
+    // Explicitly play the preview (belt-and-suspenders over autoPlay)
+    v.play().catch(() => {});
+
+    // Only start downloading the main video AFTER the preview is actually playing,
+    // so it gets all the bandwidth and shows instantly.
+    let loader: HTMLVideoElement | null = null;
+    const onPlaying = () => {
+      loader = document.createElement('video');
+      loader.src = '/login-embed2.mp4';
+      loader.preload = 'auto';
+      loader.muted = true;
+      loader.addEventListener('canplaythrough', () => {
+        if (!videoRef.current || !loader) return;
+        // Seamless swap: main video is fully buffered, switch source
+        videoRef.current.src = '/login-embed2.mp4';
+        videoRef.current.loop = true;
+        videoRef.current.muted = true;
+        videoRef.current.play().catch(() => {});
+      }, { once: true });
     };
-    main.addEventListener('canplay', onCanPlay, { once: true });
+    v.addEventListener('playing', onPlaying, { once: true });
 
     return () => {
-      main.removeEventListener('canplay', onCanPlay);
-      try { main.pause(); } catch (e) {}
-      try { preview?.pause(); } catch (e) {}
+      v.removeEventListener('playing', onPlaying);
+      try { v.pause(); } catch (e) {}
+      if (loader) { loader.src = ''; loader = null; }
     };
   }, []);
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 relative overflow-hidden bg-black">
-      {/* Preview video — tiny (0.26 MB), plays immediately while main loads */}
+      {/* Background video — preview (0.26 MB) starts instantly; swaps to main once buffered */}
       <video
         autoPlay
         loop
@@ -73,21 +86,8 @@ export function LoginPage() {
       >
         <source src="/login-embed2-preview.mp4" type="video/mp4" />
       </video>
-      {/* Main video — fades in once buffered, replacing the preview */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        className="absolute inset-0 w-full h-full object-cover z-[1] transition-opacity duration-[1500ms]"
-        style={{ opacity: 0 }}
-        ref={mainVideoRef}
-      >
-        <source src="/login-embed2.mp4" type="video/mp4" />
-      </video>
       {/* Dark overlay so the form stays readable */}
-      <div className="absolute inset-0 z-[2] bg-black/50 dark:bg-black/60" />
+      <div className="absolute inset-0 z-[1] bg-black/50 dark:bg-black/60" />
 
       {/* Theme toggle */}
       <div className="absolute top-4 right-4 z-20">
