@@ -62,7 +62,7 @@ export function ResourcesPage() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4 text-center">
           <div className="text-2xl font-bold dark:text-dark-text text-light-text">{adminMedia.length}</div>
           <div className="text-[10px] dark:text-dark-subtle text-light-subtle mt-0.5">Total Resources</div>

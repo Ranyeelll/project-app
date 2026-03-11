@@ -3,7 +3,7 @@ import {
   LayoutDashboardIcon,
   FolderKanbanIcon,
   GanttChartIcon,
-
+  MessageSquareIcon,
   DollarSignIcon,
   UsersIcon,
   FileTextIcon,
@@ -15,7 +15,8 @@ import {
   WalletIcon,
   FolderOpenIcon,
   BarChart2Icon,
-  ClipboardCheckIcon } from
+  ClipboardCheckIcon,
+  XIcon } from
 'lucide-react';
 import { useAuth, useNavigation, useTheme } from '../../context/AppContext';
 interface NavItem {
@@ -73,6 +74,11 @@ const ADMIN_NAV: NavItem[] = [
   id: 'admin-archive',
   label: 'Archive',
   icon: <ArchiveIcon size={16} />
+},
+{
+  id: 'admin-chat',
+  label: 'Project Chat',
+  icon: <MessageSquareIcon size={16} />
 }];
 
 const EMPLOYEE_NAV: NavItem[] = [
@@ -110,17 +116,35 @@ const EMPLOYEE_NAV: NavItem[] = [
   id: 'employee-resources',
   label: 'Resources',
   icon: <FolderOpenIcon size={16} />
+},
+{
+  id: 'employee-chat',
+  label: 'Project Chat',
+  icon: <MessageSquareIcon size={16} />
 }];
 
-export function Sidebar() {
+export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { currentUser, logout } = useAuth();
   const { currentPage, setCurrentPage } = useNavigation();
   const { isDark } = useTheme();
   const navItems = currentUser?.role === 'admin' ? ADMIN_NAV : EMPLOYEE_NAV;
   return (
-    <aside className="w-56 flex-shrink-0 dark:bg-dark-card dark:border-dark-border bg-white border-r border-light-border flex flex-col h-full">
-      {/* Logo */}
-      <div className="flex flex-col items-center justify-center px-4 py-3 dark:border-dark-border border-b border-light-border flex-shrink-0">
+    <aside className={`
+      fixed inset-y-0 left-0 z-50 w-64 flex flex-col h-full
+      lg:static lg:w-56 lg:flex-shrink-0 lg:z-auto lg:translate-x-0
+      dark:bg-dark-card dark:border-dark-border bg-white border-r border-light-border
+      transform transition-transform duration-300 ease-in-out
+      ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+    `}>
+      {/* Logo + mobile close */}
+      <div className="flex flex-col items-center justify-center px-4 py-3 dark:border-dark-border border-b border-light-border flex-shrink-0 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 lg:hidden p-1.5 rounded-lg dark:text-dark-muted dark:hover:bg-dark-card2 text-gray-400 hover:bg-gray-100 transition-colors"
+          aria-label="Close menu"
+        >
+          <XIcon size={15} />
+        </button>
         <img
           src="/Maptech_Official_Logo_version2_(1).png"
           alt="Maptech Information Solutions Inc."
@@ -144,7 +168,7 @@ export function Sidebar() {
             return (
               <button
                 key={item.id}
-                onClick={() => setCurrentPage(item.id)}
+                onClick={() => { setCurrentPage(item.id); onClose(); }}
                 className={`
                   relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left
                   ${isActive ? 'bg-green-primary/10 text-green-primary sidebar-active' : 'dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text'}

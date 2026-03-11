@@ -174,7 +174,7 @@ export function BudgetRequestPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
           <div className="text-xl font-bold text-yellow-400">
             {myRequests.filter((b) => b.status === 'pending').length}

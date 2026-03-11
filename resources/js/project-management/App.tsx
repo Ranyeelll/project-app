@@ -21,6 +21,7 @@ import { TeamManagementPage } from './pages/admin/TeamManagementPage';
 import { ReportsMediaPage } from './pages/admin/ReportsMediaPage';
 import { TaskReviewsPage } from './pages/admin/TaskReviewsPage';
 import { ArchivePage } from './pages/admin/ArchivePage';
+import { ProjectChatPage } from './pages/ProjectChatPage';
 import { EmployeeDashboard } from './pages/employee/EmployeeDashboard';
 import { MyTasksPage } from './pages/employee/MyTasksPage';
 import { ViewGanttPage } from './pages/employee/ViewGanttPage';
@@ -103,6 +104,8 @@ function AppContent() {
           return <TaskReviewsPage />;
         case 'admin-archive':
           return <ArchivePage />;
+        case 'admin-chat':
+          return <ProjectChatPage />;
         default:
           return <AdminDashboard />;
       }
@@ -124,6 +127,8 @@ function AppContent() {
           return <ReportIssuePage />;
         case 'employee-resources':
           return <ResourcesPage />;
+        case 'employee-chat':
+          return <ProjectChatPage />;
         default:
           return <EmployeeDashboard />;
       }

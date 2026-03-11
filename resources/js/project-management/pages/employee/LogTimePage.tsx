@@ -79,7 +79,7 @@ export function LogTimePage() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
           <div className="text-2xl font-bold dark:text-dark-text text-light-text">
             {totalHours}h

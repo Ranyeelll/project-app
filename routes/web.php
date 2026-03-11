@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BudgetRequestController;
 use App\Http\Controllers\Api\IssueController;
 use App\Http\Controllers\Api\MediaController;
+use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TimeLogController;
@@ -71,11 +72,21 @@ Route::prefix('api')->group(function () {
     Route::delete('/budget-requests/{budget_request}', [BudgetRequestController::class, 'destroy']);
     Route::get('/budget-report', [BudgetRequestController::class, 'report']);
     Route::get('/budget-report/export-pdf', [BudgetRequestController::class, 'exportPdf']);
+    Route::get('/budget-report/export-sheet', [BudgetRequestController::class, 'exportSheet']);
 
     Route::get('/issues', [IssueController::class, 'index']);
     Route::post('/issues', [IssueController::class, 'store']);
     Route::put('/issues/{issue}', [IssueController::class, 'update']);
     Route::delete('/issues/{issue}', [IssueController::class, 'destroy']);
+
+    // Project Chat
+    Route::get('/projects/{project}/messages', [MessageController::class, 'index']);
+    Route::post('/projects/{project}/messages', [MessageController::class, 'store']);
+    Route::post('/projects/{project}/messages/read', [MessageController::class, 'markRead']);
+    Route::post('/projects/{project}/messages/typing', [MessageController::class, 'typing']);
+    Route::patch('/messages/{message}', [MessageController::class, 'update']);
+    Route::delete('/messages/{message}', [MessageController::class, 'destroy']);
+    Route::get('/chat-attachments/{message}/{index}', [MessageController::class, 'serveAttachment']);
 });
 
 Route::get('/dashboard', function () {

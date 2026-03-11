@@ -123,7 +123,7 @@ export function BudgetApprovalsPage() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
           <div className="text-xs dark:text-dark-muted text-light-muted mb-1">
             Pending Requests

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
@@ -70,6 +71,9 @@ class AuthController extends Controller
                 'error'   => 'Your account has been deactivated. Contact an administrator.',
             ], 403);
         }
+
+        // Establish a Laravel session so WebSocket presence channels can authenticate
+        Auth::login($user);
 
         return response()->json([
             'success' => true,

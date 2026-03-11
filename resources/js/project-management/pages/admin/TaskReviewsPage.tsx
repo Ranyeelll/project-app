@@ -91,7 +91,7 @@ export function TaskReviewsPage() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
           <div className="text-xs dark:text-dark-muted text-light-muted mb-1">
             Pending Reviews

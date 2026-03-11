@@ -375,7 +375,7 @@ export function GanttPage() {
             </div>
           </div>
           <ProgressBar value={project.progress} size="lg" animated showLabel />
-          <div className="grid grid-cols-4 gap-4 mt-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-3">
             <div className="text-center">
               <div className="text-lg font-bold dark:text-dark-text text-light-text">{allProjectTasks.length}</div>
               <div className="text-[10px] dark:text-dark-subtle text-light-subtle">Total Tasks</div>

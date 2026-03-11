@@ -17,6 +17,7 @@ import {
   LogOutIcon,
   UserIcon,
   KeyIcon,
+  MenuIcon,
 } from 'lucide-react';
 import { ChangePasswordModal } from '../ui/ChangePasswordModal';
 import { useTheme, useAuth, useNavigation, useData } from '../../context/AppContext';
@@ -32,7 +33,7 @@ interface Notification {
   read: boolean;
 }
 
-export function Header() {
+export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   const { isDark, toggleTheme } = useTheme();
   const { currentUser, logout, updateCurrentUser } = useAuth();
   const { currentPage, setCurrentPage } = useNavigation();
@@ -413,16 +414,26 @@ export function Header() {
   const title = pageTitles[currentPage] || 'Project Management System';
 
   return (
-    <header className="h-14 flex-shrink-0 dark:bg-dark-card dark:border-dark-border bg-white border-b border-light-border flex items-center justify-between px-6 z-20">
-      {/* Page title */}
-      <div>
-        <h1 className="text-sm font-semibold dark:text-dark-text text-light-text">
-          {title}
-        </h1>
-        <p className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
-          {currentUser?.role === 'admin' ? 'Administrator' : 'Employee'} ·{' '}
-          {currentUser?.department}
-        </p>
+    <header className="h-14 flex-shrink-0 dark:bg-dark-card dark:border-dark-border bg-white border-b border-light-border flex items-center justify-between px-3 md:px-6 z-20">
+      <div className="flex items-center gap-1 min-w-0">
+        {/* Hamburger: only on < lg */}
+        <button
+          onClick={onMenuToggle}
+          className="lg:hidden p-2 -ml-1 mr-1 rounded-lg dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors flex-shrink-0"
+          aria-label="Toggle navigation"
+        >
+          <MenuIcon size={18} />
+        </button>
+        {/* Page title */}
+        <div className="min-w-0">
+          <h1 className="text-sm font-semibold dark:text-dark-text text-light-text truncate">
+            {title}
+          </h1>
+          <p className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5 hidden sm:block">
+            {currentUser?.role === 'admin' ? 'Administrator' : 'Employee'} ·{' '}
+            {currentUser?.department}
+          </p>
+        </div>
       </div>
 
       {/* Right actions */}

@@ -12,32 +12,39 @@
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
             font-size: 11px;
-            color: #1a1a1a;
+            color: #1f2937;
             line-height: 1.4;
         }
 
         /* Header */
         .header {
-            text-align: center;
-            padding: 20px 0 15px;
-            border-bottom: 3px solid #16a34a;
+            padding: 16px 0 14px;
+            border-bottom: 2px solid #154734;
             margin-bottom: 20px;
+            text-align: center;
+        }
+        .header-logo-wrap {
+            margin-bottom: 8px;
+        }
+        .header-logo-wrap img {
+            max-width: 280px;
+            max-height: 70px;
         }
         .header h1 {
-            font-size: 22px;
-            color: #16a34a;
-            margin-bottom: 4px;
-            letter-spacing: 0.5px;
+            font-size: 20px;
+            color: #154734;
+            margin-bottom: 3px;
+            letter-spacing: 0.4px;
         }
         .header .subtitle {
-            font-size: 13px;
-            color: #555;
-            font-weight: 500;
+            font-size: 12px;
+            color: #374151;
+            font-weight: 600;
         }
         .header .period {
-            font-size: 11px;
-            color: #777;
-            margin-top: 4px;
+            font-size: 10px;
+            color: #6b7280;
+            margin-top: 3px;
         }
 
         /* Summary Cards */
@@ -76,17 +83,18 @@
             color: #999;
             margin-top: 2px;
         }
-        .color-green { color: #16a34a; }
+        .color-green  { color: #16a34a; }
         .color-yellow { color: #ca8a04; }
-        .color-red { color: #dc2626; }
-        .color-blue { color: #2563eb; }
-        .color-dark { color: #1a1a1a; }
+        .color-red    { color: #dc2626; }
+        .color-blue   { color: #2563eb; }
+        .color-dark   { color: #1f2937; }
+        .color-brand  { color: #154734; }
 
         /* Section title */
         .section-title {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
-            color: #1a1a1a;
+            color: #374151;
             margin: 20px 0 10px;
             padding-bottom: 6px;
             border-bottom: 2px solid #e5e7eb;
@@ -99,7 +107,7 @@
             margin-bottom: 16px;
         }
         table thead th {
-            background: #16a34a;
+            background: #154734;
             color: #fff;
             font-size: 9px;
             text-transform: uppercase;
@@ -115,8 +123,9 @@
         }
         table tbody td {
             padding: 7px 10px;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid #e5e7eb;
             font-size: 10px;
+            color: #1f2937;
         }
         table tbody tr:nth-child(even) {
             background: #fafafa;
@@ -200,10 +209,12 @@
             left: 0;
             right: 0;
             text-align: center;
-            font-size: 8px;
-            color: #aaa;
-            padding: 10px 0;
-            border-top: 1px solid #e5e7eb;
+            font-size: 10px;
+            color: #374151;
+            font-weight: 600;
+            padding: 8px 16px;
+            background: #f0fdf4;
+            border-top: 2px solid #154734;
         }
 
         /* Page break */
@@ -214,7 +225,7 @@
         /* Totals row */
         .totals-row td {
             font-weight: 700;
-            border-top: 2px solid #16a34a;
+            border-top: 2px solid #154734;
             background: #f0fdf4 !important;
             font-size: 11px;
         }
@@ -223,7 +234,31 @@
 <body>
 
     <!-- Header -->
+    @php
+        // Only embed the PNG when the GD extension is available (required by DomPDF to decode images).
+        $logoSrc = null;
+        if (function_exists('gd_info')) {
+            $b64File = public_path('logo.b64');
+            $pngFile = public_path('Maptech_Official_Logo_version2_(1).png');
+            if (file_exists($b64File)) {
+                $logoSrc = 'data:image/png;base64,' . trim(file_get_contents($b64File));
+            } elseif (file_exists($pngFile)) {
+                $logoSrc = 'data:image/png;base64,' . base64_encode(file_get_contents($pngFile));
+            }
+        }
+    @endphp
     <div class="header">
+        <div class="header-logo-wrap">
+            @if($logoSrc)
+                <img src="{{ $logoSrc }}" alt="Maptech Logo" />
+            @else
+                {{-- Pure HTML fallback — no GD needed --}}
+                <div style="display:inline-block; background:#154734; padding:8px 18px; border-radius:6px;">
+                    <div style="font-size:18px; font-weight:900; color:#ffffff; letter-spacing:3px; line-height:1.1;">MAPTECH</div>
+                    <div style="font-size:8px; font-weight:400; color:#a7f3d0; letter-spacing:1.5px;">INFORMATION SOLUTIONS INC.</div>
+                </div>
+            @endif
+        </div>
         <h1>Budget Report</h1>
         <div class="subtitle">{{ $periodLabel }}</div>
         <div class="period">{{ $dateRange }} &mdash; Generated on {{ $generatedAt }}</div>
