@@ -38,71 +38,56 @@ export function LoginPage() {
     }
   };
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mainVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    // Ensure the browser starts fetching the video early by adding a preload link
-    try {
-      const href = '/login-embed2.mp4';
-      if (!document.querySelector(`link[rel=\"preload\"][href=\"${href}\"]`)) {
-        const link = document.createElement('link');
-        link.rel = 'preload';
-        link.as = 'video';
-        link.href = href;
-        link.type = 'video/mp4';
-        document.head.appendChild(link);
-      }
-    } catch (e) {
-      // ignore
-    }
+    // Preview plays via autoPlay — no JS needed, browser starts it immediately.
+    // Only wire up the canplay listener for the main video fade-in.
+    const main = mainVideoRef.current;
+    const preview = videoRef.current;
+    if (!main) return;
 
-    // Try to force the video to load and play when this page mounts.
-    const v = videoRef.current;
-    if (v) {
-      try {
-        v.load();
-        v.play().catch(() => {
-          // autoplay may be blocked by browser; the poster will show until user interacts
-        });
-      } catch (e) {
-        // ignore
-      }
-    }
+    const onCanPlay = () => {
+      main.style.opacity = '1';
+    };
+    main.addEventListener('canplay', onCanPlay, { once: true });
 
     return () => {
-      if (videoRef.current) {
-        try {
-          videoRef.current.pause();
-          videoRef.current.currentTime = 0;
-        } catch (e) {}
-      }
+      main.removeEventListener('canplay', onCanPlay);
+      try { main.pause(); } catch (e) {}
+      try { preview?.pause(); } catch (e) {}
     };
   }, []);
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Background video */}
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 relative overflow-hidden bg-black">
+      {/* Preview video — tiny (0.26 MB), plays immediately while main loads */}
       <video
         autoPlay
         loop
         muted
         playsInline
         preload="auto"
-        poster="/Maptech_Official_Logo_version2_(1).png"
         className="absolute inset-0 w-full h-full object-cover z-0"
         ref={videoRef}
       >
-        {/* Ultra-small instant preview to show motion immediately */}
-        <source src="/login-embed2-instant.mp4" type="video/mp4" />
-        {/* Small, low-bitrate preview sources first so a visible video appears quickly */}
-        <source src="/login-embed2-preview.webm" type="video/webm" />
         <source src="/login-embed2-preview.mp4" type="video/mp4" />
-        <source src="/login-embed-preview.webm" type="video/webm" />
-        <source src="/login-embed-preview.mp4" type="video/mp4" />
-        {/* Full-quality fallback (use login-embed2.mp4 as primary) */}
+      </video>
+      {/* Main video — fades in once buffered, replacing the preview */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        className="absolute inset-0 w-full h-full object-cover z-[1] transition-opacity duration-[1500ms]"
+        style={{ opacity: 0 }}
+        ref={mainVideoRef}
+      >
         <source src="/login-embed2.mp4" type="video/mp4" />
       </video>
       {/* Dark overlay so the form stays readable */}
-      <div className="absolute inset-0 z-[1] bg-black/50 dark:bg-black/60" />
+      <div className="absolute inset-0 z-[2] bg-black/50 dark:bg-black/60" />
 
       {/* Theme toggle */}
       <div className="absolute top-4 right-4 z-20">
