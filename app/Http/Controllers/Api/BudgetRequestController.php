@@ -386,7 +386,8 @@ class BudgetRequestController extends Controller
             'fmt'         => $fmt,
         ]);
 
-        $pdf->setPaper('A4', 'landscape');
+        // Use portrait orientation for exported PDFs to match print layout
+        $pdf->setPaper('A4', 'portrait');
 
         $filename = 'budget-report-' . $period . '-' . $now->format('Y-m-d') . '.pdf';
 
