@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+
+// Tiny 80×45 JPEG embedded as base64 — no network request, fills background the instant React renders
+const POSTER_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYyLjExLjEwMAD/2wBDAgUFBcUFxsbGxsbGyAeICEhISAgICAhISEkJCQqKiokJCQhISQkKCgqKi4vLisrKisvLzIyMjw8OTlGRkhWVmf/xAByAAEAAgMBAQAAAAAAAAAAAAAEAwUCAQYABwEAAwEBAAAAAAAAAAAAAAAAAgQBAAMQAAICAQMEAAcBAQAAAAAAAAEAAhEDEiExBLFBYTKB0VGhwfATUhEBAQEAAQUBAAAAAAAAAAAAAAERAhIhoWFRQf/AABEIAC0AUAMBIgACEQADEQD/2gAMAwEAAhEDEQA/APi0JU2nxD2OzShs8ctJHb9fV4kuSQNjBxzYv85XHeEt4n9H2xRNOjluzY+pdL0IzY5SsbB4jqIaJEK8XWTxxoFpcmQzNrfKzC8l0EpCrN8JCQqGoGU5ZiWAtd2AUxKMXV+OGUGqcrpcOfTtIaonkHhTPHA74pWP+T8Q+rz2u1INOKdOXZ29fhOqvSmAu5eB3dxyTrYj5i+7NLqJSGmYBA9cJgu/PIWQxA5s+S0xZpcsKBmTETESspPKNNdRqNA+Df4ctxX4Y3zhJgVGpC7YmG6nepIqkTohv9wB9kg48JORpAy/3Zy4sIy4+TqZEi14cy4OP//Z';
 import {
   EyeIcon,
   EyeOffIcon,
@@ -38,51 +41,62 @@ export function LoginPage() {
     }
   };
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const fullVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [fullVideoReady, setFullVideoReady] = useState(false);
 
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
+    const preview = videoRef.current;
+    if (!preview) return;
 
     // Preview is already in browser cache (preloaded via <head>), play immediately.
-    v.play().catch(() => {});
+    preview.play().catch(() => {});
 
-    // After preview starts, quietly fetch the full-quality video in the background.
-    let loader: HTMLVideoElement | null = null;
+    // Once the preview is playing, start buffering the full-quality video silently.
     const onPlaying = () => {
-      loader = document.createElement('video');
-      loader.src = '/login-embed2.mp4';
-      loader.preload = 'auto';
-      loader.muted = true;
-      loader.addEventListener('canplaythrough', () => {
-        const el = videoRef.current;
-        if (!el || !loader) return;
-        el.src = '/login-embed2.mp4';
-        el.play().catch(() => {});
-        loader = null;
+      const full = fullVideoRef.current;
+      if (!full) return;
+      full.addEventListener('canplaythrough', () => {
+        full.play().catch(() => {});
+        setFullVideoReady(true);
       }, { once: true });
+      full.load();
     };
-    v.addEventListener('playing', onPlaying, { once: true });
+    preview.addEventListener('playing', onPlaying, { once: true });
 
     return () => {
-      v.removeEventListener('playing', onPlaying);
-      try { v.pause(); } catch (e) {}
-      if (loader) { loader.src = ''; loader = null; }
+      preview.removeEventListener('playing', onPlaying);
+      try { preview.pause(); } catch (e) {}
     };
   }, []);
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 relative overflow-hidden bg-black">
-      {/* Background video — preview (0.26 MB) starts instantly; swaps to main once buffered */}
+    <div
+      className="min-h-screen w-full flex flex-col items-center justify-center p-4 relative overflow-hidden"
+      style={{ backgroundColor: '#000', backgroundImage: `url('${POSTER_B64}')`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+      {/* Preview video — plays immediately from cache, stays underneath */}
       <video
         autoPlay
         loop
         muted
         playsInline
         preload="auto"
+        poster={POSTER_B64}
         className="absolute inset-0 w-full h-full object-cover z-0"
         ref={videoRef}
       >
         <source src="/login-embed2-preview.mp4" type="video/mp4" />
+      </video>
+      {/* Full-quality video — buffered silently, fades in over the preview once ready */}
+      <video
+        loop
+        muted
+        playsInline
+        preload="auto"
+        ref={fullVideoRef}
+        className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-1000"
+        style={{ opacity: fullVideoReady ? 1 : 0 }}
+      >
+        <source src="/login-embed2.mp4" type="video/mp4" />
       </video>
       {/* Dark overlay so the form stays readable */}
       <div className="absolute inset-0 z-[1] bg-black/50 dark:bg-black/60" />

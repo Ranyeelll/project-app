@@ -12,9 +12,20 @@
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-        <!-- Preload only the tiny preview so it plays the moment the page opens -->
+        <!-- Preload poster first (JPEG, ~76 KB) — renders before any JS/video fires -->
+        <link rel="preload" href="/login-poster.jpg" as="image" type="image/jpeg">
+        <!-- Then preload the tiny preview video so it plays the moment the page opens -->
         <link rel="preload" href="/login-embed2-preview.mp4" as="video" type="video/mp4">
         <link rel="preload" href="/Maptech_Official_Logo_version2_(1).png" as="image" type="image/png">
+
+        <!-- Embedded base64 thumbnail — zero network request, paints instantly before any JS/React loads -->
+        <style>
+            html, body { margin: 0; padding: 0; min-height: 100vh; }
+            body, #project-management-root {
+                background: #000 url('data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYyLjExLjEwMAD/2wBDAgUFBcUFxsbGxsbGyAeICEhISAgICAhISEkJCQqKiokJCQhISQkKCgqKi4vLisrKisvLzIyMjw8OTlGRkhWVmf/xAByAAEAAgMBAQAAAAAAAAAAAAAEAwUCAQYABwEAAwEBAAAAAAAAAAAAAAAAAgQBAAMQAAICAQMEAAcBAQAAAAAAAAEAAhEDEiExBLFBYTKB0VGhwfATUhEBAQEAAQUBAAAAAAAAAAAAAAERAhIhoWFRQf/AABEIAC0AUAMBIgACEQADEQD/2gAMAwEAAhEDEQA/APi0JU2nxD2OzShs8ctJHb9fV4kuSQNjBxzYv85XHeEt4n9H2xRNOjluzY+pdL0IzY5SsbB4jqIaJEK8XWTxxoFpcmQzNrfKzC8l0EpCrN8JCQqGoGU5ZiWAtd2AUxKMXV+OGUGqcrpcOfTtIaonkHhTPHA74pWP+T8Q+rz2u1INOKdOXZ29fhOqvSmAu5eB3dxyTrYj5i+7NLqJSGmYBA9cJgu/PIWQxA5s+S0xZpcsKBmTETESspPKNNdRqNA+Df4ctxX4Y3zhJgVGpC7YmG6nepIqkTohv9wB9kg48JORpAy/3Zy4sIy4+TqZEi14cy4OP//Z') no-repeat center center / cover;
+                min-height: 100vh;
+            }
+        </style>
 
         <!-- Scripts & Styles -->
         @viteReactRefresh
