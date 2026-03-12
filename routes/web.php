@@ -14,6 +14,21 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+// Serve a consistent favicon at the root to override cached/missing /favicon.ico behavior
+Route::get('favicon.ico', function () {
+    // Serve the generated 48x48 PNG (copied to favicon.ico) so browsers
+    // requesting the root favicon receive the taskbar logo.
+    $path = public_path('favicon-48.png');
+    if (!file_exists($path)) {
+        // fallback to the original PNG if generated favicon missing
+        $path = public_path('Maptech_Official_Logo_version2_(1).png');
+    }
+    if (!file_exists($path)) {
+        abort(404);
+    }
+    return response()->file($path)->header('Content-Type', 'image/vnd.microsoft.icon');
+});
+
 /*
 |--------------------------------------------------------------------------
 | Project Management System (React SPA)
