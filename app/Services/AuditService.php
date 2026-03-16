@@ -424,4 +424,89 @@ class AuditService
             ]
         );
     }
+
+    /**
+     * Log a project approval state transition.
+     */
+    public function logApprovalTransition(
+        int $projectId,
+        string $action,
+        string $from,
+        string $to,
+        ?string $notes,
+        ?int $userId = null
+    ): AuditLog {
+        return self::logProjectApproval($projectId, [
+            'action' => $action,
+            'from'   => $from,
+            'to'     => $to,
+            'notes'  => $notes,
+        ], $userId);
+    }
+
+    /**
+     * Log: Gantt item created.
+     */
+    public static function logGanttItemCreated(
+        int $itemId,
+        int $projectId,
+        string $type,
+        string $name,
+        ?int $userId = null
+    ): AuditLog {
+        return AuditLog::log(
+            action: 'gantt.item_created',
+            resourceType: 'gantt_item',
+            resourceId: $itemId,
+            projectId: $projectId,
+            changes: ['type' => $type, 'name' => $name],
+            userId: $userId
+        );
+    }
+
+    /**
+     * Log: Gantt item deleted.
+     */
+    public static function logGanttItemDeleted(
+        int $itemId,
+        int $projectId,
+        string $type,
+        string $name,
+        ?int $userId = null
+    ): AuditLog {
+        return AuditLog::log(
+            action: 'gantt.item_deleted',
+            resourceType: 'gantt_item',
+            resourceId: $itemId,
+            projectId: $projectId,
+            changes: ['type' => $type, 'name' => $name],
+            userId: $userId,
+            sensitiveFlag: true
+        );
+    }
+
+    /**
+     * Log: Gantt item visibility changed.
+     */
+    public static function logGanttVisibilityChange(
+        int $itemId,
+        int $projectId,
+        array $oldRoles,
+        array $newRoles,
+        array $oldUsers,
+        array $newUsers,
+        ?int $userId = null
+    ): AuditLog {
+        return AuditLog::log(
+            action: 'gantt.visibility_changed',
+            resourceType: 'gantt_item',
+            resourceId: $itemId,
+            projectId: $projectId,
+            changes: [
+                'visible_to_roles' => ['from' => $oldRoles, 'to' => $newRoles],
+                'visible_to_users' => ['from' => $oldUsers, 'to' => $newUsers],
+            ],
+            userId: $userId
+        );
+    }
 }

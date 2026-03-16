@@ -13,6 +13,8 @@ import {
   Issue,
   MediaUpload,
   TimeLog,
+  GanttItem,
+  GanttDependency,
   MOCK_USERS,
   MOCK_PROJECTS,
   MOCK_TASKS,
@@ -69,6 +71,8 @@ interface DataContextType {
   issues: Issue[];
   media: MediaUpload[];
   timeLogs: TimeLog[];
+  ganttItems: GanttItem[];
+  ganttDependencies: GanttDependency[];
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
@@ -82,6 +86,8 @@ interface DataContextType {
   refreshTimeLogs: () => void;
   refreshBudgetRequests: () => void;
   refreshIssues: () => void;
+  refreshGanttItems: (projectId: string) => void;
+  refreshGanttDependencies: (projectId: string) => void;
   refreshAll: () => void;
 }
 const DataContext = createContext<DataContextType>({
@@ -92,6 +98,8 @@ const DataContext = createContext<DataContextType>({
   issues: [],
   media: [],
   timeLogs: [],
+  ganttItems: [],
+  ganttDependencies: [],
   setUsers: () => {},
   setProjects: () => {},
   setTasks: () => {},
@@ -105,6 +113,8 @@ const DataContext = createContext<DataContextType>({
   refreshTimeLogs: () => {},
   refreshBudgetRequests: () => {},
   refreshIssues: () => {},
+  refreshGanttItems: () => {},
+  refreshGanttDependencies: () => {},
   refreshAll: () => {}
 });
 // ─── Hooks ───────────────────────────────────────────────────────────────────
@@ -310,6 +320,8 @@ export function AppProvider({ children }: AppProviderProps) {
   const [issues, setIssues] = useState<Issue[]>(() => loadState('maptech-issues', MOCK_ISSUES));
   const [media, setMedia] = useState<MediaUpload[]>(() => loadState('maptech-media', MOCK_MEDIA));
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>(() => loadState('maptech-timeLogs', MOCK_TIME_LOGS));
+  const [ganttItems, setGanttItems] = useState<GanttItem[]>([]);
+  const [ganttDependencies, setGanttDependencies] = useState<GanttDependency[]>([]);
 
   // Persist every data slice to localStorage whenever it changes
   useEffect(() => { localStorage.setItem('maptech-users', JSON.stringify(users)); }, [users]);
@@ -394,6 +406,18 @@ export function AppProvider({ children }: AppProviderProps) {
       .then((data: Issue[]) => { if (Array.isArray(data)) setIssues(data); })
       .catch(() => {});
   };
+  const refreshGanttItems = (projectId: string) => {
+    fetch(`/api/projects/${projectId}/gantt-items`)
+      .then((res) => res.json())
+      .then((data: GanttItem[]) => { if (Array.isArray(data)) setGanttItems(data); })
+      .catch(() => {});
+  };
+  const refreshGanttDependencies = (projectId: string) => {
+    fetch(`/api/projects/${projectId}/gantt-dependencies`)
+      .then((res) => res.json())
+      .then((data: GanttDependency[]) => { if (Array.isArray(data)) setGanttDependencies(data); })
+      .catch(() => {});
+  };
   const refreshAll = () => {
     refreshUsers();
     refreshProjects();
@@ -442,6 +466,8 @@ export function AppProvider({ children }: AppProviderProps) {
               issues,
               media,
               timeLogs,
+              ganttItems,
+              ganttDependencies,
               setUsers,
               setProjects,
               setTasks,
@@ -455,6 +481,8 @@ export function AppProvider({ children }: AppProviderProps) {
               refreshTimeLogs,
               refreshBudgetRequests,
               refreshIssues,
+              refreshGanttItems,
+              refreshGanttDependencies,
               refreshAll
             }}>
 

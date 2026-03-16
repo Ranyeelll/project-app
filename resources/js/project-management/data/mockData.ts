@@ -17,7 +17,7 @@ export interface User {
 
 export interface Project {
   id: string;
-  serial: string;
+  serial?: string;
   name: string;
   description: string;
   status: 'active' | 'on-hold' | 'completed' | 'archived';
@@ -30,6 +30,51 @@ export interface Project {
   managerId: string;
   teamIds: string[];
   createdAt: string;
+  approvalStatus?: ApprovalStatus;
+  approvalNotes?: string | null;
+  submittedBy?: string | null;
+  reviewedBy?: string | null;
+  lastReviewedAt?: string | null;
+}
+
+// ─── Gantt ─────────────────────────────────────────────────────────────────
+
+export type GanttItemType = 'phase' | 'step' | 'subtask' | 'milestone';
+
+export type ApprovalStatus =
+  | 'draft'
+  | 'technical_review'
+  | 'accounting_review'
+  | 'approved'
+  | 'rejected'
+  | 'revision_requested';
+
+export interface GanttItem {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  type: GanttItemType;
+  name: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  progress: number;
+  position: number;
+  assigneeIds: string[];
+  visibleToRoles: string[];
+  visibleToUsers: string[];
+  createdAt: string;
+  updatedAt: string;
+  treeIndex?: string;
+  depth?: number;
+}
+
+export interface GanttDependency {
+  id: string;
+  projectId: string;
+  predecessorId: string;
+  successorId: string;
+  type: 'finish_to_start';
 }
 
 export interface Task {

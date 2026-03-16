@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\Project;
 use App\Models\BudgetRequest;
+use App\Services\TaskActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -67,7 +68,31 @@ class TaskController extends Controller
 
         $task = Task::create($data);
 
-        return response()->json($this->formatTask($task), 201);
+        // Log task creation
+        TaskActivityLogger::taskCreated($task->id, $task->title);
+
+        // Auto-create tasks for newly added team members if this is a project creation
+        if (isset($data['team_ids'])) {
+            foreach ($data['team_ids'] as $memberId) {
+                Task::create([
+                    'project_id'               => $task->id,
+                    'title'                    => $data['name'],
+                    'description'              => $data['description'] ?? '',
+                    'status'                   => 'todo',
+                    'priority'                 => $data['priority'] ?? 'medium',
+                    'assigned_to'              => $memberId,
+                    'start_date'               => $data['start_date'] ?? null,
+                    'end_date'                 => $data['end_date'] ?? null,
+                    'estimated_hours'          => 0,
+                    'progress'                 => 0,
+                    'logged_hours'             => 0,
+                    'allow_employee_edit'      => false,
+                    'completion_report_status' => 'none',
+                ]);
+            }
+        }
+
+        return response()->json($this->formatTask($task->fresh()), 201);
     }
 
     /**
@@ -115,6 +140,8 @@ class TaskController extends Controller
         }
 
         $oldStatus = $task->completion_report_status;
+        $oldAssignedTo = $task->assigned_to;
+        $oldStatusField = $task->status;
 
         // When re-submitting a report for an already-approved task,
         // ADD the new cost to the existing approved cost (accumulate, not replace)
@@ -125,6 +152,31 @@ class TaskController extends Controller
         }
 
         $task->update($data);
+
+        // Log activity changes
+        // 1. Status change
+        if (isset($data['status']) && $data['status'] !== $oldStatusField) {
+            TaskActivityLogger::statusChanged($task->id, $oldStatusField, $data['status']);
+        }
+
+        // 2. Assignment changes (reassigned or newly assigned)
+        if (isset($data['assigned_to']) && $data['assigned_to'] !== $oldAssignedTo) {
+            if ($oldAssignedTo) {
+                // Reassigned from one user to another
+                $oldUser = \App\Models\User::find($oldAssignedTo);
+                $newUser = \App\Models\User::find($data['assigned_to']);
+                TaskActivityLogger::taskReassigned($task->id, $oldUser?->name, $newUser?->name);
+            } else {
+                // First assignment
+                $newUser = \App\Models\User::find($data['assigned_to']);
+                TaskActivityLogger::taskAssigned($task->id, $newUser?->name);
+            }
+        }
+
+        // 3. Generic field updates
+        if (count($data) > 0 && !isset($data['status']) && !isset($data['assigned_to'])) {
+            TaskActivityLogger::taskUpdated($task->id, $data);
+        }
 
         // When a report is approved, auto-recalculate project.spent
         if (isset($data['completion_report_status']) && $data['completion_report_status'] === 'approved' && $oldStatus !== 'approved') {

@@ -2,743 +2,368 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   ChevronDownIcon,
   ChevronRightIcon,
-  SearchIcon,
-  CalendarIcon,
   LockIcon,
   ZoomInIcon,
   ZoomOutIcon,
   Maximize2Icon,
+  CalendarIcon,
 } from 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
-import { Task } from '../../data/mockData';
-import { Badge, PriorityBadge, StatusBadge } from '../../components/ui/Badge';
-import { ProgressBar } from '../../components/ui/ProgressBar';
+import { GanttItem } from '../../data/mockData';
 
-// ── Types ────────────────────────────────────────────────────────────────────
 type ZoomLevel = 'week' | 'month' | 'quarter';
+interface Column { label: string; subLabel?: string; startDate: Date; endDate: Date; }
 
-interface Column {
-  label: string;
-  subLabel?: string;
-  startDate: Date;
-  endDate: Date;
+const ROW_HEIGHT = 36;
+const BAR_H = 20;
+const TREE_W = 440;
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+const TYPE_COLOR: Record<string, string> = {
+  phase:     '#1FAF8E',
+  step:      '#8b5cf6',
+  subtask:   '#3BC25B',
+  milestone: '#f59e0b',
+};
+
+function daysBetween(a: Date, b: Date) { return Math.round((b.getTime() - a.getTime()) / 86400000); }
+function parseDate(s: string): Date { return new Date(s + 'T00:00:00'); }
+function dateShort(s: string) {
+  const d = parseDate(s); return `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}`;
 }
-
-// ── Date Helpers ─────────────────────────────────────────────────────────────
-const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function daysBetween(a: Date, b: Date): number {
-  return Math.round((b.getTime() - a.getTime()) / 86400000);
-}
-
-function parseDate(s: string): Date {
-  return new Date(s + 'T00:00:00');
-}
-
-function formatDateShort(d: Date): string {
-  return `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-
-function getWeekNumber(d: Date): number {
+function getWeekNumber(d: Date) {
   const onejan = new Date(d.getFullYear(), 0, 1);
   return Math.ceil(((d.getTime() - onejan.getTime()) / 86400000 + onejan.getDay() + 1) / 7);
 }
 
-// ── Colors ───────────────────────────────────────────────────────────────────
-const STATUS_COLORS: Record<string, string> = {
-  completed: '#3BC25B',
-  'in-progress': '#1FAF8E',
-  review: '#8b5cf6',
-  todo: '#64748b',
-};
-
-const PRIORITY_COLORS: Record<string, string> = {
-  critical: '#ef4444',
-  high: '#f97316',
-  medium: '#eab308',
-  low: '#6b7280',
-};
-
-// ═════════════════════════════════════════════════════════════════════════════
 export function ViewGanttPage() {
-  const { projects, tasks, users } = useData();
+  const { projects, users, ganttItems, ganttDependencies, refreshGanttItems, refreshGanttDependencies } = useData();
   const { currentUser } = useAuth();
 
-  // Only show projects where the current user is a team member
   const myProjects = projects.filter(
-    (p) => p.status !== 'archived' && p.teamIds?.includes(currentUser?.id || '')
+    p => p.status !== 'archived' && (p.managerId === currentUser?.id || (p.teamIds || []).includes(currentUser?.id || ''))
   );
 
-  // ── State ──────────────────────────────────────────────────────────────
   const [selectedProject, setSelectedProject] = useState('');
   const [zoom, setZoom] = useState<ZoomLevel>('month');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hoveredTask, setHoveredTask] = useState<string | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  const [showMyOnly, setShowMyOnly] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
-  const chartRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
-  // ── Zoom helpers ───────────────────────────────────────────────────────
-  const MIN_SCALE = 0.3;
-  const MAX_SCALE = 3;
-  const SCALE_STEP = 0.15;
+  const treeScrollRef = useRef<HTMLDivElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
 
-  const handleZoomIn = useCallback(() => {
-    setZoomScale((prev) => Math.min(MAX_SCALE, +(prev + SCALE_STEP).toFixed(2)));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setZoomScale((prev) => Math.max(MIN_SCALE, +(prev - SCALE_STEP).toFixed(2)));
-  }, []);
-
-  const handleZoomReset = useCallback(() => {
-    setZoomScale(1);
-  }, []);
-
-  // Ctrl + mouse wheel zoom on chart
   useEffect(() => {
-    const el = scrollContainerRef.current;
+    if (!selectedProject && myProjects.length > 0) setSelectedProject(myProjects[0].id);
+  }, [myProjects, selectedProject]);
+
+  useEffect(() => {
+    if (selectedProject) {
+      refreshGanttItems(selectedProject);
+      refreshGanttDependencies(selectedProject);
+    }
+  }, [selectedProject]);
+
+  const handleTreeScroll = useCallback(() => {
+    if (timelineScrollRef.current && treeScrollRef.current) timelineScrollRef.current.scrollTop = treeScrollRef.current.scrollTop;
+  }, []);
+  const handleTimelineScroll = useCallback(() => {
+    if (treeScrollRef.current && timelineScrollRef.current) treeScrollRef.current.scrollTop = timelineScrollRef.current.scrollTop;
+  }, []);
+
+  const MIN_SCALE = 0.3; const MAX_SCALE = 3; const SCALE_STEP = 0.15;
+  const zoomIn = useCallback(() => setZoomScale(p => Math.min(MAX_SCALE, +(p + SCALE_STEP).toFixed(2))), []);
+  const zoomOut = useCallback(() => setZoomScale(p => Math.max(MIN_SCALE, +(p - SCALE_STEP).toFixed(2))), []);
+
+  useEffect(() => {
+    const el = timelineScrollRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
       e.preventDefault();
-      setZoomScale((prev) => {
-        const delta = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP;
-        return Math.min(MAX_SCALE, Math.max(MIN_SCALE, +(prev + delta).toFixed(2)));
-      });
+      setZoomScale(p => { const d = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP; return Math.min(MAX_SCALE, Math.max(MIN_SCALE, +(p + d).toFixed(2))); });
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  // Auto-select first project
-  useEffect(() => {
-    if (!selectedProject && myProjects.length > 0) {
-      setSelectedProject(myProjects[0].id);
-    }
-  }, [myProjects, selectedProject]);
+  const project = projects.find(p => p.id === selectedProject);
+  const projectItems = ganttItems.filter(i => i.projectId === selectedProject);
+  const projectDeps = ganttDependencies.filter(d => d.projectId === selectedProject);
 
-  const project = projects.find((p) => p.id === selectedProject);
-  const allProjectTasks = tasks.filter((t) => t.projectId === selectedProject);
-
-  // ── Filters ────────────────────────────────────────────────────────────
-  const filteredTasks = useMemo(() => {
-    return allProjectTasks.filter((t) => {
-      if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-      if (showMyOnly && t.assignedTo !== currentUser?.id) return false;
-      if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+  const visibleItems = useMemo(() => {
+    return projectItems.filter(item => {
+      if (!item.parentId) return true;
+      let pid: string | null = item.parentId;
+      while (pid) {
+        if (collapsedIds.has(pid)) return false;
+        const parent = projectItems.find(i => i.id === pid);
+        pid = parent?.parentId ?? null;
+      }
       return true;
     });
-  }, [allProjectTasks, statusFilter, showMyOnly, searchQuery, currentUser]);
+  }, [projectItems, collapsedIds]);
 
-  // ── Timeline Range ─────────────────────────────────────────────────────
   const timelineRange = useMemo(() => {
-    if (!project) return { start: new Date(), end: new Date(), totalDays: 1 };
-    let earliest = parseDate(project.startDate);
-    let latest = parseDate(project.endDate);
-    allProjectTasks.forEach((t) => {
-      const ts = parseDate(t.startDate);
-      const te = parseDate(t.endDate);
-      if (ts < earliest) earliest = ts;
-      if (te > latest) latest = te;
-    });
-    const start = new Date(earliest.getFullYear(), earliest.getMonth(), 1);
-    const end = new Date(latest.getFullYear(), latest.getMonth() + 2, 0);
-    const totalDays = daysBetween(start, end);
-    return { start, end, totalDays: Math.max(totalDays, 1) };
-  }, [project, allProjectTasks]);
+    const dates: Date[] = [];
+    projectItems.forEach(i => { if (i.startDate) dates.push(parseDate(i.startDate)); if (i.endDate) dates.push(parseDate(i.endDate)); });
+    if (project?.startDate) dates.push(parseDate(project.startDate));
+    if (project?.endDate) dates.push(parseDate(project.endDate));
+    if (dates.length === 0) {
+      const now = new Date(); const end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end, totalDays: 90 };
+    }
+    const min = new Date(Math.min(...dates.map(d => d.getTime())));
+    const max = new Date(Math.max(...dates.map(d => d.getTime())));
+    const start = new Date(min.getFullYear(), min.getMonth(), 1);
+    const end = new Date(max.getFullYear(), max.getMonth() + 2, 0);
+    return { start, end, totalDays: Math.max(daysBetween(start, end), 1) };
+  }, [projectItems, project]);
 
-  // ── Columns ────────────────────────────────────────────────────────────
   const columns = useMemo((): Column[] => {
     const cols: Column[] = [];
     const { start, end } = timelineRange;
     if (zoom === 'week') {
       const cur = new Date(start);
       while (cur <= end) {
-        const weekStart = new Date(cur);
-        const weekEnd = new Date(cur);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        cols.push({
-          label: `W${getWeekNumber(weekStart)}`,
-          subLabel: `${MONTHS_SHORT[weekStart.getMonth()]} ${weekStart.getDate()}`,
-          startDate: new Date(weekStart),
-          endDate: weekEnd > end ? new Date(end) : weekEnd,
-        });
+        const ws = new Date(cur); const we = new Date(cur); we.setDate(we.getDate() + 6);
+        cols.push({ label: `W${getWeekNumber(ws)}`, subLabel: `${MONTHS_SHORT[ws.getMonth()]} ${ws.getDate()}`, startDate: new Date(ws), endDate: we > end ? new Date(end) : we });
         cur.setDate(cur.getDate() + 7);
       }
     } else if (zoom === 'month') {
       const cur = new Date(start.getFullYear(), start.getMonth(), 1);
       while (cur <= end) {
-        const monthEnd = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
-        cols.push({
-          label: MONTHS_SHORT[cur.getMonth()],
-          subLabel: String(cur.getFullYear()),
-          startDate: new Date(cur),
-          endDate: monthEnd > end ? new Date(end) : monthEnd,
-        });
+        const me = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
+        cols.push({ label: MONTHS_SHORT[cur.getMonth()], subLabel: String(cur.getFullYear()), startDate: new Date(cur), endDate: me > end ? new Date(end) : me });
         cur.setMonth(cur.getMonth() + 1);
       }
     } else {
       const cur = new Date(start.getFullYear(), Math.floor(start.getMonth() / 3) * 3, 1);
       while (cur <= end) {
-        const qEnd = new Date(cur.getFullYear(), cur.getMonth() + 3, 0);
-        cols.push({
-          label: `Q${Math.floor(cur.getMonth() / 3) + 1}`,
-          subLabel: String(cur.getFullYear()),
-          startDate: new Date(cur),
-          endDate: qEnd > end ? new Date(end) : qEnd,
-        });
+        const qe = new Date(cur.getFullYear(), cur.getMonth() + 3, 0);
+        cols.push({ label: `Q${Math.floor(cur.getMonth() / 3) + 1}`, subLabel: String(cur.getFullYear()), startDate: new Date(cur), endDate: qe > end ? new Date(end) : qe });
         cur.setMonth(cur.getMonth() + 3);
       }
     }
     return cols;
   }, [timelineRange, zoom]);
 
-  // ── Pixel helpers ──────────────────────────────────────────────────────
-  const COL_BASE_WIDTH = zoom === 'week' ? 80 : zoom === 'month' ? 100 : 140;
-  const COL_MIN_WIDTH = Math.round(COL_BASE_WIDTH * zoomScale);
-  const totalWidth = columns.length * COL_MIN_WIDTH;
+  const COL_BASE = zoom === 'week' ? 80 : zoom === 'month' ? 100 : 140;
+  const COL_W = Math.round(COL_BASE * zoomScale);
+  const totalW = columns.length * COL_W;
 
-  function getBarLeft(taskStart: string): number {
-    const days = daysBetween(timelineRange.start, parseDate(taskStart));
-    return (days / timelineRange.totalDays) * totalWidth;
-  }
+  const barLeft = (s: string) => (daysBetween(timelineRange.start, parseDate(s)) / timelineRange.totalDays) * totalW;
+  const barWidth = (s: string, e: string) => Math.max(14, (daysBetween(parseDate(s), parseDate(e)) + 1) / timelineRange.totalDays * totalW);
 
-  function getBarWidth(taskStart: string, taskEnd: string): number {
-    const days = daysBetween(parseDate(taskStart), parseDate(taskEnd)) + 1;
-    return Math.max(16, (days / timelineRange.totalDays) * totalWidth);
-  }
-
-  // ── Today marker ───────────────────────────────────────────────────────
   const today = new Date();
-  const todayOffset = (() => {
-    const days = daysBetween(timelineRange.start, today);
-    if (days < 0 || days > timelineRange.totalDays) return null;
-    return (days / timelineRange.totalDays) * totalWidth;
+  const todayX = (() => {
+    const d = daysBetween(timelineRange.start, today);
+    if (d < 0 || d > timelineRange.totalDays) return null;
+    return (d / timelineRange.totalDays) * totalW;
   })();
 
-  // ── Group tasks by status ──────────────────────────────────────────────
-  const groups = useMemo(() => {
-    const order = ['in-progress', 'todo', 'review', 'completed'];
-    const map = new Map<string, Task[]>();
-    order.forEach((s) => map.set(s, []));
-    filteredTasks.forEach((t) => {
-      const arr = map.get(t.status) || [];
-      arr.push(t);
-      map.set(t.status, arr);
+  const barPositions = useMemo(() => {
+    const map = new Map<string, { y: number; leftX: number; rightX: number }>();
+    visibleItems.forEach((item, i) => {
+      const y = i * ROW_HEIGHT + ROW_HEIGHT / 2;
+      if (!item.startDate) return;
+      const x = barLeft(item.startDate);
+      const w = item.endDate ? barWidth(item.startDate, item.endDate) : 14;
+      map.set(item.id, { y, leftX: x, rightX: x + w });
     });
-    return Array.from(map.entries()).filter(([, tasks]) => tasks.length > 0);
-  }, [filteredTasks]);
+    return map;
+  }, [visibleItems]);
 
-  const toggleGroup = (status: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(status)) next.delete(status);
-      else next.add(status);
-      return next;
-    });
+  const hasChildren = (id: string) => projectItems.some(i => i.parentId === id);
+  const toggleCollapse = (id: string) => {
+    setCollapsedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
 
-  // ── Stats ──────────────────────────────────────────────────────────────
-  const myTasks = allProjectTasks.filter((t) => t.assignedTo === currentUser?.id);
-  const myCompleted = myTasks.filter((t) => t.status === 'completed').length;
-  const myOverdue = myTasks.filter((t) => t.status !== 'completed' && parseDate(t.endDate) < today).length;
-  const completedCount = allProjectTasks.filter((t) => t.status === 'completed').length;
-
-  // ── Tooltip handler ────────────────────────────────────────────────────
-  const handleBarHover = (task: Task, e: React.MouseEvent) => {
-    setHoveredTask(task.id);
-    const rect = chartRef.current?.getBoundingClientRect();
-    if (rect) {
-      setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-    }
-  };
-
-  const hoveredTaskObj = hoveredTask ? filteredTasks.find((t) => t.id === hoveredTask) : null;
-
-  // ═════════════════════════════════════════════════════════════════════════
   return (
     <div className="space-y-4">
-      {/* ── Read-Only Notice ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-4 py-2.5 dark:bg-dark-card2 dark:border-dark-border bg-light-card2 border border-light-border rounded-lg">
-        <LockIcon size={13} className="dark:text-dark-muted text-light-muted flex-shrink-0" />
+      {/* Read-only notice */}
+      <div className="flex items-center gap-2 px-4 py-2 dark:bg-dark-card2 dark:border-dark-border bg-light-card2 border border-light-border rounded-lg">
+        <LockIcon size={12} className="dark:text-dark-muted text-light-muted flex-shrink-0" />
         <p className="text-xs dark:text-dark-muted text-light-muted">
-          Gantt chart is in <strong>read-only mode</strong>. Contact your admin to enable timeline editing.
+          Gantt chart is in <strong>read-only mode</strong>. Only items visible to you are shown.
         </p>
       </div>
 
-      {/* ── Project Tabs + Zoom ─────────────────────────────────────────── */}
+      {/* Project tabs + zoom */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex gap-2 flex-wrap flex-1">
-          {myProjects.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setSelectedProject(p.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                selectedProject === p.id
-                  ? 'bg-green-primary text-black shadow-sm'
-                  : 'dark:bg-dark-card dark:border dark:border-dark-border dark:text-dark-muted dark:hover:text-dark-text dark:hover:border-green-primary/30 bg-white border border-light-border text-light-muted hover:text-light-text hover:border-green-600/30'
-              }`}
-            >
-              {p.name}
-            </button>
+          {myProjects.map(p => (
+            <button key={p.id} onClick={() => setSelectedProject(p.id)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedProject === p.id ? 'bg-green-primary text-black shadow-sm' : 'dark:bg-dark-card dark:border dark:border-dark-border dark:text-dark-muted bg-white border border-light-border text-light-muted hover:text-light-text'}`}
+            >{p.name}</button>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          {/* Zoom level selector */}
           <div className="flex items-center dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg overflow-hidden">
-            {(['week', 'month', 'quarter'] as ZoomLevel[]).map((z) => (
-              <button
-                key={z}
-                onClick={() => setZoom(z)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors capitalize ${
-                  zoom === z
-                    ? 'bg-green-primary text-black'
-                    : 'dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text'
-                }`}
-              >
-                {z}
-              </button>
+            {(['week','month','quarter'] as ZoomLevel[]).map(z => (
+              <button key={z} onClick={() => setZoom(z)} className={`px-3 py-1.5 text-xs font-medium transition-colors capitalize ${zoom === z ? 'bg-green-primary text-black' : 'dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text'}`}>{z}</button>
             ))}
           </div>
-          {/* Zoom in/out controls */}
           <div className="flex items-center gap-1 dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg px-1.5 py-1">
-            <button
-              onClick={handleZoomOut}
-              disabled={zoomScale <= MIN_SCALE}
-              className="p-1 rounded transition-colors dark:text-dark-muted dark:hover:text-dark-text dark:hover:bg-dark-border/50 text-light-muted hover:text-light-text hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Zoom out"
-            >
-              <ZoomOutIcon size={14} />
-            </button>
-            <button
-              onClick={handleZoomReset}
-              className="px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors dark:text-dark-muted dark:hover:text-dark-text dark:hover:bg-dark-border/50 text-light-muted hover:text-light-text hover:bg-gray-100 min-w-[38px] text-center"
-              title="Reset zoom to 100%"
-            >
-              {Math.round(zoomScale * 100)}%
-            </button>
-            <button
-              onClick={handleZoomIn}
-              disabled={zoomScale >= MAX_SCALE}
-              className="p-1 rounded transition-colors dark:text-dark-muted dark:hover:text-dark-text dark:hover:bg-dark-border/50 text-light-muted hover:text-light-text hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Zoom in"
-            >
-              <ZoomInIcon size={14} />
-            </button>
-            <button
-              onClick={handleZoomReset}
-              className="p-1 rounded transition-colors dark:text-dark-muted dark:hover:text-dark-text dark:hover:bg-dark-border/50 text-light-muted hover:text-light-text hover:bg-gray-100"
-              title="Fit to screen"
-            >
-              <Maximize2Icon size={13} />
-            </button>
+            <button onClick={zoomOut} disabled={zoomScale <= MIN_SCALE} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted disabled:opacity-30"><ZoomOutIcon size={13} /></button>
+            <button onClick={() => setZoomScale(1)} className="px-1.5 py-0.5 text-[10px] font-semibold rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted min-w-[36px] text-center">{Math.round(zoomScale * 100)}%</button>
+            <button onClick={zoomIn} disabled={zoomScale >= MAX_SCALE} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted disabled:opacity-30"><ZoomInIcon size={13} /></button>
+            <button onClick={() => setZoomScale(1)} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted"><Maximize2Icon size={12} /></button>
           </div>
         </div>
       </div>
 
-      {/* ── My Tasks Summary ────────────────────────────────────────────── */}
-      {project && (
-        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-base font-semibold dark:text-dark-text text-light-text">
-                {project.name}
-              </h2>
-              <p className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
-                {formatDateShort(parseDate(project.startDate))} → {formatDateShort(parseDate(project.endDate))}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <StatusBadge status={project.status} />
-              <PriorityBadge priority={project.priority} />
-            </div>
+      {/* Chart */}
+      <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card overflow-hidden">
+        {/* Column headers */}
+        <div className="flex dark:border-dark-border border-b border-light-border sticky top-0 z-10 dark:bg-dark-card bg-white">
+          <div className="flex-shrink-0 flex items-center dark:border-dark-border border-r border-light-border" style={{ width: TREE_W }}>
+            <div className="w-10 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted border-r dark:border-dark-border border-light-border">#</div>
+            <div className="flex-1 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted">Name</div>
+            <div className="w-16 px-1 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted text-center">Start</div>
+            <div className="w-14 px-1 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted text-center">%</div>
           </div>
-          <ProgressBar value={project.progress} size="lg" animated showLabel />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-3">
-            <div className="text-center">
-              <div className="text-lg font-bold dark:text-dark-text text-light-text">{myTasks.length}</div>
-              <div className="text-[10px] dark:text-dark-subtle text-light-subtle">My Tasks</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-green-primary">{myCompleted}</div>
-              <div className="text-[10px] dark:text-dark-subtle text-light-subtle">Completed</div>
-            </div>
-            <div className="text-center">
-              <div className={`text-lg font-bold ${myOverdue > 0 ? 'text-red-400' : 'dark:text-dark-text text-light-text'}`}>{myOverdue}</div>
-              <div className="text-[10px] dark:text-dark-subtle text-light-subtle">Overdue</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold dark:text-dark-text text-light-text">
-                {completedCount}<span className="text-xs font-normal dark:text-dark-subtle text-light-subtle">/{allProjectTasks.length}</span>
-              </div>
-              <div className="text-[10px] dark:text-dark-subtle text-light-subtle">Team Total</div>
+          <div className="flex-1 overflow-hidden">
+            <div className="flex" style={{ width: totalW }}>
+              {columns.map((col, i) => {
+                const isCur = today >= col.startDate && today <= col.endDate;
+                return (
+                  <div key={i} className={`flex-shrink-0 py-2 text-center dark:border-dark-border border-r border-light-border last:border-r-0 ${isCur ? 'dark:bg-green-primary/5 bg-green-50/50' : ''}`} style={{ width: COL_W }}>
+                    <div className="text-xs font-semibold dark:text-dark-text text-light-text">{col.label}</div>
+                    {col.subLabel && <div className="text-[10px] dark:text-dark-subtle text-light-subtle">{col.subLabel}</div>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
-      )}
 
-      {/* ── Gantt Chart ─────────────────────────────────────────────────── */}
-      <div
-        ref={chartRef}
-        className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card overflow-hidden relative"
-      >
-        {/* ── Filters (toolbar inside chart card) ─────────────────────── */}
-        <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 dark:border-dark-border border-b border-light-border">
-          <div className="relative">
-            <SearchIcon size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 dark:text-dark-subtle text-light-subtle" />
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 pr-3 py-1.5 text-xs rounded-lg dark:bg-dark-bg dark:border-dark-border dark:text-dark-text bg-gray-50 border border-light-border text-light-text w-48 focus:outline-none focus:ring-1 focus:ring-green-primary/50"
-            />
-          </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="pl-3 pr-7 py-1.5 text-xs rounded-lg dark:bg-dark-bg dark:border-dark-border dark:text-dark-muted bg-gray-50 border border-light-border text-light-muted focus:outline-none appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%239ca3af%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_6px_center] bg-no-repeat"
-          >
-            <option value="all">All Status</option>
-            <option value="todo">To Do</option>
-            <option value="in-progress">In Progress</option>
-            <option value="review">In Review</option>
-            <option value="completed">Completed</option>
-          </select>
-          <button
-            onClick={() => setShowMyOnly(!showMyOnly)}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
-              showMyOnly
-                ? 'bg-green-primary text-black'
-                : 'dark:bg-dark-bg dark:border dark:border-dark-border dark:text-dark-muted bg-gray-50 border border-light-border text-light-muted'
-            }`}
-          >
-            My Tasks Only
-          </button>
-          <div className="ml-auto text-xs dark:text-dark-subtle text-light-subtle">
-            {filteredTasks.length} of {allProjectTasks.length} tasks
-          </div>
-        </div>
-        <div ref={scrollContainerRef} className="overflow-x-auto relative">
-          {/* Today Label */}
-          {todayOffset !== null && (
-            <div className="absolute top-0 z-30 pointer-events-none flex flex-col items-center" style={{ left: `${todayOffset + 260}px`, transform: 'translateX(-50%)' }}>
-              <div className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm whitespace-nowrap">
-                TODAY
+        <div className="flex" style={{ maxHeight: '60vh' }}>
+          {/* Tree panel */}
+          <div ref={treeScrollRef} onScroll={handleTreeScroll} className="flex-shrink-0 overflow-y-auto dark:border-dark-border border-r border-light-border" style={{ width: TREE_W }}>
+            {visibleItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 dark:text-dark-subtle text-light-subtle">
+                <CalendarIcon size={32} className="mb-2 opacity-30" />
+                <p className="text-xs">No visible gantt items for this project.</p>
               </div>
-              <div className="w-0 h-0 border-l-[4px] border-r-[4px] border-t-[4px] border-l-transparent border-r-transparent border-t-red-500" />
-            </div>
-          )}
-          <div style={{ minWidth: `${Math.max(totalWidth + 260, 900)}px` }}>
-            {/* Column Headers */}
-            <div className="flex dark:border-dark-border border-b border-light-border sticky top-0 z-10 dark:bg-dark-card bg-white">
-              <div className="w-[260px] flex-shrink-0 px-4 py-2 dark:border-dark-border border-r border-light-border">
-                <span className="text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted">
-                  Task / Assignee
-                </span>
-              </div>
-              <div className="flex-1 flex">
-                {columns.map((col, i) => {
-                  const now = new Date();
-                  const isCurrent = now >= col.startDate && now <= col.endDate;
-                  return (
-                    <div
-                      key={i}
-                      className={`flex-shrink-0 py-2 text-center dark:border-dark-border border-r border-light-border last:border-r-0 ${
-                        isCurrent ? 'dark:bg-green-primary/5 bg-green-50/50' : ''
-                      }`}
-                      style={{ width: `${COL_MIN_WIDTH}px` }}
-                    >
-                      <div className="text-xs font-semibold dark:text-dark-text text-light-text">{col.label}</div>
-                      {col.subLabel && (
-                        <div className="text-[10px] dark:text-dark-subtle text-light-subtle">{col.subLabel}</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Grouped Task Rows */}
-            {groups.map(([status, groupTasks]) => {
-              const isCollapsed = collapsedGroups.has(status);
-              const statusColor = STATUS_COLORS[status] || '#6b7280';
+            ) : visibleItems.map(item => {
+              const depth = item.depth ?? 0;
+              const color = TYPE_COLOR[item.type] || '#6b7280';
+              const canExpand = hasChildren(item.id);
+              const isCollapsed = collapsedIds.has(item.id);
+              const assignees = users.filter(u => (item.assigneeIds || []).includes(u.id));
 
               return (
-                <div key={status}>
-                  {/* Group Header */}
-                  <div
-                    className="flex items-center gap-2 py-1.5 px-4 cursor-pointer select-none dark:bg-dark-card2/50 bg-light-card2/50 dark:border-dark-border border-b border-light-border transition-colors hover:dark:bg-dark-card2 hover:bg-light-card2"
-                    onClick={() => toggleGroup(status)}
-                  >
-                    {isCollapsed ? (
-                      <ChevronRightIcon size={13} className="dark:text-dark-muted text-light-muted" />
-                    ) : (
-                      <ChevronDownIcon size={13} className="dark:text-dark-muted text-light-muted" />
-                    )}
-                    <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: statusColor }} />
-                    <span className="text-xs font-semibold dark:text-dark-text text-light-text capitalize">
-                      {status.replace('-', ' ')}
-                    </span>
-                    <Badge variant="muted" size="sm">{groupTasks.length}</Badge>
+                <div key={item.id} className="flex items-center dark:border-dark-border border-b border-light-border" style={{ height: ROW_HEIGHT }}>
+                  <div className="w-10 px-2 flex-shrink-0 border-r dark:border-dark-border border-light-border flex items-center justify-end" style={{ height: ROW_HEIGHT }}>
+                    <span className="text-[10px] dark:text-dark-subtle text-light-subtle font-mono">{item.treeIndex || ''}</span>
                   </div>
-
-                  {/* Tasks */}
-                  {!isCollapsed &&
-                    groupTasks.map((task, taskIdx) => {
-                      const assignee = users.find((u) => u.id === task.assignedTo);
-                      const barLeft = getBarLeft(task.startDate);
-                      const barWidth = getBarWidth(task.startDate, task.endDate);
-                      const barColor = STATUS_COLORS[task.status] || '#6b7280';
-                      const isOverdue = task.status !== 'completed' && parseDate(task.endDate) < today;
-                      const isMilestone = task.progress === 100;
-                      const isMyTask = task.assignedTo === currentUser?.id;
-
-                      return (
-                        <div
-                          key={task.id}
-                          className={`flex dark:border-dark-border border-b border-light-border last:border-b-0 transition-colors ${
-                            isMyTask
-                              ? 'dark:bg-green-primary/5 bg-green-50/40'
-                              : hoveredTask === task.id
-                              ? 'dark:bg-green-primary/3 bg-green-50/20'
-                              : taskIdx % 2 === 0
-                              ? ''
-                              : 'dark:bg-dark-card2/20 bg-gray-50/30'
-                          }`}
-                        >
-                          {/* Left — Task Info */}
-                          <div className="w-[260px] flex-shrink-0 px-4 py-2.5 dark:border-dark-border border-r border-light-border">
-                            <div className="flex items-start gap-2">
-                              <div
-                                className="w-1 h-8 rounded-full flex-shrink-0 mt-0.5"
-                                style={{ backgroundColor: PRIORITY_COLORS[task.priority] || '#6b7280' }}
-                                title={`${task.priority} priority`}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  {isMyTask && (
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-primary flex-shrink-0" />
-                                  )}
-                                  <p className="text-xs font-medium dark:text-dark-text text-light-text truncate">
-                                    {task.title}
-                                  </p>
-                                  {isOverdue && (
-                                    <span className="text-[9px] px-1 py-0.5 rounded bg-red-500/15 text-red-400 font-medium flex-shrink-0">
-                                      LATE
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1.5 mt-1">
-                                  <div
-                                    className="w-4 h-4 rounded-full flex items-center justify-center text-black flex-shrink-0"
-                                    style={{ backgroundColor: '#63D44A', fontSize: '7px', fontWeight: 700 }}
-                                  >
-                                    {assignee?.avatar}
-                                  </div>
-                                  <span className="text-[10px] dark:text-dark-subtle text-light-subtle truncate">
-                                    {assignee?.name || 'Unassigned'}
-                                  </span>
-                                  <span className="text-[10px] dark:text-dark-subtle text-light-subtle ml-auto flex-shrink-0">
-                                    {task.progress}%
-                                  </span>
-                                </div>
-                                <div className="mt-1">
-                                  <div className="h-1.5 rounded-full dark:bg-dark-border bg-gray-200 overflow-hidden">
-                                    <div
-                                      className="h-full rounded-full transition-all"
-                                      style={{ width: `${task.progress}%`, backgroundColor: barColor }}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Right — Gantt Bar */}
-                          <div className="flex-1 relative" style={{ height: '56px' }}>
-                            {/* Grid columns */}
-                            <div className="absolute inset-0 flex">
-                              {columns.map((col, i) => {
-                                const now = new Date();
-                                const isCurrent = now >= col.startDate && now <= col.endDate;
-                                return (
-                                  <div
-                                    key={i}
-                                    className={`flex-shrink-0 h-full dark:border-dark-border border-r border-light-border last:border-r-0 ${
-                                      isCurrent ? 'dark:bg-green-primary/3 bg-green-50/20' : ''
-                                    }`}
-                                    style={{ width: `${COL_MIN_WIDTH}px` }}
-                                  />
-                                );
-                              })}
-                            </div>
-
-                            {/* Bar */}
-                            <div
-                              className="absolute top-1/2 -translate-y-1/2 rounded-md cursor-default group transition-all"
-                              style={{ left: `${barLeft}px`, width: `${barWidth}px`, height: '28px', zIndex: 5 }}
-                              onMouseEnter={(e) => handleBarHover(task, e)}
-                              onMouseMove={(e) => handleBarHover(task, e)}
-                              onMouseLeave={() => { setHoveredTask(null); setTooltipPos(null); }}
-                            >
-                              {/* Bar background */}
-                              <div
-                                className="absolute inset-0 rounded-md"
-                                style={{ backgroundColor: barColor, opacity: task.status === 'todo' ? 0.2 : 0.15 }}
-                              />
-                              {/* Progress fill */}
-                              <div
-                                className="absolute left-0 top-0 h-full rounded-l-md transition-all"
-                                style={{
-                                  width: `${task.progress}%`,
-                                  backgroundColor: barColor,
-                                  opacity: task.status === 'todo' ? 0.5 : 0.85,
-                                  borderRadius: task.progress === 100 ? '0.375rem' : '0.375rem 0 0 0.375rem',
-                                }}
-                              />
-                              {/* Border */}
-                              <div
-                                className="absolute inset-0 rounded-md border transition-all"
-                                style={{
-                                  borderColor: isMyTask ? '#63D44A' : barColor,
-                                  borderWidth: isMyTask ? '2px' : '1.5px',
-                                  boxShadow: hoveredTask === task.id ? `0 0 12px ${barColor}40` : 'none',
-                                }}
-                              />
-                              {/* Label */}
-                              {barWidth > 50 && (
-                                <div className="absolute inset-0 flex items-center px-2 z-10">
-                                  <span className="dark:text-white text-gray-900 font-semibold truncate" style={{ fontSize: '10px' }}>
-                                    <span className="dark:drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] drop-shadow-[0_0px_3px_rgba(255,255,255,0.9)]">{task.title}</span>
-                                  </span>
-                                  <span className="ml-auto dark:text-white/80 text-gray-800 font-medium flex-shrink-0" style={{ fontSize: '9px' }}>
-                                    <span className="dark:drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] drop-shadow-[0_0px_3px_rgba(255,255,255,0.9)]">{task.progress}%</span>
-                                  </span>
-                                </div>
-                              )}
-                              {/* Milestone diamond */}
-                              {isMilestone && (
-                                <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rotate-45 bg-green-primary border-2 border-white dark:border-dark-card z-20" />
-                              )}
-                              {/* Overdue end marker */}
-                              {isOverdue && (
-                                <div className="absolute -right-0.5 top-0 bottom-0 w-1 rounded-r-md bg-red-500" />
-                              )}
-                            </div>
-
-                            {/* Today line */}
-                            {todayOffset !== null && (
-                              <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: `${todayOffset}px` }}>
-                                <div className="w-0.5 h-full bg-red-500/40" style={{ backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 3px, rgb(239 68 68 / 0.5) 3px, rgb(239 68 68 / 0.5) 7px)' }} />
-                              </div>
-                            )}
-                          </div>
+                  <div className="flex-1 flex items-center gap-1 px-1 min-w-0" style={{ paddingLeft: `${depth * 16 + 4}px` }}>
+                    {canExpand ? (
+                      <button onClick={() => toggleCollapse(item.id)} className="flex-shrink-0 dark:text-dark-muted text-light-muted">
+                        {isCollapsed ? <ChevronRightIcon size={12} /> : <ChevronDownIcon size={12} />}
+                      </button>
+                    ) : <div className="w-3 flex-shrink-0" />}
+                    <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
+                    <span className="text-xs truncate dark:text-dark-text text-light-text" title={item.name}>{item.name}</span>
+                    {assignees.length > 0 && (
+                      <div className="flex -space-x-1 ml-auto flex-shrink-0">
+                        {assignees.slice(0, 3).map(u => (
+                          <div key={u.id} className="w-4 h-4 rounded-full flex items-center justify-center text-black border border-white dark:border-dark-card" style={{ backgroundColor: '#63D44A', fontSize: '6px', fontWeight: 700 }} title={u.name}>{u.avatar}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="w-16 px-1 flex-shrink-0 flex items-center justify-center" style={{ height: ROW_HEIGHT }}>
+                    <span className="text-[9px] dark:text-dark-subtle text-light-subtle">{item.startDate ? dateShort(item.startDate) : ''}</span>
+                  </div>
+                  <div className="w-14 px-1 flex-shrink-0 flex items-center justify-center" style={{ height: ROW_HEIGHT }}>
+                    {item.type !== 'milestone' ? (
+                      <div className="flex items-center gap-1 w-full">
+                        <div className="flex-1 h-1 rounded-full dark:bg-dark-border bg-gray-200 overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${item.progress}%`, backgroundColor: color }} />
                         </div>
-                      );
-                    })}
+                        <span className="text-[9px] dark:text-dark-muted text-light-muted w-6 text-right">{item.progress}%</span>
+                      </div>
+                    ) : <span className="text-[9px] dark:text-dark-subtle text-light-subtle">—</span>}
+                  </div>
                 </div>
               );
             })}
+          </div>
 
-            {/* Empty State */}
-            {filteredTasks.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 dark:text-dark-subtle text-light-subtle">
-                <CalendarIcon size={40} className="mb-3 opacity-30" />
-                <p className="text-sm">No tasks found for the current filters</p>
+          {/* Timeline */}
+          <div ref={timelineScrollRef} onScroll={handleTimelineScroll} className="flex-1 overflow-auto relative">
+            <div style={{ width: totalW, position: 'relative' }}>
+              {visibleItems.map((item, idx) => (
+                <div key={item.id} className="dark:border-dark-border border-b border-light-border relative" style={{ height: ROW_HEIGHT }}>
+                  <div className="absolute inset-0 flex pointer-events-none">
+                    {columns.map((col, i) => {
+                      const isCur = today >= col.startDate && today <= col.endDate;
+                      return <div key={i} className={`flex-shrink-0 h-full dark:border-dark-border border-r border-light-border last:border-r-0 ${isCur ? 'dark:bg-green-primary/3 bg-green-50/20' : ''}`} style={{ width: COL_W }} />;
+                    })}
+                  </div>
+                  {item.startDate && (
+                    item.type === 'milestone' ? (
+                      <div className="absolute top-1/2 z-10 pointer-events-none" style={{ left: barLeft(item.startDate) + 7, transform: 'translate(-50%, -50%)' }}>
+                        <div className="w-3.5 h-3.5 rotate-45 border-2 border-white dark:border-dark-card shadow-sm" style={{ backgroundColor: TYPE_COLOR.milestone }} title={item.name} />
+                      </div>
+                    ) : (
+                      <div className="absolute top-1/2 -translate-y-1/2 rounded z-10" style={{ left: barLeft(item.startDate), width: item.endDate ? barWidth(item.startDate, item.endDate) : 60, height: BAR_H }}>
+                        <div className="absolute inset-0 rounded" style={{ backgroundColor: TYPE_COLOR[item.type], opacity: 0.15 }} />
+                        <div className="absolute left-0 top-0 h-full rounded-l" style={{ width: `${item.progress}%`, backgroundColor: TYPE_COLOR[item.type], opacity: 0.8, borderRadius: item.progress === 100 ? '3px' : '3px 0 0 3px' }} />
+                        <div className="absolute inset-0 rounded border" style={{ borderColor: TYPE_COLOR[item.type], borderWidth: '1.5px' }} />
+                        {(item.endDate ? barWidth(item.startDate, item.endDate) : 60) > 40 && (
+                          <div className="absolute inset-0 flex items-center px-1.5 z-10">
+                            <span className="text-[9px] font-medium dark:text-white text-gray-900 truncate dark:drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] drop-shadow-[0_0px_3px_rgba(255,255,255,0.9)]">{item.name}</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
+                  {todayX !== null && <div className="absolute top-0 bottom-0 z-20 pointer-events-none w-0.5 bg-red-500/30" style={{ left: todayX }} />}
+                </div>
+              ))}
+
+              {projectDeps.length > 0 && (
+                <svg className="absolute top-0 left-0 pointer-events-none z-30" style={{ width: totalW, height: visibleItems.length * ROW_HEIGHT }}>
+                  <defs>
+                    <marker id="arrow-emp" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                      <path d="M0,0 L0,6 L6,3 z" fill="#94a3b8" />
+                    </marker>
+                  </defs>
+                  {projectDeps.map(dep => {
+                    const from = barPositions.get(dep.predecessorId);
+                    const to = barPositions.get(dep.successorId);
+                    if (!from || !to) return null;
+                    return (
+                      <path key={dep.id} d={`M ${from.rightX} ${from.y} H ${from.rightX + 8} V ${to.y} H ${to.leftX}`} stroke="#94a3b8" strokeWidth="1.5" fill="none" markerEnd="url(#arrow-emp)" />
+                    );
+                  })}
+                </svg>
+              )}
+            </div>
+            {todayX !== null && (
+              <div className="absolute top-0 z-40 pointer-events-none flex flex-col items-center" style={{ left: todayX, transform: 'translateX(-50%)' }}>
+                <div className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">TODAY</div>
+                <div className="w-0 h-0 border-l-[4px] border-r-[4px] border-t-[4px] border-l-transparent border-r-transparent border-t-red-500" />
               </div>
             )}
           </div>
         </div>
-
-
-
-        {/* Tooltip */}
-        {hoveredTaskObj && tooltipPos && (
-          <div
-            className="absolute z-50 pointer-events-none"
-            style={{
-              left: `${Math.min(tooltipPos.x + 12, (chartRef.current?.offsetWidth || 600) - 260)}px`,
-              top: `${tooltipPos.y - 10}px`,
-              transform: 'translateY(-100%)',
-            }}
-          >
-            <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg shadow-xl p-3 w-60">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[hoveredTaskObj.status] }} />
-                <p className="text-xs font-semibold dark:text-dark-text text-light-text truncate">{hoveredTaskObj.title}</p>
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[10px]">
-                  <span className="dark:text-dark-subtle text-light-subtle">Status</span>
-                  <span className="dark:text-dark-text text-light-text capitalize font-medium">{hoveredTaskObj.status.replace('-', ' ')}</span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span className="dark:text-dark-subtle text-light-subtle">Priority</span>
-                  <span className="font-medium capitalize" style={{ color: PRIORITY_COLORS[hoveredTaskObj.priority] }}>{hoveredTaskObj.priority}</span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span className="dark:text-dark-subtle text-light-subtle">Timeline</span>
-                  <span className="dark:text-dark-text text-light-text font-medium">
-                    {formatDateShort(parseDate(hoveredTaskObj.startDate))} → {formatDateShort(parseDate(hoveredTaskObj.endDate))}
-                  </span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span className="dark:text-dark-subtle text-light-subtle">Progress</span>
-                  <span className="dark:text-dark-text text-light-text font-medium">{hoveredTaskObj.progress}%</span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span className="dark:text-dark-subtle text-light-subtle">Hours</span>
-                  <span className="dark:text-dark-text text-light-text font-medium">{hoveredTaskObj.loggedHours}h / {hoveredTaskObj.estimatedHours}h</span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span className="dark:text-dark-subtle text-light-subtle">Assignee</span>
-                  <span className="dark:text-dark-text text-light-text font-medium">
-                    {users.find((u) => u.id === hoveredTaskObj.assignedTo)?.name || 'Unassigned'}
-                  </span>
-                </div>
-                <div className="pt-1">
-                  <div className="h-1.5 rounded-full dark:bg-dark-border bg-gray-200 overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${hoveredTaskObj.progress}%`, backgroundColor: STATUS_COLORS[hoveredTaskObj.status] }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* ── Legend ───────────────────────────────────────────────────────── */}
+      {/* Legend */}
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card px-5 py-3">
-        <div className="flex items-center gap-6 flex-wrap">
-          {Object.entries(STATUS_COLORS).map(([status, color]) => (
-            <div key={status} className="flex items-center gap-1.5">
-              <div className="w-3 h-1.5 rounded-sm" style={{ backgroundColor: color }} />
-              <span className="text-[10px] dark:text-dark-muted text-light-muted capitalize">{status.replace('-', ' ')}</span>
+        <div className="flex items-center gap-5 flex-wrap">
+          {Object.entries(TYPE_COLOR).map(([type, color]) => (
+            <div key={type} className="flex items-center gap-1.5">
+              {type === 'milestone' ? <div className="w-2.5 h-2.5 rotate-45" style={{ backgroundColor: color }} /> : <div className="w-3 h-1.5 rounded-sm" style={{ backgroundColor: color }} />}
+              <span className="text-[10px] dark:text-dark-muted text-light-muted capitalize">{type}</span>
             </div>
           ))}
           <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rotate-45 bg-green-primary" />
-            <span className="text-[10px] dark:text-dark-muted text-light-muted">Milestone</span>
-          </div>
-          <div className="flex items-center gap-1.5">
             <div className="w-3 h-px bg-red-500" />
             <span className="text-[10px] dark:text-dark-muted text-light-muted">Today</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-primary" />
-            <span className="text-[10px] dark:text-dark-muted text-light-muted">My Tasks</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-1.5 rounded-sm bg-red-500/60" />
-            <span className="text-[10px] dark:text-dark-muted text-light-muted">Overdue</span>
           </div>
         </div>
       </div>

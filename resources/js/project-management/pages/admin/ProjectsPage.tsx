@@ -11,21 +11,25 @@ import {
   UsersIcon } from
 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
-import { Project, Task } from '../../data/mockData';
+import { Project, Task, ApprovalStatus } from '../../data/mockData';
 import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { ApprovalActionModal } from '../../components/projects/ApprovalActionModal';
 type ModalMode = 'create' | 'edit' | 'view' | null;
 export function ProjectsPage() {
   const { projects, setProjects, users, tasks, setTasks, refreshTasks, refreshProjects } = useData();
   const { currentUser } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [approvalFilter, setApprovalFilter] = useState('all');
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [approvalProject, setApprovalProject] = useState<Project | null>(null);
+  const [approvalAction, setApprovalAction] = useState('');
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({
@@ -50,7 +54,8 @@ export function ProjectsPage() {
   const filtered = projects.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchApproval = approvalFilter === 'all' || (p.approvalStatus || 'draft') === approvalFilter;
+    return matchSearch && matchStatus && matchApproval;
   });
   const openCreate = () => {
     setForm({
@@ -217,8 +222,23 @@ export function ProjectsPage() {
     } catch { /* continue */ }
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
   };
-  const handleArchive = (id: string) => {
-    setProjects((prev) =>
+  const handleApprovalConfirm = async (notes: string) => {
+    if (!approvalProject || !approvalAction) return;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const res = await fetch(`/api/projects/${approvalProject.id}/approval`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+      body: JSON.stringify({ action: approvalAction, notes }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || 'Approval action failed.');
+    }
+    await refreshProjects();
+    setApprovalProject(null);
+    setApprovalAction('');
+  };
+  const handleArchive = (id: string) => {    setProjects((prev) =>
     prev.map((p) =>
     p.id === id ?
     {
@@ -276,6 +296,20 @@ export function ProjectsPage() {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="w-36" />
+
+          <Select
+            options={[
+            { value: 'all', label: 'All Approval' },
+            { value: 'draft', label: 'Draft' },
+            { value: 'technical_review', label: 'Tech Review' },
+            { value: 'accounting_review', label: 'Acct Review' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'rejected', label: 'Rejected' },
+            { value: 'revision_requested', label: 'Revision Requested' },
+            ]}
+            value={approvalFilter}
+            onChange={(e) => setApprovalFilter(e.target.value)}
+            className="w-40" />
 
         </div>
         <Button
@@ -344,6 +378,12 @@ export function ProjectsPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge status={project.status} />
                 <PriorityBadge priority={project.priority} />
+                {project.approvalStatus && project.approvalStatus !== 'draft' && (
+                  <StatusBadge status={project.approvalStatus} />
+                )}
+                {(!project.approvalStatus || project.approvalStatus === 'draft') && (
+                  <StatusBadge status="draft" />
+                )}
               </div>
 
               {/* Progress */}
@@ -413,6 +453,47 @@ export function ProjectsPage() {
                   {formatCurrency(project.budget)}
                 </span>
               </div>
+
+              {/* Approval actions */}
+              {(() => {
+                const dept = currentUser?.department || '';
+                const as = project.approvalStatus || 'draft';
+                const actions: { action: string; label: string; variant: string }[] = [];
+
+                if (dept === 'Admin') {
+                  if (as === 'draft') actions.push({ action: 'submit_for_review', label: 'Submit for Review', variant: 'primary' });
+                  if (as === 'revision_requested') actions.push({ action: 'resubmit', label: 'Resubmit', variant: 'primary' });
+                  if (as === 'accounting_review') actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
+                }
+                if (dept === 'Technical' && as === 'technical_review') {
+                  actions.push({ action: 'approve_technical', label: 'Approve', variant: 'primary' });
+                  actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
+                  actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
+                }
+                if (dept === 'Accounting' && as === 'accounting_review') {
+                  actions.push({ action: 'approve_final', label: 'Final Approve', variant: 'primary' });
+                  actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
+                }
+
+                if (actions.length === 0) return null;
+                return (
+                  <div className="flex flex-wrap gap-1.5 pt-1 dark:border-dark-border border-t border-light-border">
+                    {actions.map(a => (
+                      <button
+                        key={a.action}
+                        onClick={() => { setApprovalProject(project); setApprovalAction(a.action); }}
+                        className={`px-2.5 py-1 text-[10px] font-medium rounded-lg transition-colors ${
+                          a.variant === 'primary' ? 'bg-green-primary text-black hover:bg-green-progress' :
+                          a.variant === 'danger' ? 'bg-red-600 text-white hover:bg-red-700' :
+                          'dark:bg-dark-card2 dark:text-dark-muted dark:border dark:border-dark-border bg-gray-100 text-light-muted border border-light-border hover:text-light-text'
+                        }`}
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>);
 
         })}
@@ -898,6 +979,17 @@ export function ProjectsPage() {
           undone and will remove all associated tasks.
         </p>
       </Modal>
+
+      {/* Approval Action Modal */}
+      {approvalProject && approvalAction && (
+        <ApprovalActionModal
+          isOpen={!!approvalProject}
+          onClose={() => { setApprovalProject(null); setApprovalAction(''); }}
+          project={approvalProject}
+          action={approvalAction}
+          onConfirm={handleApprovalConfirm}
+        />
+      )}
     </div>);
 
 }

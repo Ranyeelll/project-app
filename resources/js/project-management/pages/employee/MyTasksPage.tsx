@@ -175,7 +175,7 @@ export function MyTasksPage() {
                   <StatusBadge status={project.status} />
                 </div>
                 {taskCount > 0 && (
-                  <ProgressBar value={Math.round((completedCount / taskCount) * 100)} size="sm" className="mt-2" />
+                  <div className="mt-2"><ProgressBar value={Math.round((completedCount / taskCount) * 100)} size="sm" /></div>
                 )}
                 {taskCount === 0 && (
                   <p className="text-[10px] dark:text-dark-subtle text-light-subtle mt-2 italic">No tasks created yet</p>

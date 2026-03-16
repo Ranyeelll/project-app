@@ -287,7 +287,7 @@ export function MonitorControlPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: textColor }} />
                   <YAxis tick={{ fontSize: 11, fill: textColor }} tickFormatter={(v: number) => `₱${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip contentStyle={customTooltipStyle} formatter={(value: number) => formatCurrency(value)} />
+                  <Tooltip contentStyle={customTooltipStyle} formatter={(value: number | undefined) => value != null ? formatCurrency(value) : ''} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
                   <ReBar dataKey="Budget" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                   <ReBar dataKey="Spent" fill="#f59e0b" radius={[4, 4, 0, 0]} />
@@ -324,7 +324,7 @@ export function MonitorControlPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: textColor }} />
                   <YAxis tick={{ fontSize: 11, fill: textColor }} unit="h" />
-                  <Tooltip contentStyle={customTooltipStyle} formatter={(value: number) => `${value}h`} />
+                  <Tooltip contentStyle={customTooltipStyle} formatter={(value: number | undefined) => `${value ?? 0}h`} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
                   <ReBar dataKey="Estimated" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                   <ReBar dataKey="Logged" fill="#22c55e" radius={[4, 4, 0, 0]} />

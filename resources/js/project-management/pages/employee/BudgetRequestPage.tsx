@@ -164,6 +164,7 @@ export function BudgetRequestPage() {
             setForm({
               projectId: projects[0]?.id || '',
               amount: '',
+              type: 'spending',
               purpose: ''
             });
             setCreateModal(true);

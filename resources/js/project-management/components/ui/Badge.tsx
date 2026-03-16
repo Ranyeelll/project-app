@@ -126,6 +126,18 @@ export function StatusBadge({ status }: {status: string;}) {
     none: {
       variant: 'muted',
       label: 'No Report'
+    },
+    draft: {
+      variant: 'muted',
+      label: 'Draft'
+    },
+    technical_review: {
+      variant: 'info',
+      label: 'Tech Review'
+    },
+    accounting_review: {
+      variant: 'warning',
+      label: 'Acct Review'
     }
   };
   const config = map[status] || {

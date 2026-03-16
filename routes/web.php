@@ -14,6 +14,8 @@ use App\Http\Controllers\Api\TaskCompletionController;
 use App\Http\Controllers\Api\TaskReviewController;
 use App\Http\Controllers\Api\TaskBlockerController;
 use App\Http\Controllers\Api\TimeLogController;
+use App\Http\Controllers\Api\GanttController;
+use App\Http\Controllers\Api\ProjectApprovalController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
@@ -86,10 +88,22 @@ Route::prefix('api')->group(function () {
             Route::delete('/issues/{issue}', [IssueController::class, 'destroy']);
         });
 
-        // ─── Admin + Technical (Task management) ──────────────────
+        // ─── Admin + Technical (Task management + Gantt) ──────────
         Route::middleware('department:Admin,Technical')->group(function () {
             // Admin and Technical can create tasks
             Route::post('/tasks', [TaskController::class, 'store']);
+
+            // Gantt items (Admin + Technical can edit gantt charts)
+            Route::get('/projects/{project}/gantt-items', [GanttController::class, 'index']);
+            Route::post('/projects/{project}/gantt-items', [GanttController::class, 'store']);
+            Route::put('/projects/{project}/gantt-items/{item}', [GanttController::class, 'update']);
+            Route::delete('/projects/{project}/gantt-items/{item}', [GanttController::class, 'destroy']);
+            Route::patch('/projects/{project}/gantt-items/{item}/move', [GanttController::class, 'move']);
+
+            // Gantt dependencies
+            Route::get('/projects/{project}/gantt-dependencies', [GanttController::class, 'indexDependencies']);
+            Route::post('/projects/{project}/gantt-dependencies', [GanttController::class, 'storeDependency']);
+            Route::delete('/projects/{project}/gantt-dependencies/{dependency}', [GanttController::class, 'destroyDependency']);
         });
 
         // ─── Admin + Accounting (Budget management) ───────────────
@@ -105,6 +119,10 @@ Route::prefix('api')->group(function () {
         });
 
         // ─── Any Authenticated User ───────────────────────────────
+        // Project approval workflow (authorization enforced in service)
+        Route::post('/projects/{project}/approval', [ProjectApprovalController::class, 'transition']);
+        Route::get('/projects/{project}/approval-history', [ProjectApprovalController::class, 'history']);
+
         // Profile photo (users can access)
         Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
         Route::get('/users/{user}/photo', [UserController::class, 'servePhoto']);

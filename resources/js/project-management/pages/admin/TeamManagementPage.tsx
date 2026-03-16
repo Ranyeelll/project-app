@@ -38,12 +38,12 @@ export function TeamManagementPage() {
   });
 
   // Department options for the dropdown
-  const DEPARTMENTS = [
+  const DEPARTMENTS: { value: string; label: string }[] = [
     { value: 'Admin', label: 'Admin' },
     { value: 'Accounting', label: 'Accounting' },
     { value: 'Technical', label: 'Technical' },
     { value: 'Employee', label: 'Employee' },
-  ] as const;
+  ];
   const filtered = users.filter((u) => {
     const matchSearch =
     u.name.toLowerCase().includes(search.toLowerCase()) ||
