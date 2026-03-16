@@ -47,10 +47,9 @@ class TaskReviewController extends Controller
     {
         $user = Auth::user();
 
-        // Authorization: Only Managers, Technical, Admin, Accounting can review
+        // Authorization: Only Technical, Admin, Accounting can review
         $canReview = $user && in_array($user->department, [
             Department::Admin,
-            Department::Manager,
             Department::Technical,
             Department::Accounting,
         ]);

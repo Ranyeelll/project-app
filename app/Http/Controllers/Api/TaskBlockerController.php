@@ -103,10 +103,9 @@ class TaskBlockerController extends Controller
     {
         $user = Auth::user();
 
-        // Authorization: Only managers/admin can resolve
+        // Authorization: Only Technical/Admin can resolve
         $canResolve = $user && in_array($user->department, [
             Department::Admin,
-            Department::Manager,
             Department::Technical,
         ]);
 

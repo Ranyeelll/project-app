@@ -7,6 +7,12 @@ use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\TaskActivityController;
+use App\Http\Controllers\Api\TaskProgressLogController;
+use App\Http\Controllers\Api\TaskTimeLogController;
+use App\Http\Controllers\Api\TaskCompletionController;
+use App\Http\Controllers\Api\TaskReviewController;
+use App\Http\Controllers\Api\TaskBlockerController;
 use App\Http\Controllers\Api\TimeLogController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\ProfileController;
@@ -73,8 +79,7 @@ Route::prefix('api')->group(function () {
             Route::put('/projects/{project}', [ProjectController::class, 'update']);
             Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
 
-            // Task create/delete (Admin only)
-            Route::post('/tasks', [TaskController::class, 'store']);
+            // Task delete (Admin only)
             Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
             // Issue delete (Admin only)
@@ -83,7 +88,7 @@ Route::prefix('api')->group(function () {
 
         // ─── Admin + Technical (Task management) ──────────────────
         Route::middleware('department:Admin,Technical')->group(function () {
-            // Technical can also create/manage tasks
+            // Admin and Technical can create tasks
             Route::post('/tasks', [TaskController::class, 'store']);
         });
 
@@ -112,6 +117,36 @@ Route::prefix('api')->group(function () {
 
         // Update tasks (authorization in controller)
         Route::put('/tasks/{task}', [TaskController::class, 'update']);
+
+        // ─── Task Management Forms (Progress, Time Logs, Completion, Review, Blockers) ────
+        // Task progress update
+        Route::patch('/tasks/{task}/progress', [TaskProgressLogController::class, 'update']);
+        Route::get('/tasks/{task}/progress', [TaskProgressLogController::class, 'show']);
+
+        // Task time logs
+        Route::get('/tasks/{task}/time-logs', [TaskTimeLogController::class, 'index']);
+        Route::post('/tasks/{task}/time-logs', [TaskTimeLogController::class, 'store']);
+        Route::put('/tasks/{task}/time-logs/{timeLog}', [TaskTimeLogController::class, 'update']);
+        Route::delete('/tasks/{task}/time-logs/{timeLog}', [TaskTimeLogController::class, 'destroy']);
+
+        // Task completion submissions
+        Route::get('/tasks/{task}/completions', [TaskCompletionController::class, 'index']);
+        Route::post('/tasks/{task}/completions', [TaskCompletionController::class, 'store']);
+        Route::put('/tasks/{task}/completions/{completion}', [TaskCompletionController::class, 'update']);
+
+        // Task reviews/approvals
+        Route::get('/tasks/{task}/reviews', [TaskReviewController::class, 'index']);
+        Route::post('/tasks/{task}/reviews', [TaskReviewController::class, 'store']);
+        Route::put('/tasks/{task}/reviews/{review}', [TaskReviewController::class, 'update']);
+
+        // Task blockers/issues
+        Route::get('/tasks/{task}/blockers', [TaskBlockerController::class, 'index']);
+        Route::post('/tasks/{task}/blockers', [TaskBlockerController::class, 'store']);
+        Route::put('/tasks/{task}/blockers/{blocker}', [TaskBlockerController::class, 'update']);
+        Route::delete('/tasks/{task}/blockers/{blocker}', [TaskBlockerController::class, 'destroy']);
+
+        // Task activity timeline
+        Route::get('/tasks/{task}/activities', [TaskActivityController::class, 'index']);
 
         // Budget requests (all can view/create, approval in controller)
         Route::get('/budget-requests', [BudgetRequestController::class, 'index']);

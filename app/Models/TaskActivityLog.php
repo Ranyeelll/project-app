@@ -16,6 +16,7 @@ class TaskActivityLog extends Model
         'action_type',
         'description',
         'metadata',
+        'created_at',
     ];
 
     protected $casts = [

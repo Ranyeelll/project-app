@@ -85,7 +85,7 @@ class TaskTimeLogController extends Controller
         );
 
         // Activity log
-        TaskActivityLogger::timeLogged($task->id, (float) $data['hours_worked'], $data['date_worked']->toDateString());
+        TaskActivityLogger::timeLogged($task->id, (float) $data['hours_worked'], $data['date_worked']);
 
         return response()->json([
             'message' => 'Time logged successfully',
