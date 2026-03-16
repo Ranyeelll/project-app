@@ -66,9 +66,9 @@ class TaskCompletionController extends Controller
             'task_id' => $task->id,
             'user_id' => $user->id,
             'completion_date' => $data['completion_date'],
-            'deliverable_path' => $data['deliverable_path'],
+            'deliverable_path' => $data['deliverable_path'] ?? null,
             'summary' => $data['summary'],
-            'issues_encountered' => $data['issues_encountered'],
+            'issues_encountered' => $data['issues_encountered'] ?? null,
         ]);
 
         // Update task status to pending approval

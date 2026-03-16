@@ -71,7 +71,7 @@ class TaskTimeLogController extends Controller
             'user_id' => $user->id,
             'date_worked' => $data['date_worked'],
             'hours_worked' => $data['hours_worked'],
-            'work_description' => $data['work_description'],
+            'work_description' => $data['work_description'] ?? null,
         ]);
 
         // Recalculate task.logged_hours

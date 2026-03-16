@@ -8,9 +8,10 @@ import {
   FolderKanbanIcon,
   CalendarIcon,
   DollarSignIcon,
-  UsersIcon } from
+  UsersIcon,
+  ClipboardListIcon } from
 'lucide-react';
-import { useData, useAuth } from '../../context/AppContext';
+import { useData, useAuth, useNavigation } from '../../context/AppContext';
 import { Project, Task, ApprovalStatus } from '../../data/mockData';
 import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
@@ -18,10 +19,13 @@ import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { ApprovalActionModal } from '../../components/projects/ApprovalActionModal';
+import { ProjectFormsPanel } from '../../components/projects/ProjectFormsPanel';
 type ModalMode = 'create' | 'edit' | 'view' | null;
 export function ProjectsPage() {
   const { projects, setProjects, users, tasks, setTasks, refreshTasks, refreshProjects } = useData();
   const { currentUser } = useAuth();
+  const { setCurrentPage } = useNavigation();
+  const isAdmin = currentUser?.department === 'Admin';
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [approvalFilter, setApprovalFilter] = useState('all');
@@ -30,6 +34,7 @@ export function ProjectsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [approvalProject, setApprovalProject] = useState<Project | null>(null);
   const [approvalAction, setApprovalAction] = useState('');
+  const [formsProject, setFormsProject] = useState<Project | null>(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({
@@ -58,17 +63,7 @@ export function ProjectsPage() {
     return matchSearch && matchStatus && matchApproval;
   });
   const openCreate = () => {
-    setForm({
-      name: '',
-      description: '',
-      status: 'active',
-      priority: 'medium',
-      startDate: '',
-      endDate: '',
-      budget: '',
-      teamIds: []
-    });
-    setModalMode('create');
+    setCurrentPage('admin-create-project');
   };
   const openEdit = (p: Project) => {
     setSelectedProject(p);
@@ -312,13 +307,15 @@ export function ProjectsPage() {
             className="w-40" />
 
         </div>
-        <Button
-          variant="primary"
-          icon={<PlusIcon size={14} />}
-          onClick={openCreate}>
+        {isAdmin && (
+          <Button
+            variant="primary"
+            icon={<PlusIcon size={14} />}
+            onClick={openCreate}>
 
-          New Project
-        </Button>
+            New Project
+          </Button>
+        )}
       </div>
 
       {/* Grid */}
@@ -358,19 +355,30 @@ export function ProjectsPage() {
                     <EyeIcon size={13} />
                   </button>
                   <button
-                    onClick={() => openEdit(project)}
-                    className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-green-primary text-light-muted hover:bg-light-card2 transition-colors"
-                    title="Edit">
+                    onClick={() => setFormsProject(project)}
+                    className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 transition-colors"
+                    title="Forms">
 
-                    <EditIcon size={13} />
+                    <ClipboardListIcon size={13} />
                   </button>
-                  <button
-                    onClick={() => setDeleteConfirm(project.id)}
-                    className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors"
-                    title="Delete">
+                  {isAdmin && (
+                    <>
+                      <button
+                        onClick={() => openEdit(project)}
+                        className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-green-primary text-light-muted hover:bg-light-card2 transition-colors"
+                        title="Edit">
 
-                    <TrashIcon size={13} />
-                  </button>
+                        <EditIcon size={13} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(project.id)}
+                        className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors"
+                        title="Delete">
+
+                        <TrashIcon size={13} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -506,11 +514,11 @@ export function ProjectsPage() {
         }
       </div>
 
-      {/* Create/Edit Modal */}
+      {/* Edit Modal */}
       <Modal
-        isOpen={modalMode === 'create' || modalMode === 'edit'}
+        isOpen={modalMode === 'edit'}
         onClose={() => setModalMode(null)}
-        title={modalMode === 'create' ? 'Create New Project' : 'Edit Project'}
+        title="Edit Project"
         size="md"
         footer={
         <>
@@ -518,7 +526,7 @@ export function ProjectsPage() {
               Cancel
             </Button>
             <Button variant="primary" onClick={handleSave}>
-              {modalMode === 'create' ? 'Create Project' : 'Save Changes'}
+              Save Changes
             </Button>
           </>
         }>
@@ -988,6 +996,15 @@ export function ProjectsPage() {
           project={approvalProject}
           action={approvalAction}
           onConfirm={handleApprovalConfirm}
+        />
+      )}
+
+      {/* Project Forms Panel */}
+      {formsProject && (
+        <ProjectFormsPanel
+          isOpen={!!formsProject}
+          onClose={() => setFormsProject(null)}
+          project={formsProject}
         />
       )}
     </div>);

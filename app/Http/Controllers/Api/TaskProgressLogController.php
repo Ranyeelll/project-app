@@ -47,8 +47,8 @@ class TaskProgressLogController extends Controller
             'task_id' => $task->id,
             'user_id' => $user->id,
             'percentage_completed' => $data['percentage_completed'],
-            'work_description' => $data['work_description'],
-            'file_path' => $data['file_path'],
+            'work_description' => $data['work_description'] ?? null,
+            'file_path' => $data['file_path'] ?? null,
         ]);
 
         // Update task progress

@@ -138,6 +138,14 @@ export function StatusBadge({ status }: {status: string;}) {
     accounting_review: {
       variant: 'warning',
       label: 'Acct Review'
+    },
+    submitted: {
+      variant: 'info',
+      label: 'Submitted'
+    },
+    reviewed: {
+      variant: 'purple',
+      label: 'Reviewed'
     }
   };
   const config = map[status] || {

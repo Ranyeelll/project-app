@@ -20,9 +20,9 @@ type ZoomLevel = 'week' | 'month' | 'quarter';
 interface Column { label: string; subLabel?: string; startDate: Date; endDate: Date; }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const ROW_HEIGHT = 36;
+const ROW_HEIGHT = 42;
 const BAR_H = 20;
-const TREE_W = 480;
+const TREE_W = 520;
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const TYPE_COLOR: Record<string, string> = {
@@ -73,14 +73,10 @@ export function GanttPage() {
     }
   }, [projects, selectedProject]);
 
-  // Load gantt data when project changes
+  // Load gantt data when project changes or preview mode changes
   useEffect(() => {
     if (selectedProject) {
-      const url = previewAs
-        ? `/api/projects/${selectedProject}/gantt-items?preview_as=${previewAs}`
-        : `/api/projects/${selectedProject}/gantt-items`;
-      fetch(url).then(r => r.json()).then(d => { if (Array.isArray(d)) { /* handled by context refresh */ }});
-      refreshGanttItems(selectedProject);
+      refreshGanttItems(selectedProject, previewAs || undefined);
       refreshGanttDependencies(selectedProject);
     }
   }, [selectedProject, previewAs]);
@@ -339,12 +335,8 @@ export function GanttPage() {
         {/* Column header row */}
         <div className="flex dark:border-dark-border border-b border-light-border sticky top-0 z-10 dark:bg-dark-card bg-white">
           {/* Tree header */}
-          <div className="flex-shrink-0 flex items-center gap-0 dark:border-dark-border border-r border-light-border" style={{ width: TREE_W }}>
-            <div className="w-12 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted border-r dark:border-dark-border border-light-border">#</div>
-            <div className="flex-1 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted">Name</div>
-            <div className="w-16 px-1 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted text-center">Start</div>
-            <div className="w-16 px-1 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted text-center">End</div>
-            <div className="w-14 px-1 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted text-center">%</div>
+          <div className="flex-shrink-0 dark:border-dark-border border-r border-light-border" style={{ width: TREE_W }}>
+            <div className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted">Task Name & Details</div>
           </div>
 
           {/* Timeline header */}
@@ -387,88 +379,93 @@ export function GanttPage() {
               return (
                 <div
                   key={item.id}
-                  className="flex items-center gap-0 dark:border-dark-border border-b border-light-border dark:hover:bg-dark-card2/30 hover:bg-gray-50/50 group"
-                  style={{ height: ROW_HEIGHT, minHeight: ROW_HEIGHT }}
+                  className="dark:border-dark-border border-b border-light-border dark:hover:bg-dark-card2/30 hover:bg-gray-50/50 group"
+                  style={{ height: ROW_HEIGHT }}
                 >
-                  {/* # index */}
-                  <div className="w-12 px-2 flex-shrink-0 border-r dark:border-dark-border border-light-border flex items-center justify-end" style={{ height: ROW_HEIGHT }}>
-                    <span className="text-[10px] dark:text-dark-subtle text-light-subtle font-mono">{item.treeIndex || ''}</span>
-                  </div>
-
-                  {/* Name + expand */}
-                  <div className="flex-1 flex items-center gap-1 px-1 min-w-0" style={{ paddingLeft: `${depth * 16 + 4}px` }}>
+                  <div className="flex items-center h-full gap-2 px-4" style={{ paddingLeft: `${depth * 16 + 16}px` }}>
+                    {/* Expand button */}
                     {canExpand ? (
-                      <button onClick={() => toggleCollapse(item.id)} className="flex-shrink-0 dark:text-dark-muted text-light-muted">
-                        {isCollapsed ? <ChevronRightIcon size={12} /> : <ChevronDownIcon size={12} />}
+                      <button onClick={() => toggleCollapse(item.id)} className="flex-shrink-0 dark:text-dark-muted text-light-muted hover:dark:text-dark-text hover:text-light-text transition-colors">
+                        {isCollapsed ? <ChevronRightIcon size={14} /> : <ChevronDownIcon size={14} />}
                       </button>
                     ) : (
-                      <div className="w-3 flex-shrink-0" />
+                      <div className="w-5 flex-shrink-0" />
                     )}
-                    <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
-                    <span className="text-xs truncate dark:text-dark-text text-light-text" title={item.name}>{item.name}</span>
-                    {/* assignees */}
-                    {assignees.length > 0 && (
-                      <div className="flex -space-x-1 ml-auto flex-shrink-0">
-                        {assignees.slice(0, 3).map(u => (
-                          <div key={u.id} className="w-4 h-4 rounded-full flex items-center justify-center text-black border border-white dark:border-dark-card flex-shrink-0" style={{ backgroundColor: '#63D44A', fontSize: '6px', fontWeight: 700 }} title={u.name}>
-                            {u.avatar}
+
+                    {/* Type indicator */}
+                    <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} title={item.type} />
+
+                    {/* Name and details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium dark:text-dark-text text-light-text truncate" title={item.name}>{item.name}</span>
+                        {/* Assignees */}
+                        {assignees.length > 0 && (
+                          <div className="flex -space-x-1 flex-shrink-0">
+                            {assignees.slice(0, 2).map(u => (
+                              <div key={u.id} className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold border border-white dark:border-dark-card flex-shrink-0 bg-green-primary text-black" title={u.name}>
+                                {u.avatar}
+                              </div>
+                            ))}
+                            {assignees.length > 2 && (
+                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border border-white dark:border-dark-card bg-gray-400 text-white dark:text-dark-text flex-shrink-0" title={assignees.map(a => a.name).join(', ')}>
+                                +{assignees.length - 2}
+                              </div>
+                            )}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
-                    {/* edit/delete buttons (admin only) */}
+                      {/* Dates and progress info */}
+                      <div className="flex items-center gap-3 text-[11px] dark:text-dark-subtle text-light-subtle">
+                        {item.startDate && (
+                          <span>{dateShort(item.startDate)}</span>
+                        )}
+                        {item.endDate && item.type !== 'milestone' && (
+                          <>
+                            <span>→</span>
+                            <span>{dateShort(item.endDate)}</span>
+                          </>
+                        )}
+                        {item.type !== 'milestone' && (
+                          <div className="flex items-center gap-1 flex-1 max-w-[100px]">
+                            <div className="h-1 flex-1 rounded-full dark:bg-dark-border bg-gray-200 overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${item.progress}%`, backgroundColor: color }} />
+                            </div>
+                            <span className="font-medium w-7 text-right">{item.progress}%</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
                     {(isAdmin || currentUser?.department === 'Technical') && (
-                      <div className="flex gap-0.5 ml-1 opacity-0 group-hover:opacity-100 flex-shrink-0">
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity ml-2">
                         <button
                           onClick={() => { setEditItem(item); setAddParent(null); setShowForm(true); }}
-                          className="p-0.5 rounded dark:text-dark-muted dark:hover:text-blue-400 text-light-muted hover:text-blue-500"
+                          className="p-1 rounded dark:text-dark-muted dark:hover:text-blue-400 text-light-muted hover:text-blue-500 transition-colors"
                           title="Edit"
                         >
-                          <PencilIcon size={11} />
+                          <PencilIcon size={13} />
                         </button>
                         {isAdmin && (
                           <>
                             <button
                               onClick={() => { setAddParent(item); setEditItem(null); setShowForm(true); }}
-                              className="p-0.5 rounded dark:text-dark-muted dark:hover:text-green-400 text-light-muted hover:text-green-500"
+                              className="p-1 rounded dark:text-dark-muted dark:hover:text-green-400 text-light-muted hover:text-green-500 transition-colors"
                               title="Add child"
                             >
-                              <PlusIcon size={11} />
+                              <PlusIcon size={13} />
                             </button>
                             <button
                               onClick={() => handleDelete(item)}
-                              className="p-0.5 rounded dark:text-dark-muted dark:hover:text-red-400 text-light-muted hover:text-red-500"
+                              className="p-1 rounded dark:text-dark-muted dark:hover:text-red-400 text-light-muted hover:text-red-500 transition-colors"
                               title="Delete"
                             >
-                              <TrashIcon size={11} />
+                              <TrashIcon size={13} />
                             </button>
                           </>
                         )}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Start */}
-                  <div className="w-16 px-1 flex-shrink-0 flex items-center justify-center" style={{ height: ROW_HEIGHT }}>
-                    <span className="text-[9px] dark:text-dark-subtle text-light-subtle">{item.startDate ? dateShort(item.startDate) : ''}</span>
-                  </div>
-
-                  {/* End */}
-                  <div className="w-16 px-1 flex-shrink-0 flex items-center justify-center" style={{ height: ROW_HEIGHT }}>
-                    <span className="text-[9px] dark:text-dark-subtle text-light-subtle">{item.endDate && item.type !== 'milestone' ? dateShort(item.endDate) : ''}</span>
-                  </div>
-
-                  {/* % */}
-                  <div className="w-14 px-1 flex-shrink-0 flex items-center justify-center" style={{ height: ROW_HEIGHT }}>
-                    {item.type !== 'milestone' ? (
-                      <div className="flex items-center gap-1 w-full">
-                        <div className="flex-1 h-1 rounded-full dark:bg-dark-border bg-gray-200 overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${item.progress}%`, backgroundColor: color }} />
-                        </div>
-                        <span className="text-[9px] dark:text-dark-muted text-light-muted w-6 text-right">{item.progress}%</span>
-                      </div>
-                    ) : (
-                      <span className="text-[9px] dark:text-dark-subtle text-light-subtle">—</span>
                     )}
                   </div>
                 </div>

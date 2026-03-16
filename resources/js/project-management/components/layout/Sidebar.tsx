@@ -16,7 +16,9 @@ import {
   FolderOpenIcon,
   BarChart2Icon,
   ClipboardCheckIcon,
-  XIcon } from
+  XIcon,
+  ShieldIcon,
+  ShieldAlertIcon } from
 'lucide-react';
 import { useAuth, useNavigation, useTheme } from '../../context/AppContext';
 
@@ -38,8 +40,10 @@ const DEPARTMENT_NAV: Record<string, NavItem[]> = {
     { id: 'admin-team', label: 'Team Management', icon: <UsersIcon size={16} /> },
     { id: 'admin-reports', label: 'Reports & Media', icon: <FileTextIcon size={16} /> },
     { id: 'admin-reviews', label: 'Task Reviews', icon: <ClipboardCheckIcon size={16} /> },
+    { id: 'admin-audit-logs', label: 'Audit Logs', icon: <ShieldIcon size={16} /> },
     { id: 'admin-archive', label: 'Archive', icon: <ArchiveIcon size={16} /> },
     { id: 'admin-chat', label: 'Project Chat', icon: <MessageSquareIcon size={16} /> },
+    { id: 'admin-chat-moderation', label: 'Chat Moderation', icon: <ShieldAlertIcon size={16} /> },
   ],
   Accounting: [
     { id: 'accounting-dashboard', label: 'Dashboard', icon: <LayoutDashboardIcon size={16} /> },

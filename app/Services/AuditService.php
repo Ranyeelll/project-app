@@ -113,7 +113,7 @@ class AuditService
      */
     public static function logChatModeration(
         int $messageId,
-        int $projectId,
+        ?int $projectId,
         string $action,
         ?array $moderationDetails = null,
         ?int $userId = null
@@ -125,6 +125,89 @@ class AuditService
             projectId: $projectId,
             changes: $moderationDetails,
             userId: $userId,
+            sensitiveFlag: true
+        );
+    }
+
+    /**
+     * Log a message sent (project or direct).
+     */
+    public static function logMessageSent(
+        int $messageId,
+        ?int $projectId,
+        ?int $conversationId,
+        ?int $userId = null
+    ): AuditLog {
+        return AuditLog::log(
+            action: 'chat.message_sent',
+            resourceType: 'chat_message',
+            resourceId: $messageId,
+            projectId: $projectId,
+            context: ['conversation_id' => $conversationId],
+            userId: $userId,
+        );
+    }
+
+    /**
+     * Log a message edited.
+     */
+    public static function logMessageEdited(
+        int $messageId,
+        ?int $projectId,
+        string $oldText,
+        string $newText,
+        ?int $userId = null
+    ): AuditLog {
+        return AuditLog::log(
+            action: 'chat.message_edited',
+            resourceType: 'chat_message',
+            resourceId: $messageId,
+            projectId: $projectId,
+            changes: [
+                'message_text' => ['from' => $oldText, 'to' => $newText],
+            ],
+            userId: $userId,
+        );
+    }
+
+    /**
+     * Log a message deleted (by the sender).
+     */
+    public static function logMessageDeleted(
+        int $messageId,
+        ?int $projectId,
+        ?array $snapshot = null,
+        ?int $userId = null
+    ): AuditLog {
+        return AuditLog::log(
+            action: 'chat.message_deleted',
+            resourceType: 'chat_message',
+            resourceId: $messageId,
+            projectId: $projectId,
+            snapshot: $snapshot,
+            userId: $userId,
+        );
+    }
+
+    /**
+     * Log a user being muted or unmuted in chat.
+     */
+    public static function logUserMuted(
+        int $targetUserId,
+        string $action,
+        ?string $reason = null,
+        ?\DateTimeInterface $mutedUntil = null,
+        ?int $adminUserId = null
+    ): AuditLog {
+        return AuditLog::log(
+            action: "chat.user_{$action}",     // chat.user_muted | chat.user_unmuted
+            resourceType: 'user',
+            resourceId: $targetUserId,
+            changes: [
+                'reason'      => $reason,
+                'muted_until' => $mutedUntil?->format('Y-m-d H:i:s'),
+            ],
+            userId: $adminUserId,
             sensitiveFlag: true
         );
     }
@@ -507,6 +590,53 @@ class AuditService
                 'visible_to_users' => ['from' => $oldUsers, 'to' => $newUsers],
             ],
             userId: $userId
+        );
+    }
+
+    // ─── Project Form Submission Logging ──────────────────────────────
+
+    /**
+     * Log: Project form submission created.
+     */
+    public function logFormSubmission(
+        int $submissionId,
+        int $projectId,
+        string $formType,
+        ?int $userId = null
+    ): AuditLog {
+        return self::log(
+            action: 'project_form.submitted',
+            resourceType: 'project_form',
+            resourceId: $submissionId,
+            projectId: $projectId,
+            context: ['form_type' => $formType],
+            userId: $userId
+        );
+    }
+
+    /**
+     * Log: Project form submission reviewed.
+     */
+    public function logFormReviewed(
+        int $submissionId,
+        int $projectId,
+        string $formType,
+        string $status,
+        ?string $notes = null,
+        ?int $userId = null
+    ): AuditLog {
+        return self::log(
+            action: 'project_form.reviewed',
+            resourceType: 'project_form',
+            resourceId: $submissionId,
+            projectId: $projectId,
+            context: [
+                'form_type' => $formType,
+                'status'    => $status,
+                'notes'     => $notes,
+            ],
+            userId: $userId,
+            sensitiveFlag: true
         );
     }
 }

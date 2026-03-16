@@ -13,18 +13,23 @@ class Message extends Model
 
     protected $fillable = [
         'project_id',
+        'conversation_id',
         'sender_id',
         'message_text',
         'attachments_meta',
         'metadata',
         'reply_to_id',
         'read_by',
+        'is_flagged',
+        'flag_reason',
+        'flagged_by',
     ];
 
     protected $casts = [
         'attachments_meta' => 'array',
         'metadata'         => 'array',
         'read_by'          => 'array',
+        'is_flagged'       => 'boolean',
     ];
 
     public function sender(): BelongsTo
@@ -35,6 +40,16 @@ class Message extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function conversation(): BelongsTo
+    {
+        return $this->belongsTo(DirectConversation::class, 'conversation_id');
+    }
+
+    public function flaggedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'flagged_by');
     }
 
     public function replyTo(): BelongsTo

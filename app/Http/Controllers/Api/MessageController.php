@@ -4,11 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Events\MessagesRead;
 use App\Events\MessageSent;
+use App\Events\MessageDeleted;
 use App\Events\UserTyping;
 use App\Http\Controllers\Controller;
+use App\Models\ChatMutedUser;
+use App\Models\ChatNotification;
 use App\Models\Message;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -61,10 +65,15 @@ class MessageController extends Controller
 
         $sender = User::findOrFail((int) $data['sender_id']);
 
+        // Mute check — muted users cannot send messages
+        if (ChatMutedUser::isUserMuted($sender->id)) {
+            return response()->json(['error' => 'You are muted and cannot send messages.'], 403);
+        }
+
         // Handle file uploads
         $attachmentsMeta = [];
         foreach ($request->file('attachments', []) as $file) {
-            $path = $file->store("chat/{$project->id}", 'local');
+            $path = $file->store('chat/' . $project->id, 'local');
             $attachmentsMeta[] = [
                 'name'      => $file->getClientOriginalName(),
                 'path'      => $path,
@@ -91,7 +100,27 @@ class MessageController extends Controller
 
         $message->loadMissing(['sender', 'replyTo.sender']);
 
-        // Broadcast if Reverb is running â€” silently skip if it isn't
+        // Audit: message sent
+        AuditService::logMessageSent($message->id, $project->id, null, $sender->id);
+
+        // Notify mentioned users
+        if (!empty($data['mentions'])) {
+            $preview = mb_substr($data['message_text'] ?? '', 0, 80);
+            foreach ($data['mentions'] as $mentionedId) {
+                if ((int) $mentionedId !== $sender->id) {
+                    ChatNotification::create([
+                        'user_id'     => $mentionedId,
+                        'type'        => 'mention',
+                        'message_id'  => $message->id,
+                        'project_id'  => $project->id,
+                        'sender_name' => $sender->name,
+                        'preview'     => $preview,
+                    ]);
+                }
+            }
+        }
+
+        // Broadcast if Reverb is running — silently skip if it isn't
         try {
             broadcast(new MessageSent($message));
         } catch (\Throwable $e) {
@@ -177,6 +206,7 @@ class MessageController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
+        $oldText = $message->message_text ?? '';
         $metadata = $message->metadata ?? [];
         $metadata['edited'] = true;
         $metadata['edited_at'] = now()->toISOString();
@@ -185,6 +215,15 @@ class MessageController extends Controller
             'message_text' => $data['message_text'],
             'metadata'     => $metadata,
         ]);
+
+        // Audit: message edited
+        AuditService::logMessageEdited(
+            $message->id,
+            $message->project_id,
+            $oldText,
+            $data['message_text'],
+            (int) $data['user_id']
+        );
 
         $message->loadMissing(['sender', 'replyTo.sender']);
 
@@ -204,7 +243,21 @@ class MessageController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
+        $snapshot = [
+            'message_text' => $message->message_text,
+            'sender_id'    => $message->sender_id,
+            'project_id'   => $message->project_id,
+        ];
+
         $message->delete();
+
+        // Audit: message deleted
+        AuditService::logMessageDeleted($message->id, $message->project_id, $snapshot, $requestUserId ?: null);
+
+        // Broadcast deletion so clients can remove the bubble immediately
+        try {
+            broadcast(new MessageDeleted($message->id, $message->project_id));
+        } catch (\Throwable $e) {}
 
         return response()->json(['ok' => true]);
     }

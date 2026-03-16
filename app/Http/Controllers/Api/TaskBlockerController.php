@@ -75,7 +75,7 @@ class TaskBlockerController extends Controller
             'description' => $data['description'],
             'priority' => $data['priority'],
             'date_reported' => $data['date_reported'],
-            'attachment_path' => $data['attachment_path'],
+            'attachment_path' => $data['attachment_path'] ?? null,
             'reported_by_user_id' => $user->id,
         ]);
 

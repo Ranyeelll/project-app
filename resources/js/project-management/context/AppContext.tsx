@@ -15,6 +15,7 @@ import {
   TimeLog,
   GanttItem,
   GanttDependency,
+  ProjectFormSubmission,
   MOCK_USERS,
   MOCK_PROJECTS,
   MOCK_TASKS,
@@ -73,6 +74,7 @@ interface DataContextType {
   timeLogs: TimeLog[];
   ganttItems: GanttItem[];
   ganttDependencies: GanttDependency[];
+  formSubmissions: ProjectFormSubmission[];
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
@@ -86,8 +88,9 @@ interface DataContextType {
   refreshTimeLogs: () => void;
   refreshBudgetRequests: () => void;
   refreshIssues: () => void;
-  refreshGanttItems: (projectId: string) => void;
+  refreshGanttItems: (projectId: string, previewAs?: string) => void;
   refreshGanttDependencies: (projectId: string) => void;
+  refreshFormSubmissions: (projectId: string, formType?: string) => void;
   refreshAll: () => void;
 }
 const DataContext = createContext<DataContextType>({
@@ -100,6 +103,7 @@ const DataContext = createContext<DataContextType>({
   timeLogs: [],
   ganttItems: [],
   ganttDependencies: [],
+  formSubmissions: [],
   setUsers: () => {},
   setProjects: () => {},
   setTasks: () => {},
@@ -115,6 +119,7 @@ const DataContext = createContext<DataContextType>({
   refreshIssues: () => {},
   refreshGanttItems: () => {},
   refreshGanttDependencies: () => {},
+  refreshFormSubmissions: () => {},
   refreshAll: () => {}
 });
 // ─── Hooks ───────────────────────────────────────────────────────────────────
@@ -322,6 +327,7 @@ export function AppProvider({ children }: AppProviderProps) {
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>(() => loadState('maptech-timeLogs', MOCK_TIME_LOGS));
   const [ganttItems, setGanttItems] = useState<GanttItem[]>([]);
   const [ganttDependencies, setGanttDependencies] = useState<GanttDependency[]>([]);
+  const [formSubmissions, setFormSubmissions] = useState<ProjectFormSubmission[]>([]);
 
   // Persist every data slice to localStorage whenever it changes
   useEffect(() => { localStorage.setItem('maptech-users', JSON.stringify(users)); }, [users]);
@@ -406,8 +412,11 @@ export function AppProvider({ children }: AppProviderProps) {
       .then((data: Issue[]) => { if (Array.isArray(data)) setIssues(data); })
       .catch(() => {});
   };
-  const refreshGanttItems = (projectId: string) => {
-    fetch(`/api/projects/${projectId}/gantt-items`)
+  const refreshGanttItems = (projectId: string, previewAs?: string) => {
+    const url = previewAs
+      ? `/api/projects/${projectId}/gantt-items?preview_as=${previewAs}`
+      : `/api/projects/${projectId}/gantt-items`;
+    fetch(url)
       .then((res) => res.json())
       .then((data: GanttItem[]) => { if (Array.isArray(data)) setGanttItems(data); })
       .catch(() => {});
@@ -416,6 +425,15 @@ export function AppProvider({ children }: AppProviderProps) {
     fetch(`/api/projects/${projectId}/gantt-dependencies`)
       .then((res) => res.json())
       .then((data: GanttDependency[]) => { if (Array.isArray(data)) setGanttDependencies(data); })
+      .catch(() => {});
+  };
+  const refreshFormSubmissions = (projectId: string, formType?: string) => {
+    const url = formType
+      ? `/api/projects/${projectId}/form-submissions?form_type=${formType}`
+      : `/api/projects/${projectId}/form-submissions`;
+    fetch(url)
+      .then((res) => res.json())
+      .then((data: ProjectFormSubmission[]) => { if (Array.isArray(data)) setFormSubmissions(data); })
       .catch(() => {});
   };
   const refreshAll = () => {
@@ -468,6 +486,7 @@ export function AppProvider({ children }: AppProviderProps) {
               timeLogs,
               ganttItems,
               ganttDependencies,
+              formSubmissions,
               setUsers,
               setProjects,
               setTasks,
@@ -483,6 +502,7 @@ export function AppProvider({ children }: AppProviderProps) {
               refreshIssues,
               refreshGanttItems,
               refreshGanttDependencies,
+              refreshFormSubmissions,
               refreshAll
             }}>
 

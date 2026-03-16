@@ -70,7 +70,7 @@ class TaskReviewController extends Controller
             'task_id' => $task->id,
             'reviewer_id' => $user->id,
             'approval_status' => $data['approval_status'],
-            'comments' => $data['comments'],
+            'comments' => $data['comments'] ?? null,
             'review_date' => now(),
         ]);
 

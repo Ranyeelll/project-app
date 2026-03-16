@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BudgetRequestController;
+use App\Http\Controllers\Api\ChatModerationController;
+use App\Http\Controllers\Api\DirectMessageController;
 use App\Http\Controllers\Api\IssueController;
 use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\MessageController;
@@ -16,6 +18,8 @@ use App\Http\Controllers\Api\TaskBlockerController;
 use App\Http\Controllers\Api\TimeLogController;
 use App\Http\Controllers\Api\GanttController;
 use App\Http\Controllers\Api\ProjectApprovalController;
+use App\Http\Controllers\Api\ProjectFormController;
+use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
@@ -76,6 +80,9 @@ Route::prefix('api')->group(function () {
             Route::delete('/users/{user}', [UserController::class, 'destroy']);
             Route::post('/users/{user}/regenerate-recovery', [UserController::class, 'regenerateRecovery']);
 
+            // Audit logs (admin only)
+            Route::get('/audit-logs', [AuditLogController::class, 'index']);
+
             // Project management (full CRUD)
             Route::post('/projects', [ProjectController::class, 'store']);
             Route::put('/projects/{project}', [ProjectController::class, 'update']);
@@ -86,22 +93,29 @@ Route::prefix('api')->group(function () {
 
             // Issue delete (Admin only)
             Route::delete('/issues/{issue}', [IssueController::class, 'destroy']);
+
+            // ─── Chat Moderation (Admin only) ──────────────────────
+            Route::delete('/admin/chat/messages/{message}', [ChatModerationController::class, 'deleteMessage']);
+            Route::post('/admin/chat/messages/{message}/flag', [ChatModerationController::class, 'flagMessage']);
+            Route::delete('/admin/chat/messages/{message}/flag', [ChatModerationController::class, 'unflagMessage']);
+            Route::get('/admin/chat/flagged', [ChatModerationController::class, 'flagged']);
+            Route::post('/admin/chat/mute', [ChatModerationController::class, 'muteUser']);
+            Route::delete('/admin/chat/mute/{user}', [ChatModerationController::class, 'unmuteUser']);
+            Route::get('/admin/chat/muted', [ChatModerationController::class, 'mutedUsers']);
         });
 
-        // ─── Admin + Technical (Task management + Gantt) ──────────
+        // ─── Admin + Technical (Task management + Gantt writes) ────
         Route::middleware('department:Admin,Technical')->group(function () {
             // Admin and Technical can create tasks
             Route::post('/tasks', [TaskController::class, 'store']);
 
-            // Gantt items (Admin + Technical can edit gantt charts)
-            Route::get('/projects/{project}/gantt-items', [GanttController::class, 'index']);
+            // Gantt items (Admin + Technical can create/edit/delete)
             Route::post('/projects/{project}/gantt-items', [GanttController::class, 'store']);
             Route::put('/projects/{project}/gantt-items/{item}', [GanttController::class, 'update']);
             Route::delete('/projects/{project}/gantt-items/{item}', [GanttController::class, 'destroy']);
             Route::patch('/projects/{project}/gantt-items/{item}/move', [GanttController::class, 'move']);
 
-            // Gantt dependencies
-            Route::get('/projects/{project}/gantt-dependencies', [GanttController::class, 'indexDependencies']);
+            // Gantt dependency writes
             Route::post('/projects/{project}/gantt-dependencies', [GanttController::class, 'storeDependency']);
             Route::delete('/projects/{project}/gantt-dependencies/{dependency}', [GanttController::class, 'destroyDependency']);
         });
@@ -118,10 +132,26 @@ Route::prefix('api')->group(function () {
             Route::get('/budget-report/export-sheet', [BudgetRequestController::class, 'exportSheet']);
         });
 
+        // ─── Admin + Technical + Accounting (Form review) ──────────
+        Route::middleware('department:Admin,Technical,Accounting')->group(function () {
+            Route::put('/projects/{project}/form-submissions/{submission}', [ProjectFormController::class, 'update']);
+        });
+
         // ─── Any Authenticated User ───────────────────────────────
+        // Gantt read access (visibility filtering enforced server-side)
+        Route::get('/projects/{project}/gantt-items', [GanttController::class, 'index']);
+        Route::get('/projects/{project}/gantt-dependencies', [GanttController::class, 'indexDependencies']);
+
         // Project approval workflow (authorization enforced in service)
         Route::post('/projects/{project}/approval', [ProjectApprovalController::class, 'transition']);
         Route::get('/projects/{project}/approval-history', [ProjectApprovalController::class, 'history']);
+
+        // Project audit logs (any authenticated user can view their project logs)
+        Route::get('/projects/{project}/audit-logs', [AuditLogController::class, 'indexForProject']);
+
+        // Project form submissions (any user can view/submit, review restricted below)
+        Route::get('/projects/{project}/form-submissions', [ProjectFormController::class, 'index']);
+        Route::post('/projects/{project}/form-submissions', [ProjectFormController::class, 'store']);
 
         // Profile photo (users can access)
         Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
@@ -195,11 +225,23 @@ Route::prefix('api')->group(function () {
         Route::patch('/messages/{message}', [MessageController::class, 'update']);
         Route::delete('/messages/{message}', [MessageController::class, 'destroy']);
         Route::get('/chat-attachments/{message}/{index}', [MessageController::class, 'serveAttachment']);
+
+        // ─── Direct Messages (all departments) ────────────────────
+        Route::get('/direct-conversations', [DirectMessageController::class, 'index']);
+        Route::post('/direct-conversations', [DirectMessageController::class, 'store']);
+        Route::get('/direct-conversations/{conversation}/messages', [DirectMessageController::class, 'messages']);
+        Route::post('/direct-conversations/{conversation}/messages', [DirectMessageController::class, 'sendMessage']);
+        Route::post('/direct-conversations/{conversation}/messages/read', [DirectMessageController::class, 'markRead']);
+        Route::post('/direct-conversations/{conversation}/typing', [DirectMessageController::class, 'typing']);
+
+        // ─── Chat Notifications (all departments) ─────────────────
+        Route::get('/notifications', [DirectMessageController::class, 'notifications']);
+        Route::post('/notifications/read', [DirectMessageController::class, 'markNotificationsRead']);
     });
 });
 
 Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
+    return redirect('/');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {

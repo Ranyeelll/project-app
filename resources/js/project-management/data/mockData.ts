@@ -77,6 +77,33 @@ export interface GanttDependency {
   type: 'finish_to_start';
 }
 
+// ─── Project Forms ──────────────────────────────────────────────────────────
+
+export type ProjectFormType =
+  | 'project_details'
+  | 'project_planning'
+  | 'progress_update'
+  | 'issue_risk'
+  | 'approval_review'
+  | 'completion_handover'
+  | 'analytics_kpi';
+
+export type FormSubmissionStatus = 'submitted' | 'reviewed' | 'approved' | 'rejected' | 'revision_requested';
+
+export interface ProjectFormSubmission {
+  id: string;
+  projectId: string;
+  submittedBy: string | null;
+  formType: ProjectFormType;
+  status: FormSubmissionStatus;
+  data: Record<string, any>;
+  notes: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Task {
   id: string;
   projectId: string;

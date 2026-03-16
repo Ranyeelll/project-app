@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,6 +12,9 @@ use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
+    public function __construct(
+        private AuditService $audit,
+    ) {}
     /* ------------------------------------------------------------------ */
     /*  Helper: build the standard user payload returned to the SPA       */
     /* ------------------------------------------------------------------ */
@@ -59,6 +63,14 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
+            // Log failed login attempt
+            $this->audit->log(
+                action: 'auth.login_failed',
+                resourceType: 'auth',
+                resourceId: 1,
+                context: ['email' => $request->email ?? 'unknown'],
+                sensitiveFlag: true
+            );
             return response()->json([
                 'success' => false,
                 'error'   => 'Invalid email or password.',
@@ -66,6 +78,15 @@ class AuthController extends Controller
         }
 
         if (($user->status ?? 'active') === 'inactive') {
+            // Log login attempt by inactive user
+            $this->audit->log(
+                action: 'auth.login_blocked',
+                resourceType: 'auth',
+                resourceId: 1,
+                context: ['reason' => 'account_inactive', 'user_id' => $user->id],
+                userId: $user->id,
+                sensitiveFlag: true
+            );
             return response()->json([
                 'success' => false,
                 'error'   => 'Your account has been deactivated. Contact an administrator.',
@@ -74,6 +95,16 @@ class AuthController extends Controller
 
         // Establish a Laravel session so WebSocket presence channels can authenticate
         Auth::login($user);
+
+        // Log successful login
+        $this->audit->log(
+            action: 'auth.login_success',
+            resourceType: 'user',
+            resourceId: $user->id,
+            context: ['email' => $user->email, 'department' => $user->department],
+            userId: $user->id,
+            sensitiveFlag: false
+        );
 
         return response()->json([
             'success' => true,
@@ -97,6 +128,15 @@ class AuthController extends Controller
         $user = User::findOrFail($request->user_id);
 
         if (! Hash::check($request->old_password, $user->password)) {
+            // Log failed password change attempt
+            $this->audit->log(
+                action: 'auth.password_change_failed',
+                resourceType: 'user',
+                resourceId: $user->id,
+                context: ['reason' => 'incorrect_old_password'],
+                userId: $user->id,
+                sensitiveFlag: true
+            );
             return response()->json([
                 'success' => false,
                 'error'   => 'Current password is incorrect.',
@@ -110,6 +150,16 @@ class AuthController extends Controller
         $user->recovery_code        = Hash::make($plainCode);
         $user->must_change_password = 0;
         $user->save();
+
+        // Log successful password change
+        $this->audit->log(
+            action: 'auth.password_changed',
+            resourceType: 'user',
+            resourceId: $user->id,
+            context: ['email' => $user->email],
+            userId: $user->id,
+            sensitiveFlag: true
+        );
 
         return response()->json([
             'success'       => true,
@@ -175,6 +225,15 @@ class AuthController extends Controller
 
         // Re-verify recovery code to prevent tampering
         if (! $user->recovery_code || ! Hash::check($request->recovery_code, $user->recovery_code)) {
+            // Log failed password reset attempt
+            $this->audit->log(
+                action: 'auth.password_reset_failed',
+                resourceType: 'user',
+                resourceId: $user->id,
+                context: ['reason' => 'invalid_recovery_code'],
+                userId: $user->id,
+                sensitiveFlag: true
+            );
             return response()->json([
                 'success' => false,
                 'error'   => 'Invalid recovery code.',
@@ -188,6 +247,16 @@ class AuthController extends Controller
         $user->recovery_code        = Hash::make($plainCode);
         $user->must_change_password = 0;
         $user->save();
+
+        // Log successful password reset
+        $this->audit->log(
+            action: 'auth.password_reset',
+            resourceType: 'user',
+            resourceId: $user->id,
+            context: ['email' => $user->email, 'method' => 'recovery_code'],
+            userId: $user->id,
+            sensitiveFlag: true
+        );
 
         return response()->json([
             'success'       => true,
