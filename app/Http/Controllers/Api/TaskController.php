@@ -2,28 +2,38 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Department;
 use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\Project;
 use App\Models\BudgetRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class TaskController extends Controller
 {
     /**
      * List all tasks (optionally filtered by project_id or assigned_to).
+     * Employees can only see tasks assigned to them.
      */
     public function index(Request $request): JsonResponse
     {
+        $user = Auth::user();
         $query = Task::query();
+
+        // Employees can only see tasks assigned to them
+        if ($user && $user->department === Department::Employee) {
+            $query->where('assigned_to', $user->id);
+        } else {
+            // Other departments can filter by assigned_to if provided
+            if ($request->has('assigned_to')) {
+                $query->where('assigned_to', $request->input('assigned_to'));
+            }
+        }
 
         if ($request->has('project_id')) {
             $query->where('project_id', $request->input('project_id'));
-        }
-
-        if ($request->has('assigned_to')) {
-            $query->where('assigned_to', $request->input('assigned_to'));
         }
 
         $tasks = $query->orderByDesc('created_at')
@@ -62,24 +72,47 @@ class TaskController extends Controller
 
     /**
      * Update a task.
+     * Employees can only update their own tasks with limited fields.
      */
     public function update(Request $request, Task $task): JsonResponse
     {
-        $data = $request->validate([
-            'title'                    => 'sometimes|string|max:255',
-            'description'              => 'nullable|string',
-            'status'                   => 'sometimes|in:todo,in-progress,review,completed',
-            'priority'                 => 'sometimes|in:low,medium,high,critical',
-            'assigned_to'              => 'nullable|exists:users,id',
-            'start_date'               => 'nullable|date',
-            'end_date'                 => 'nullable|date',
-            'progress'                 => 'nullable|integer|min:0|max:100',
-            'estimated_hours'          => 'nullable|numeric|min:0',
-            'logged_hours'             => 'nullable|numeric|min:0',
-            'allow_employee_edit'      => 'nullable|boolean',
-            'completion_report_status' => 'sometimes|in:none,pending,approved,rejected',
-            'report_cost'              => 'nullable|numeric|min:0',
-        ]);
+        $user = Auth::user();
+
+        // Employees can only update their own tasks
+        if ($user && $user->department === Department::Employee) {
+            if ($task->assigned_to !== $user->id) {
+                return response()->json([
+                    'error' => 'Forbidden',
+                    'message' => 'You can only update tasks assigned to you.',
+                ], 403);
+            }
+
+            // Employees can only update limited fields
+            $data = $request->validate([
+                'status'                   => 'sometimes|in:todo,in-progress,review,completed',
+                'progress'                 => 'nullable|integer|min:0|max:100',
+                'logged_hours'             => 'nullable|numeric|min:0',
+                'completion_report_status' => 'sometimes|in:none,pending',
+                'report_cost'              => 'nullable|numeric|min:0',
+            ]);
+        } else {
+            // Admin/Technical - full update access
+            $data = $request->validate([
+                'title'                    => 'sometimes|string|max:255',
+                'description'              => 'nullable|string',
+                'status'                   => 'sometimes|in:todo,in-progress,review,completed',
+                'priority'                 => 'sometimes|in:low,medium,high,critical',
+                'assigned_to'              => 'nullable|exists:users,id',
+                'start_date'               => 'nullable|date',
+                'end_date'                 => 'nullable|date',
+                'progress'                 => 'nullable|integer|min:0|max:100',
+                'estimated_hours'          => 'nullable|numeric|min:0',
+                'logged_hours'             => 'nullable|numeric|min:0',
+                'allow_employee_edit'      => 'nullable|boolean',
+                'completion_report_status' => 'sometimes|in:none,pending,approved,rejected',
+                'report_cost'              => 'nullable|numeric|min:0',
+            ]);
+        }
 
         $oldStatus = $task->completion_report_status;
 

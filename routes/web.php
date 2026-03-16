@@ -49,59 +49,100 @@ Route::get('/login', function () {
 |--------------------------------------------------------------------------
 */
 Route::prefix('api')->group(function () {
+    // Public routes (no auth required)
     Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/change-password', [AuthController::class, 'changePassword']);
     Route::post('/verify-recovery', [AuthController::class, 'verifyRecovery']);
     Route::post('/reset-password-offline', [AuthController::class, 'resetPasswordOffline']);
-    Route::get('/users', [UserController::class, 'index']);
-    Route::post('/users', [UserController::class, 'store']);
-    Route::put('/users/{user}', [UserController::class, 'update']);
-    Route::delete('/users/{user}', [UserController::class, 'destroy']);
-    Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
-    Route::get('/users/{user}/photo', [UserController::class, 'servePhoto']);
-    Route::post('/users/{user}/regenerate-recovery', [UserController::class, 'regenerateRecovery']);
 
-    Route::get('/projects', [ProjectController::class, 'index']);
-    Route::post('/projects', [ProjectController::class, 'store']);
-    Route::put('/projects/{project}', [ProjectController::class, 'update']);
-    Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+    // Authenticated routes
+    Route::middleware('auth.api')->group(function () {
+        // Password change (any authenticated user)
+        Route::post('/change-password', [AuthController::class, 'changePassword']);
 
-    Route::get('/tasks', [TaskController::class, 'index']);
-    Route::post('/tasks', [TaskController::class, 'store']);
-    Route::put('/tasks/{task}', [TaskController::class, 'update']);
-    Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
+        // ─── Admin Only ───────────────────────────────────────────
+        Route::middleware('department:Admin')->group(function () {
+            // User management
+            Route::get('/users', [UserController::class, 'index']);
+            Route::post('/users', [UserController::class, 'store']);
+            Route::put('/users/{user}', [UserController::class, 'update']);
+            Route::delete('/users/{user}', [UserController::class, 'destroy']);
+            Route::post('/users/{user}/regenerate-recovery', [UserController::class, 'regenerateRecovery']);
 
-    Route::get('/media', [MediaController::class, 'index']);
-    Route::post('/media', [MediaController::class, 'store']);
-    Route::delete('/media/{medium}', [MediaController::class, 'destroy']);
-    Route::get('/media/{medium}/download', [MediaController::class, 'download']);
-    Route::get('/media/{medium}/serve', [MediaController::class, 'serve']);
+            // Project management (full CRUD)
+            Route::post('/projects', [ProjectController::class, 'store']);
+            Route::put('/projects/{project}', [ProjectController::class, 'update']);
+            Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
 
-    Route::get('/time-logs', [TimeLogController::class, 'index']);
-    Route::post('/time-logs', [TimeLogController::class, 'store']);
-    Route::delete('/time-logs/{time_log}', [TimeLogController::class, 'destroy']);
+            // Task create/delete (Admin only)
+            Route::post('/tasks', [TaskController::class, 'store']);
+            Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
-    Route::get('/budget-requests', [BudgetRequestController::class, 'index']);
-    Route::post('/budget-requests', [BudgetRequestController::class, 'store']);
-    Route::put('/budget-requests/{budget_request}', [BudgetRequestController::class, 'update']);
-    Route::delete('/budget-requests/{budget_request}', [BudgetRequestController::class, 'destroy']);
-    Route::get('/budget-report', [BudgetRequestController::class, 'report']);
-    Route::get('/budget-report/export-pdf', [BudgetRequestController::class, 'exportPdf']);
-    Route::get('/budget-report/export-sheet', [BudgetRequestController::class, 'exportSheet']);
+            // Issue delete (Admin only)
+            Route::delete('/issues/{issue}', [IssueController::class, 'destroy']);
+        });
 
-    Route::get('/issues', [IssueController::class, 'index']);
-    Route::post('/issues', [IssueController::class, 'store']);
-    Route::put('/issues/{issue}', [IssueController::class, 'update']);
-    Route::delete('/issues/{issue}', [IssueController::class, 'destroy']);
+        // ─── Admin + Technical (Task management) ──────────────────
+        Route::middleware('department:Admin,Technical')->group(function () {
+            // Technical can also create/manage tasks
+            Route::post('/tasks', [TaskController::class, 'store']);
+        });
 
-    // Project Chat
-    Route::get('/projects/{project}/messages', [MessageController::class, 'index']);
-    Route::post('/projects/{project}/messages', [MessageController::class, 'store']);
-    Route::post('/projects/{project}/messages/read', [MessageController::class, 'markRead']);
-    Route::post('/projects/{project}/messages/typing', [MessageController::class, 'typing']);
-    Route::patch('/messages/{message}', [MessageController::class, 'update']);
-    Route::delete('/messages/{message}', [MessageController::class, 'destroy']);
-    Route::get('/chat-attachments/{message}/{index}', [MessageController::class, 'serveAttachment']);
+        // ─── Admin + Accounting (Budget management) ───────────────
+        Route::middleware('department:Admin,Accounting')->group(function () {
+            // Budget approvals and management
+            Route::put('/budget-requests/{budget_request}', [BudgetRequestController::class, 'update']);
+            Route::delete('/budget-requests/{budget_request}', [BudgetRequestController::class, 'destroy']);
+
+            // Budget reports
+            Route::get('/budget-report', [BudgetRequestController::class, 'report']);
+            Route::get('/budget-report/export-pdf', [BudgetRequestController::class, 'exportPdf']);
+            Route::get('/budget-report/export-sheet', [BudgetRequestController::class, 'exportSheet']);
+        });
+
+        // ─── Any Authenticated User ───────────────────────────────
+        // Profile photo (users can access)
+        Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
+        Route::get('/users/{user}/photo', [UserController::class, 'servePhoto']);
+
+        // View projects (filtered based on department in controller)
+        Route::get('/projects', [ProjectController::class, 'index']);
+
+        // View tasks (filtered based on department in controller)
+        Route::get('/tasks', [TaskController::class, 'index']);
+
+        // Update tasks (authorization in controller)
+        Route::put('/tasks/{task}', [TaskController::class, 'update']);
+
+        // Budget requests (all can view/create, approval in controller)
+        Route::get('/budget-requests', [BudgetRequestController::class, 'index']);
+        Route::post('/budget-requests', [BudgetRequestController::class, 'store']);
+
+        // Media
+        Route::get('/media', [MediaController::class, 'index']);
+        Route::post('/media', [MediaController::class, 'store']);
+        Route::delete('/media/{medium}', [MediaController::class, 'destroy']);
+        Route::get('/media/{medium}/download', [MediaController::class, 'download']);
+        Route::get('/media/{medium}/serve', [MediaController::class, 'serve']);
+
+        // Time logs
+        Route::get('/time-logs', [TimeLogController::class, 'index']);
+        Route::post('/time-logs', [TimeLogController::class, 'store']);
+        Route::delete('/time-logs/{time_log}', [TimeLogController::class, 'destroy']);
+
+        // Issues
+        Route::get('/issues', [IssueController::class, 'index']);
+        Route::post('/issues', [IssueController::class, 'store']);
+        Route::put('/issues/{issue}', [IssueController::class, 'update']);
+
+        // Chat (all departments)
+        Route::get('/projects/{project}/messages', [MessageController::class, 'index']);
+        Route::post('/projects/{project}/messages', [MessageController::class, 'store']);
+        Route::post('/projects/{project}/messages/read', [MessageController::class, 'markRead']);
+        Route::post('/projects/{project}/messages/typing', [MessageController::class, 'typing']);
+        Route::patch('/messages/{message}', [MessageController::class, 'update']);
+        Route::delete('/messages/{message}', [MessageController::class, 'destroy']);
+        Route::get('/chat-attachments/{message}/{index}', [MessageController::class, 'serveAttachment']);
+    });
 });
 
 Route::get('/dashboard', function () {

@@ -303,6 +303,11 @@ export function ProjectsPage() {
               {/* Header */}
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
+                  {project.serial && (
+                    <span className="text-[10px] font-mono dark:text-green-primary text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded mb-1 inline-block">
+                      {project.serial}
+                    </span>
+                  )}
                   <h3 className="text-sm font-semibold dark:text-dark-text text-light-text truncate">
                     {project.name}
                   </h3>

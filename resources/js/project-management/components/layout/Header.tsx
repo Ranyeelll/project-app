@@ -43,12 +43,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem('maptech-dismissed-notifs');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch { return new Set(); }
-  });
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const dropdownRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,10 +62,26 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showNotifications, showProfileMenu]);
 
-  // Persist dismissed IDs
+  // Load dismissed IDs from localStorage (user-specific)
   useEffect(() => {
-    localStorage.setItem('maptech-dismissed-notifs', JSON.stringify([...dismissedIds]));
-  }, [dismissedIds]);
+    if (!currentUser?.id) return;
+    try {
+      const saved = localStorage.getItem(`maptech-dismissed-notifs-${currentUser.id}`);
+      if (saved) {
+        setDismissedIds(new Set(JSON.parse(saved)));
+      } else {
+        setDismissedIds(new Set());
+      }
+    } catch {
+      setDismissedIds(new Set());
+    }
+  }, [currentUser?.id]);
+
+  // Persist dismissed IDs (user-specific)
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    localStorage.setItem(`maptech-dismissed-notifs-${currentUser.id}`, JSON.stringify([...dismissedIds]));
+  }, [dismissedIds, currentUser?.id]);
 
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
@@ -85,7 +96,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       const pendingReviews = tasks.filter((t) => t.completionReportStatus === 'pending');
       if (pendingReviews.length > 0) {
         notifs.push({
-          id: `admin-pending-reviews-${pendingReviews.length}`,
+          id: 'admin-pending-reviews',
           icon: <ClipboardCheckIcon size={14} />,
           iconBg: 'bg-blue-500/15 text-blue-400',
           title: 'Pending Task Reviews',
@@ -100,7 +111,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       const pendingBudgets = budgetRequests.filter((b) => b.status === 'pending');
       if (pendingBudgets.length > 0) {
         notifs.push({
-          id: `admin-pending-budgets-${pendingBudgets.length}`,
+          id: 'admin-pending-budgets',
           icon: <DollarSignIcon size={14} />,
           iconBg: 'bg-yellow-500/15 text-yellow-400',
           title: 'Budget Requests Pending',
@@ -115,7 +126,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       const revisionBudgets = budgetRequests.filter((b) => b.status === 'revision_requested');
       if (revisionBudgets.length > 0) {
         notifs.push({
-          id: `admin-revision-budgets-${revisionBudgets.length}`,
+          id: 'admin-revision-budgets',
           icon: <ClockIcon size={14} />,
           iconBg: 'bg-purple-500/15 text-purple-400',
           title: 'Budgets Awaiting Revision',
@@ -132,7 +143,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       );
       if (overdueTasks.length > 0) {
         notifs.push({
-          id: `admin-overdue-${overdueTasks.length}`,
+          id: 'admin-overdue',
           icon: <AlertTriangleIcon size={14} />,
           iconBg: 'bg-red-500/15 text-red-400',
           title: 'Overdue Tasks',
@@ -147,7 +158,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       const openIssues = issues.filter((i) => i.status === 'open');
       if (openIssues.length > 0) {
         notifs.push({
-          id: `admin-open-issues-${openIssues.length}`,
+          id: 'admin-open-issues',
           icon: <AlertTriangleIcon size={14} />,
           iconBg: 'bg-orange-500/15 text-orange-400',
           title: 'Open Issues',
@@ -162,7 +173,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       const reviewTasks = tasks.filter((t) => t.status === 'review');
       if (reviewTasks.length > 0) {
         notifs.push({
-          id: `admin-in-review-${reviewTasks.length}`,
+          id: 'admin-in-review',
           icon: <ClockIcon size={14} />,
           iconBg: 'bg-purple-500/15 text-purple-400',
           title: 'Tasks In Review',
@@ -182,7 +193,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       });
       if (soonProjects.length > 0) {
         notifs.push({
-          id: `admin-deadline-projects-${soonProjects.length}`,
+          id: 'admin-deadline-projects',
           icon: <CalendarIcon size={14} />,
           iconBg: 'bg-amber-500/15 text-amber-400',
           title: 'Project Deadlines Approaching',
@@ -205,7 +216,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       );
       if (myOverdue.length > 0) {
         notifs.push({
-          id: `emp-overdue-${myOverdue.length}`,
+          id: 'emp-overdue',
           icon: <AlertTriangleIcon size={14} />,
           iconBg: 'bg-red-500/15 text-red-400',
           title: 'Overdue Tasks',
@@ -225,7 +236,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       });
       if (dueSoon.length > 0) {
         notifs.push({
-          id: `emp-due-soon-${dueSoon.length}`,
+          id: 'emp-due-soon',
           icon: <ClockIcon size={14} />,
           iconBg: 'bg-amber-500/15 text-amber-400',
           title: 'Tasks Due Soon',
@@ -240,7 +251,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       const approvedTasks = myTasks.filter((t) => t.completionReportStatus === 'approved');
       if (approvedTasks.length > 0) {
         notifs.push({
-          id: `emp-approved-${approvedTasks.length}`,
+          id: 'emp-approved',
           icon: <CheckCircleIcon size={14} />,
           iconBg: 'bg-green-500/15 text-green-400',
           title: 'Tasks Approved',
@@ -255,7 +266,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       const rejectedTasks = myTasks.filter((t) => t.completionReportStatus === 'rejected');
       if (rejectedTasks.length > 0) {
         notifs.push({
-          id: `emp-rejected-${rejectedTasks.length}`,
+          id: 'emp-rejected',
           icon: <XCircleIcon size={14} />,
           iconBg: 'bg-red-500/15 text-red-400',
           title: 'Tasks Rejected',
@@ -275,7 +286,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
 
       if (approvedBudgets.length > 0) {
         notifs.push({
-          id: `emp-budget-approved-${approvedBudgets.length}`,
+          id: 'emp-budget-approved',
           icon: <CheckCircleIcon size={14} />,
           iconBg: 'bg-green-500/15 text-green-400',
           title: 'Budget Approved',
@@ -287,7 +298,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       }
       if (rejectedBudgets.length > 0) {
         notifs.push({
-          id: `emp-budget-rejected-${rejectedBudgets.length}`,
+          id: 'emp-budget-rejected',
           icon: <XCircleIcon size={14} />,
           iconBg: 'bg-red-500/15 text-red-400',
           title: 'Budget Rejected',
@@ -299,7 +310,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       }
       if (pendingBudgets.length > 0) {
         notifs.push({
-          id: `emp-budget-pending-${pendingBudgets.length}`,
+          id: 'emp-budget-pending',
           icon: <DollarSignIcon size={14} />,
           iconBg: 'bg-yellow-500/15 text-yellow-400',
           title: 'Budget Pending',
@@ -311,7 +322,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       }
       if (revisionBudgets.length > 0) {
         notifs.push({
-          id: `emp-budget-revision-${revisionBudgets.length}`,
+          id: 'emp-budget-revision',
           icon: <AlertTriangleIcon size={14} />,
           iconBg: 'bg-purple-500/15 text-purple-400',
           title: 'Budget Revision Requested',
@@ -326,7 +337,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       const editableTasks = myTasks.filter((t) => t.allowEmployeeEdit && t.status !== 'completed');
       if (editableTasks.length > 0) {
         notifs.push({
-          id: `emp-editable-${editableTasks.length}`,
+          id: 'emp-editable',
           icon: <FolderIcon size={14} />,
           iconBg: 'bg-blue-500/15 text-blue-400',
           title: 'Editable Tasks',

@@ -1,4 +1,5 @@
 export type UserRole = 'admin' | 'employee';
+export type Department = 'Admin' | 'Accounting' | 'Technical' | 'Employee';
 
 export interface User {
   id: string;
@@ -6,7 +7,7 @@ export interface User {
   email: string;
   role: UserRole;
   avatar: string;
-  department: string;
+  department: Department | string;
   position: string;
   status: 'active' | 'inactive';
   joinDate: string;
@@ -16,6 +17,7 @@ export interface User {
 
 export interface Project {
   id: string;
+  serial: string;
   name: string;
   description: string;
   status: 'active' | 'on-hold' | 'completed' | 'archived';

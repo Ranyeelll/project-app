@@ -2,21 +2,42 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Department;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\BudgetRequest;
+use App\Services\AuditService;
+use App\Services\ProjectSerialService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ProjectController extends Controller
 {
+    public function __construct(
+        private ProjectSerialService $serialService,
+        private AuditService $audit,
+    ) {}
+
     /**
      * List all projects.
+     * Employees can only see projects where they are manager or team member.
      */
     public function index(): JsonResponse
     {
-        $projects = Project::orderByDesc('created_at')
+        $user = Auth::user();
+        $query = Project::query();
+
+        // Employees can only see projects they're assigned to
+        if ($user && $user->department === Department::Employee) {
+            $query->where(function ($q) use ($user) {
+                $q->where('manager_id', $user->id)
+                  ->orWhereJsonContains('team_ids', (string) $user->id);
+            });
+        }
+
+        $projects = $query->orderByDesc('created_at')
             ->get()
             ->map(fn ($p) => $this->formatProject($p));
 
@@ -48,6 +69,12 @@ class ProjectController extends Controller
 
         $project = Project::create($data);
 
+        // Generate and assign unique serial number
+        $this->serialService->assignSerial($project, Auth::id());
+
+        // Audit: project created
+        $this->audit->projectCreated($project->fresh());
+
         // Auto-create a task for each team member so it appears in their My Tasks
         foreach ($data['team_ids'] as $memberId) {
             Task::create([
@@ -76,6 +103,7 @@ class ProjectController extends Controller
     public function update(Request $request, Project $project): JsonResponse
     {
         $oldTeamIds = $project->team_ids ?? [];
+        $oldStatus  = $project->status;
 
         $data = $request->validate([
             'name'        => 'sometimes|string|max:255',
@@ -93,6 +121,11 @@ class ProjectController extends Controller
         ]);
 
         $project->update($data);
+
+        // Audit: status change
+        if (isset($data['status']) && $data['status'] !== $oldStatus) {
+            $this->audit->projectStatusChanged($project, $oldStatus, $data['status']);
+        }
 
         // Auto-create tasks for newly added team members
         if (isset($data['team_ids'])) {
@@ -133,6 +166,7 @@ class ProjectController extends Controller
      */
     public function destroy(Project $project): JsonResponse
     {
+        $this->audit->projectDeleted($project);
         $project->delete();
         return response()->json(['message' => 'Project deleted']);
     }
@@ -160,6 +194,7 @@ class ProjectController extends Controller
 
         return [
             'id'          => (string) $p->id,
+            'serial'      => $p->serial ?? '',
             'name'        => $p->name,
             'description' => $p->description ?? '',
             'status'      => $p->status,

@@ -19,6 +19,7 @@ class Project extends Model
         'progress',
         'manager_id',
         'team_ids',
+        'serial',
     ];
 
     protected $casts = [

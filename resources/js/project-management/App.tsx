@@ -79,9 +79,104 @@ function AppContent() {
     }
     return <LoginPage />;
   }
-  // Render page based on current navigation
+  // Render page based on current navigation and department
   const renderPage = () => {
-    // Admin pages
+    const dept = currentUser.department;
+
+    // Admin department - full access
+    if (dept === 'Admin') {
+      switch (currentPage) {
+        case 'admin-dashboard':
+          return <AdminDashboard />;
+        case 'admin-projects':
+          return <ProjectsPage />;
+        case 'admin-gantt':
+          return <GanttPage />;
+        case 'admin-monitor':
+          return <MonitorControlPage />;
+        case 'admin-budget':
+          return <BudgetApprovalsPage />;
+        case 'admin-budget-report':
+          return <BudgetReportPage />;
+        case 'admin-team':
+          return <TeamManagementPage />;
+        case 'admin-reports':
+          return <ReportsMediaPage />;
+        case 'admin-reviews':
+          return <TaskReviewsPage />;
+        case 'admin-archive':
+          return <ArchivePage />;
+        case 'admin-chat':
+          return <ProjectChatPage />;
+        default:
+          return <AdminDashboard />;
+      }
+    }
+
+    // Accounting department - budget and financial access
+    if (dept === 'Accounting') {
+      switch (currentPage) {
+        case 'accounting-dashboard':
+          return <AdminDashboard />;
+        case 'admin-budget':
+          return <BudgetApprovalsPage />;
+        case 'admin-budget-report':
+          return <BudgetReportPage />;
+        case 'accounting-review':
+          return <TaskReviewsPage />;
+        case 'admin-chat':
+          return <ProjectChatPage />;
+        default:
+          return <AdminDashboard />;
+      }
+    }
+
+    // Technical department - gantt and task management
+    if (dept === 'Technical') {
+      switch (currentPage) {
+        case 'technical-dashboard':
+          return <AdminDashboard />;
+        case 'admin-gantt':
+          return <GanttPage />;
+        case 'admin-projects':
+          return <ProjectsPage />;
+        case 'technical-tasks':
+          return <MyTasksPage />;
+        case 'technical-review':
+          return <TaskReviewsPage />;
+        case 'admin-chat':
+          return <ProjectChatPage />;
+        default:
+          return <AdminDashboard />;
+      }
+    }
+
+    // Employee department (default) - assigned tasks and basic access
+    // Also fallback for legacy role-based routing
+    if (dept === 'Employee' || currentUser.role === 'employee') {
+      switch (currentPage) {
+        case 'employee-dashboard':
+          return <EmployeeDashboard />;
+        case 'employee-tasks':
+          return <MyTasksPage />;
+        case 'employee-gantt':
+          return <ViewGanttPage />;
+        case 'employee-budget':
+          return <BudgetRequestPage />;
+        case 'employee-time':
+          return <LogTimePage />;
+        case 'employee-issues':
+          return <ReportIssuePage />;
+        case 'employee-resources':
+          return <ResourcesPage />;
+        case 'employee-chat':
+          return <ProjectChatPage />;
+        default:
+          return <EmployeeDashboard />;
+      }
+    }
+
+    // Fallback for admin role (legacy)
     if (currentUser.role === 'admin') {
       switch (currentPage) {
         case 'admin-dashboard':
@@ -110,29 +205,7 @@ function AppContent() {
           return <AdminDashboard />;
       }
     }
-    // Employee pages
-    if (currentUser.role === 'employee') {
-      switch (currentPage) {
-        case 'employee-dashboard':
-          return <EmployeeDashboard />;
-        case 'employee-tasks':
-          return <MyTasksPage />;
-        case 'employee-gantt':
-          return <ViewGanttPage />;
-        case 'employee-budget':
-          return <BudgetRequestPage />;
-        case 'employee-time':
-          return <LogTimePage />;
-        case 'employee-issues':
-          return <ReportIssuePage />;
-        case 'employee-resources':
-          return <ResourcesPage />;
-        case 'employee-chat':
-          return <ProjectChatPage />;
-        default:
-          return <EmployeeDashboard />;
-      }
-    }
+
     return <LoginPage />;
   };
   return (

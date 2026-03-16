@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Department;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
@@ -16,13 +19,18 @@ class UserController extends Controller
      */
     private function formatUser(User $u): array
     {
+        // Handle department as enum or string
+        $department = $u->department instanceof Department
+            ? $u->department->value
+            : ($u->department ?? '');
+
         return [
             'id'           => (string) $u->id,
             'name'         => $u->name,
             'email'        => $u->email,
             'role'         => $u->role,
             'avatar'       => collect(explode(' ', $u->name))->map(fn ($n) => strtoupper($n[0] ?? ''))->join(''),
-            'department'   => $u->department ?? '',
+            'department'   => $department,
             'position'     => $u->position ?? '',
             'status'       => $u->status ?? 'active',
             'joinDate'     => $u->created_at?->toDateString() ?? '',
@@ -50,7 +58,7 @@ class UserController extends Controller
             'email'      => 'required|email|unique:users,email',
             'password'   => 'sometimes|string|min:6',
             'role'       => 'required|in:admin,employee',
-            'department' => 'nullable|string|max:255',
+            'department' => ['required', Rule::in(Department::values())],
             'position'   => 'nullable|string|max:255',
             'status'     => 'required|in:active,inactive',
         ]);
@@ -80,7 +88,7 @@ class UserController extends Controller
             'email'      => 'sometimes|email|unique:users,email,' . $user->id,
             'password'   => 'sometimes|nullable|string|min:6',
             'role'       => 'sometimes|in:admin,employee',
-            'department' => 'nullable|string|max:255',
+            'department' => ['sometimes', Rule::in(Department::values())],
             'position'   => 'nullable|string|max:255',
             'status'     => 'sometimes|in:active,inactive',
         ]);
@@ -99,9 +107,20 @@ class UserController extends Controller
 
     /**
      * Upload a profile photo for a user.
+     * Users can only upload their own photo, unless they are Admin.
      */
     public function uploadPhoto(Request $request, User $user): JsonResponse
     {
+        $currentUser = Auth::user();
+
+        // Users can only upload their own photo, unless admin
+        if ($currentUser && $currentUser->id !== $user->id && !$currentUser->isAdmin()) {
+            return response()->json([
+                'error' => 'Forbidden',
+                'message' => 'You can only upload your own profile photo.',
+            ], 403);
+        }
+
         $request->validate([
             'photo' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);

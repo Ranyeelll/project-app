@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Department;
 use App\Http\Controllers\Controller;
 use App\Models\BudgetRequest;
 use App\Models\Project;
@@ -11,22 +12,36 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use App\Services\AuditService;
 
 class BudgetRequestController extends Controller
 {
+    public function __construct(
+        private AuditService $audit,
+    ) {}
+
     /**
      * List all budget requests.
+     * Employees can only see their own requests.
      */
     public function index(Request $request): JsonResponse
     {
+        $user = Auth::user();
         $query = BudgetRequest::query();
+
+        // Employees can only see their own budget requests
+        if ($user && $user->department === Department::Employee) {
+            $query->where('requested_by', $user->id);
+        } else {
+            // Other departments can filter by requested_by if provided
+            if ($request->has('requested_by')) {
+                $query->where('requested_by', $request->input('requested_by'));
+            }
+        }
 
         if ($request->has('project_id')) {
             $query->where('project_id', $request->input('project_id'));
-        }
-
-        if ($request->has('requested_by')) {
-            $query->where('requested_by', $request->input('requested_by'));
         }
 
         $items = $query->orderByDesc('created_at')
@@ -93,6 +108,11 @@ class BudgetRequestController extends Controller
         }
 
         $budget_request->update($data);
+
+        // Audit log for status changes (approvals, rejections, revision requests)
+        if (isset($data['status']) && in_array($data['status'], ['approved', 'rejected', 'revision_requested'])) {
+            $this->audit->budgetRequestApproved($budget_request, $data['status'], $data['review_comment'] ?? null);
+        }
 
         // Auto-recalculate project budget & spent from approved budget requests
         if (isset($data['status']) && in_array($data['status'], ['approved', 'rejected'])) {
@@ -390,6 +410,8 @@ class BudgetRequestController extends Controller
         $pdf->setPaper('A4', 'portrait');
 
         $filename = 'budget-report-' . $period . '-' . $now->format('Y-m-d') . '.pdf';
+
+        $this->audit->budgetReportExported('pdf', $period);
 
         return $pdf->download($filename);
     }
@@ -753,6 +775,8 @@ class BudgetRequestController extends Controller
         $filename = 'budget-report-' . $period . '-' . $now->format('Y-m-d') . '.xlsx';
         $content  = file_get_contents($tmpFile);
         unlink($tmpFile);
+
+        $this->audit->budgetReportExported('xlsx', $period);
 
         return response($content, 200, [
             'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

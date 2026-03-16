@@ -24,7 +24,11 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        //
+        // Register custom middleware aliases for API authorization
+        $middleware->alias([
+            'auth.api' => \App\Http\Middleware\EnsureApiAuthenticated::class,
+            'department' => \App\Http\Middleware\EnsureDepartment::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

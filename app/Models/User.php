@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\Department;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -51,6 +52,44 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'department' => Department::class,
         ];
+    }
+
+    /**
+     * Check if user is in Admin department
+     */
+    public function isAdmin(): bool
+    {
+        return $this->department === Department::Admin;
+    }
+
+    /**
+     * Check if user has access based on department
+     */
+    public function hasDepartmentAccess(string ...$departments): bool
+    {
+        // Admin always has access
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        // Check if user's department is in allowed list
+        foreach ($departments as $dept) {
+            $deptEnum = Department::tryFrom($dept);
+            if ($deptEnum && $this->department === $deptEnum) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if user has a specific permission
+     */
+    public function hasPermission(string $permission): bool
+    {
+        return $this->department->can($permission);
     }
 }

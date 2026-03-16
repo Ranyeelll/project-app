@@ -32,10 +32,18 @@ export function TeamManagementPage() {
     email: '',
     password: '',
     role: 'employee',
-    department: '',
+    department: 'Employee',
     position: '',
     status: 'active'
   });
+
+  // Department options for the dropdown
+  const DEPARTMENTS = [
+    { value: 'Admin', label: 'Admin' },
+    { value: 'Accounting', label: 'Accounting' },
+    { value: 'Technical', label: 'Technical' },
+    { value: 'Employee', label: 'Employee' },
+  ] as const;
   const filtered = users.filter((u) => {
     const matchSearch =
     u.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -49,7 +57,7 @@ export function TeamManagementPage() {
       email: '',
       password: '',
       role: 'employee',
-      department: '',
+      department: 'Employee',
       position: '',
       status: 'active'
     });
@@ -164,6 +172,11 @@ export function TeamManagementPage() {
     } catch { /* silent */ }
   };
   const DEPT_COLORS: Record<string, string> = {
+    Admin: '#154734',
+    Accounting: '#f59e0b',
+    Technical: '#3b82f6',
+    Employee: '#63D44A',
+    // Legacy fallbacks
     Engineering: '#63D44A',
     Development: '#1FAF8E',
     Design: '#8b5cf6',
@@ -443,16 +456,16 @@ export function TeamManagementPage() {
             required={modalMode === 'create'} />
 
           <div className="grid grid-cols-2 gap-4">
-            <Input
+            <Select
               label="Department"
-              placeholder="Engineering"
               value={form.department}
               onChange={(e) =>
               setForm({
                 ...form,
                 department: e.target.value
               })
-              } />
+              }
+              options={DEPARTMENTS} />
 
             <Input
               label="Position"

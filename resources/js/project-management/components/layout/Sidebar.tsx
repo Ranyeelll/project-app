@@ -19,115 +19,69 @@ import {
   XIcon } from
 'lucide-react';
 import { useAuth, useNavigation, useTheme } from '../../context/AppContext';
+
 interface NavItem {
   id: string;
   label: string;
   icon: React.ReactNode;
 }
-const ADMIN_NAV: NavItem[] = [
-{
-  id: 'admin-dashboard',
-  label: 'Dashboard',
-  icon: <LayoutDashboardIcon size={16} />
-},
-{
-  id: 'admin-projects',
-  label: 'Projects',
-  icon: <FolderKanbanIcon size={16} />
-},
-{
-  id: 'admin-gantt',
-  label: 'Gantt Hub',
-  icon: <GanttChartIcon size={16} />
-},
-{
-  id: 'admin-monitor',
-  label: 'Analytics',
-  icon: <BarChart2Icon size={16} />
-},
-{
-  id: 'admin-budget',
-  label: 'Budget Approvals',
-  icon: <DollarSignIcon size={16} />
-},
-{
-  id: 'admin-budget-report',
-  label: 'Budget Report',
-  icon: <BarChart2Icon size={16} />
-},
-{
-  id: 'admin-team',
-  label: 'Team Management',
-  icon: <UsersIcon size={16} />
-},
-{
-  id: 'admin-reports',
-  label: 'Reports & Media',
-  icon: <FileTextIcon size={16} />
-},
-{
-  id: 'admin-reviews',
-  label: 'Task Reviews',
-  icon: <ClipboardCheckIcon size={16} />
-},
-{
-  id: 'admin-archive',
-  label: 'Archive',
-  icon: <ArchiveIcon size={16} />
-},
-{
-  id: 'admin-chat',
-  label: 'Project Chat',
-  icon: <MessageSquareIcon size={16} />
-}];
 
-const EMPLOYEE_NAV: NavItem[] = [
-{
-  id: 'employee-dashboard',
-  label: 'My Dashboard',
-  icon: <LayoutDashboardIcon size={16} />
-},
-{
-  id: 'employee-tasks',
-  label: 'My Tasks',
-  icon: <CheckSquareIcon size={16} />
-},
-{
-  id: 'employee-gantt',
-  label: 'View Gantt',
-  icon: <GanttChartIcon size={16} />
-},
-{
-  id: 'employee-budget',
-  label: 'Budget Request',
-  icon: <WalletIcon size={16} />
-},
-{
-  id: 'employee-time',
-  label: 'Log Time',
-  icon: <ClockIcon size={16} />
-},
-{
-  id: 'employee-issues',
-  label: 'Report Issue',
-  icon: <AlertTriangleIcon size={16} />
-},
-{
-  id: 'employee-resources',
-  label: 'Resources',
-  icon: <FolderOpenIcon size={16} />
-},
-{
-  id: 'employee-chat',
-  label: 'Project Chat',
-  icon: <MessageSquareIcon size={16} />
-}];
+// Department-based navigation
+const DEPARTMENT_NAV: Record<string, NavItem[]> = {
+  Admin: [
+    { id: 'admin-dashboard', label: 'Dashboard', icon: <LayoutDashboardIcon size={16} /> },
+    { id: 'admin-projects', label: 'Projects', icon: <FolderKanbanIcon size={16} /> },
+    { id: 'admin-gantt', label: 'Gantt Hub', icon: <GanttChartIcon size={16} /> },
+    { id: 'admin-monitor', label: 'Analytics', icon: <BarChart2Icon size={16} /> },
+    { id: 'admin-budget', label: 'Budget Approvals', icon: <DollarSignIcon size={16} /> },
+    { id: 'admin-budget-report', label: 'Budget Report', icon: <BarChart2Icon size={16} /> },
+    { id: 'admin-team', label: 'Team Management', icon: <UsersIcon size={16} /> },
+    { id: 'admin-reports', label: 'Reports & Media', icon: <FileTextIcon size={16} /> },
+    { id: 'admin-reviews', label: 'Task Reviews', icon: <ClipboardCheckIcon size={16} /> },
+    { id: 'admin-archive', label: 'Archive', icon: <ArchiveIcon size={16} /> },
+    { id: 'admin-chat', label: 'Project Chat', icon: <MessageSquareIcon size={16} /> },
+  ],
+  Accounting: [
+    { id: 'accounting-dashboard', label: 'Dashboard', icon: <LayoutDashboardIcon size={16} /> },
+    { id: 'admin-budget', label: 'Budget Approvals', icon: <DollarSignIcon size={16} /> },
+    { id: 'admin-budget-report', label: 'Budget Report', icon: <BarChart2Icon size={16} /> },
+    { id: 'accounting-review', label: 'Accounting Review', icon: <ClipboardCheckIcon size={16} /> },
+    { id: 'admin-chat', label: 'Project Chat', icon: <MessageSquareIcon size={16} /> },
+  ],
+  Technical: [
+    { id: 'technical-dashboard', label: 'Dashboard', icon: <LayoutDashboardIcon size={16} /> },
+    { id: 'admin-gantt', label: 'Gantt Chart', icon: <GanttChartIcon size={16} /> },
+    { id: 'admin-projects', label: 'Projects', icon: <FolderKanbanIcon size={16} /> },
+    { id: 'technical-tasks', label: 'Task Management', icon: <CheckSquareIcon size={16} /> },
+    { id: 'technical-review', label: 'Technical Review', icon: <ClipboardCheckIcon size={16} /> },
+    { id: 'admin-chat', label: 'Project Chat', icon: <MessageSquareIcon size={16} /> },
+  ],
+  Employee: [
+    { id: 'employee-dashboard', label: 'My Dashboard', icon: <LayoutDashboardIcon size={16} /> },
+    { id: 'employee-tasks', label: 'My Tasks', icon: <CheckSquareIcon size={16} /> },
+    { id: 'employee-gantt', label: 'View Gantt', icon: <GanttChartIcon size={16} /> },
+    { id: 'employee-budget', label: 'Budget Request', icon: <WalletIcon size={16} /> },
+    { id: 'employee-time', label: 'Log Time', icon: <ClockIcon size={16} /> },
+    { id: 'employee-issues', label: 'Report Issue', icon: <AlertTriangleIcon size={16} /> },
+    { id: 'employee-resources', label: 'Resources', icon: <FolderOpenIcon size={16} /> },
+    { id: 'employee-chat', label: 'Project Chat', icon: <MessageSquareIcon size={16} /> },
+  ],
+};
+
+// Keep legacy role-based navigation as fallback
+const ADMIN_NAV: NavItem[] = DEPARTMENT_NAV.Admin;
+const EMPLOYEE_NAV: NavItem[] = DEPARTMENT_NAV.Employee;
 
 export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { currentUser, logout } = useAuth();
   const { currentPage, setCurrentPage } = useNavigation();
   const { isDark } = useTheme();
-  const navItems = currentUser?.role === 'admin' ? ADMIN_NAV : EMPLOYEE_NAV;
+
+  // Use department-based navigation with fallback to role-based
+  const department = currentUser?.department;
+  const navItems = department && DEPARTMENT_NAV[department]
+    ? DEPARTMENT_NAV[department]
+    : (currentUser?.role === 'admin' ? ADMIN_NAV : EMPLOYEE_NAV);
   return (
     <aside className={`
       fixed inset-y-0 left-0 z-50 w-64 flex flex-col h-full
