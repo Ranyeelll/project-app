@@ -12,6 +12,8 @@ use App\Services\ProjectSerialService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ProjectController extends Controller
 {
@@ -60,39 +62,49 @@ class ProjectController extends Controller
             'manager_id'  => 'nullable|exists:users,id',
             'team_ids'    => 'nullable|array',
             'team_ids.*'  => 'string',
+            'leader_id'   => 'nullable|exists:users,id',
         ]);
 
+        $data['team_ids'] = array_values(array_unique(array_filter(array_map('strval', $data['team_ids'] ?? []))));
         $data['budget']  = $data['budget'] ?? 0;
         $data['spent']   = 0;
         $data['progress'] = 0;
         $data['team_ids'] = $data['team_ids'] ?? [];
+        $data['project_leader_id'] = $data['leader_id'] ?? null;
+        unset($data['leader_id']);
 
-        $project = Project::create($data);
+        $this->validateLeaderForTeam($data['team_ids'], $data['project_leader_id']);
 
-        // Generate and assign unique serial number
-        $this->serialService->assignSerial($project, Auth::id());
+        $project = DB::transaction(function () use ($data) {
+            $project = Project::create($data);
 
-        // Audit: project created
-        $this->audit->projectCreated($project->fresh());
+            // Generate and assign unique serial number.
+            $this->serialService->assignSerial($project, Auth::id());
 
-        // Auto-create a task for each team member so it appears in their My Tasks
-        foreach ($data['team_ids'] as $memberId) {
-            Task::create([
-                'project_id'               => $project->id,
-                'title'                    => $data['name'],
-                'description'              => $data['description'] ?? '',
-                'status'                   => 'todo',
-                'priority'                 => $data['priority'] ?? 'medium',
-                'assigned_to'              => $memberId,
-                'start_date'               => $data['start_date'] ?? null,
-                'end_date'                 => $data['end_date'] ?? null,
-                'estimated_hours'          => 0,
-                'progress'                 => 0,
-                'logged_hours'             => 0,
-                'allow_employee_edit'      => false,
-                'completion_report_status' => 'none',
-            ]);
-        }
+            // Audit: project created
+            $this->audit->projectCreated($project->fresh());
+
+            // Auto-create a task for each team member so it appears in their My Tasks
+            foreach (($data['team_ids'] ?? []) as $memberId) {
+                Task::create([
+                    'project_id'               => $project->id,
+                    'title'                    => $data['name'],
+                    'description'              => $data['description'] ?? '',
+                    'status'                   => 'todo',
+                    'priority'                 => $data['priority'] ?? 'medium',
+                    'assigned_to'              => $memberId,
+                    'start_date'               => $data['start_date'] ?? null,
+                    'end_date'                 => $data['end_date'] ?? null,
+                    'estimated_hours'          => 0,
+                    'progress'                 => 0,
+                    'logged_hours'             => 0,
+                    'allow_employee_edit'      => false,
+                    'completion_report_status' => 'none',
+                ]);
+            }
+
+            return $project;
+        });
 
         return response()->json($this->formatProject($project->fresh()), 201);
     }
@@ -118,7 +130,21 @@ class ProjectController extends Controller
             'manager_id'  => 'nullable|exists:users,id',
             'team_ids'    => 'nullable|array',
             'team_ids.*'  => 'string',
+            'leader_id'   => 'nullable|exists:users,id',
         ]);
+
+        if (array_key_exists('team_ids', $data)) {
+            $data['team_ids'] = array_values(array_unique(array_filter(array_map('strval', $data['team_ids'] ?? []))));
+        }
+
+        $nextTeamIds = array_key_exists('team_ids', $data) ? ($data['team_ids'] ?? []) : ($project->team_ids ?? []);
+        $nextLeaderId = array_key_exists('leader_id', $data) ? $data['leader_id'] : $project->project_leader_id;
+        $this->validateLeaderForTeam($nextTeamIds, $nextLeaderId);
+
+        if (array_key_exists('leader_id', $data)) {
+            $data['project_leader_id'] = $data['leader_id'];
+            unset($data['leader_id']);
+        }
 
         $project->update($data);
 
@@ -132,13 +158,19 @@ class ProjectController extends Controller
             $newTeamIds = $data['team_ids'];
             $addedMembers = array_diff($newTeamIds, $oldTeamIds);
 
-            foreach ($addedMembers as $memberId) {
-                // Only create if this member doesn't already have a task in this project
-                $existing = Task::where('project_id', $project->id)
-                    ->where('assigned_to', $memberId)
-                    ->exists();
+            $addedMemberInts = array_values(array_filter(array_map('intval', $addedMembers), static fn ($id) => $id > 0));
+            if (!empty($addedMemberInts)) {
+                $existingAssignees = Task::where('project_id', $project->id)
+                    ->whereIn('assigned_to', $addedMemberInts)
+                    ->pluck('assigned_to')
+                    ->map(static fn ($id) => (int) $id)
+                    ->all();
 
-                if (!$existing) {
+                foreach ($addedMemberInts as $memberId) {
+                    if (in_array($memberId, $existingAssignees, true)) {
+                        continue;
+                    }
+
                     Task::create([
                         'project_id'               => $project->id,
                         'title'                    => $project->name,
@@ -176,11 +208,20 @@ class ProjectController extends Controller
      */
     private function formatProject(Project $p): array
     {
-        // Compute progress from tasks
-        $projectTasks = Task::where('project_id', $p->id)->get();
-        $totalTasks = $projectTasks->count();
-        $completedTasks = $projectTasks->where('status', 'completed')->count();
-        $computedProgress = $totalTasks > 0 ? (int) round(($completedTasks / $totalTasks) * 100) : (int) $p->progress;
+        // Keep persisted project progress as source of truth.
+        // Derive task-based progress from assigned team-member tasks first,
+        // then fallback to all project tasks when needed.
+        $teamIds = array_values(array_filter(array_map('intval', $p->team_ids ?? []), static fn ($id) => $id > 0));
+        $teamTaskAvg = null;
+        if (!empty($teamIds)) {
+            $teamTaskAvg = Task::where('project_id', $p->id)
+                ->whereIn('assigned_to', $teamIds)
+                ->avg('progress');
+        }
+        $allTaskAvg = Task::where('project_id', $p->id)->avg('progress');
+        $taskAverageProgress = (int) round($teamTaskAvg ?? $allTaskAvg ?? 0);
+        $storedProgress = (int) ($p->progress ?? 0);
+        $computedProgress = max($storedProgress, $taskAverageProgress);
 
         // Compute spent from approved spending budget requests + approved task report costs
         $approvedSpent = BudgetRequest::where('project_id', $p->id)
@@ -205,7 +246,8 @@ class ProjectController extends Controller
             'spent'          => $computedSpent,
             'progress'       => $computedProgress,
             'managerId'      => (string) ($p->manager_id ?? ''),
-            'teamIds'        => $p->team_ids ?? [],
+            'teamIds'        => array_values(array_filter(array_map('strval', $p->team_ids ?? []))),
+            'leaderId'       => $p->project_leader_id ? (string) $p->project_leader_id : null,
             'createdAt'      => $p->created_at?->toDateString() ?? '',
             'approvalStatus' => $p->approval_status ?? 'draft',
             'approvalNotes'  => $p->approval_notes,
@@ -213,5 +255,25 @@ class ProjectController extends Controller
             'reviewedBy'     => $p->reviewed_by  ? (string) $p->reviewed_by  : null,
             'lastReviewedAt' => $p->last_reviewed_at?->toISOString(),
         ];
+    }
+
+    private function validateLeaderForTeam(array $teamIds, mixed $leaderId): void
+    {
+        $normalizedTeamIds = array_values(array_unique(array_filter(array_map('strval', $teamIds))));
+        $normalizedLeaderId = $leaderId !== null ? (string) $leaderId : null;
+
+        if (count($normalizedTeamIds) >= 2) {
+            if (!$normalizedLeaderId) {
+                throw ValidationException::withMessages([
+                    'leader_id' => 'A project leader is required when assigning two or more employees.',
+                ]);
+            }
+
+            if (!in_array($normalizedLeaderId, $normalizedTeamIds, true)) {
+                throw ValidationException::withMessages([
+                    'leader_id' => 'The selected project leader must be one of the assigned team members.',
+                ]);
+            }
+        }
     }
 }

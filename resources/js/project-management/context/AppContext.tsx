@@ -194,6 +194,7 @@ export function AppProvider({ children }: AppProviderProps) {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': csrfToken,
           },
+          credentials: 'include',
           body: JSON.stringify({ email, password }),
         });
         const data = await res.json();
@@ -253,6 +254,39 @@ export function AppProvider({ children }: AppProviderProps) {
       // server-side rendering / unavailable window
     }
   };
+
+  // Validate persisted user against current backend session.
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
+    fetch('/api/me', {
+      headers: { Accept: 'application/json' },
+      credentials: 'include',
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`Auth check failed (${res.status})`);
+        }
+        return res.json();
+      })
+      .then((data: { success?: boolean; user?: User }) => {
+        if (data?.success && data.user) {
+          setCurrentUser(data.user);
+          return;
+        }
+        throw new Error('No user returned from auth check');
+      })
+      .catch(() => {
+        setCurrentUser(null);
+        localStorage.removeItem('maptech-current-user');
+        setCurrentPage('login');
+        if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+          window.history.replaceState({}, '', '/');
+        }
+      });
+  }, []);
 
   // Once auth state changes, set the right default page and push URL
   useEffect(() => {
@@ -449,9 +483,9 @@ export function AppProvider({ children }: AppProviderProps) {
   // ─── Load all data from the database on mount ────────────────────────────
   useEffect(() => { refreshAll(); }, []);
 
-  // ─── Auto-refresh every 10 seconds ───────────────────────────────────────
+  // ─── Auto-refresh every 5 seconds ───────────────────────────────────────
   useEffect(() => {
-    const interval = setInterval(refreshAll, 10000);
+    const interval = setInterval(refreshAll, 5000);
     return () => clearInterval(interval);
   }, []);
   return (

@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -65,9 +66,13 @@ Route::prefix('api')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/verify-recovery', [AuthController::class, 'verifyRecovery']);
     Route::post('/reset-password-offline', [AuthController::class, 'resetPasswordOffline']);
+    Route::get('/users/{user}/photo', [UserController::class, 'servePhoto']);
 
     // Authenticated routes
     Route::middleware('auth.api')->group(function () {
+        // Session bootstrap (any authenticated user)
+        Route::get('/me', [AuthController::class, 'me']);
+
         // Password change (any authenticated user)
         Route::post('/change-password', [AuthController::class, 'changePassword']);
 
@@ -82,6 +87,8 @@ Route::prefix('api')->group(function () {
 
             // Audit logs (admin only)
             Route::get('/audit-logs', [AuditLogController::class, 'index']);
+            Route::get('/audit-logs/export-pdf', [AuditLogController::class, 'exportPdf']);
+            Route::get('/audit-logs/export-sheet', [AuditLogController::class, 'exportSheet']);
 
             // Project management (full CRUD)
             Route::post('/projects', [ProjectController::class, 'store']);
@@ -153,9 +160,8 @@ Route::prefix('api')->group(function () {
         Route::get('/projects/{project}/form-submissions', [ProjectFormController::class, 'index']);
         Route::post('/projects/{project}/form-submissions', [ProjectFormController::class, 'store']);
 
-        // Profile photo (users can access)
+        // Profile photo upload (authenticated users)
         Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
-        Route::get('/users/{user}/photo', [UserController::class, 'servePhoto']);
 
         // View projects (filtered based on department in controller)
         Route::get('/projects', [ProjectController::class, 'index']);
@@ -251,6 +257,15 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__.'/auth.php';
+
+// Legacy photo path fallback for old cached SPA user payloads.
+Route::get('/profile-photos/{path}', function (string $path) {
+    if (!Storage::disk('public')->exists('profile-photos/' . $path)) {
+        abort(404);
+    }
+
+    return Storage::disk('public')->response('profile-photos/' . $path);
+})->where('path', '.*');
 
 /*
 |--------------------------------------------------------------------------

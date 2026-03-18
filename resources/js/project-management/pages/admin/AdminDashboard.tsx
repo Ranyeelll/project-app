@@ -9,10 +9,26 @@ import {
   ClockIcon,
   ArrowUpRightIcon } from
 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar as ReBar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
+} from 'recharts';
 import { useData, useNavigation } from '../../context/AppContext';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { UserAvatar } from '../../components/ui/UserAvatar';
 function StatCard({
   label,
   value,
@@ -61,6 +77,7 @@ function StatCard({
 export function AdminDashboard() {
   const { projects, tasks, users, budgetRequests, issues } = useData();
   const { setCurrentPage } = useNavigation();
+  const today = new Date();
   const activeProjects = projects.filter((p) => p.status === 'active').length;
   const completedProjects = projects.filter(
     (p) => p.status === 'completed'
@@ -73,6 +90,12 @@ export function AdminDashboard() {
   const pendingBudgets = budgetRequests.filter(
     (b) => b.status === 'pending'
   ).length;
+  const employeeCompletionSubmissions = projects.filter((p) => {
+    if ((p.approvalStatus || 'draft') !== 'technical_review') return false;
+    if (!p.submittedBy) return false;
+    const submitter = users.find((u) => u.id === p.submittedBy);
+    return submitter?.department === 'Employee';
+  }).length;
   const openIssues = issues.filter(
     (i) => i.status === 'open' || i.status === 'in-progress'
   ).length;
@@ -88,6 +111,109 @@ export function AdminDashboard() {
   const recentTasks = [...tasks].
   filter((t) => t.status === 'in-progress').
   slice(0, 5);
+  const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const shortDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const dayLabels = Array.from({ length: 7 }, (_, index) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - index));
+    return {
+      label: shortDay(d),
+      key: dateKey(d)
+    };
+  });
+  const activityLineData = dayLabels.map((day) => {
+    const completed = tasks.filter((t) => {
+      if (t.status !== 'completed') return false;
+      const d = new Date(t.endDate);
+      return !isNaN(d.getTime()) && dateKey(d) === day.key;
+    }).length;
+    const started = tasks.filter((t) => {
+      const d = new Date(t.startDate);
+      return !isNaN(d.getTime()) && dateKey(d) === day.key;
+    }).length;
+    return {
+      day: day.label,
+      completed,
+      started
+    };
+  });
+  const workloadChannelData = dayLabels.map((day) => {
+    const dueToday = tasks.filter((t) => {
+      const d = new Date(t.endDate);
+      return !isNaN(d.getTime()) && dateKey(d) === day.key;
+    });
+    return {
+      day: day.label,
+      critical: dueToday.filter((t) => t.priority === 'critical').length,
+      high: dueToday.filter((t) => t.priority === 'high').length,
+      medium: dueToday.filter((t) => t.priority === 'medium').length,
+      low: dueToday.filter((t) => t.priority === 'low').length
+    };
+  });
+  const teamLoadData = users
+  .filter((u) => u.role === 'employee' && u.status === 'active')
+  .map((u) => {
+    const assigned = tasks.filter((t) => t.assignedTo === u.id);
+    const done = assigned.filter((t) => t.status === 'completed').length;
+    return {
+      name: u.name.split(' ')[0],
+      assigned: assigned.length,
+      done
+    };
+  })
+  .sort((a, b) => b.assigned - a.assigned)
+  .slice(0, 6);
+  const severityData = [
+  {
+    name: 'Critical',
+    value: issues.filter((i) => i.severity === 'critical' && (i.status === 'open' || i.status === 'in-progress')).length,
+    color: '#ef4444'
+  },
+  {
+    name: 'High',
+    value: issues.filter((i) => i.severity === 'high' && (i.status === 'open' || i.status === 'in-progress')).length,
+    color: '#f97316'
+  },
+  {
+    name: 'Medium',
+    value: issues.filter((i) => i.severity === 'medium' && (i.status === 'open' || i.status === 'in-progress')).length,
+    color: '#f59e0b'
+  },
+  {
+    name: 'Low',
+    value: issues.filter((i) => i.severity === 'low' && (i.status === 'open' || i.status === 'in-progress')).length,
+    color: '#3b82f6'
+  }
+  ];
+  const monthLabels = Array.from({ length: 6 }, (_, index) => {
+    const d = new Date(today.getFullYear(), today.getMonth() - (5 - index), 1);
+    return {
+      label: d.toLocaleString('en-US', { month: 'short' }),
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    };
+  });
+  const completionTrendData = monthLabels.map((month) => {
+    const completed = tasks.filter((t) => {
+      if (t.status !== 'completed') return false;
+      const d = new Date(t.endDate);
+      if (isNaN(d.getTime())) return false;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === month.key;
+    }).length;
+    const startedProjects = projects.filter((p) => {
+      const d = new Date(p.startDate);
+      if (isNaN(d.getTime())) return false;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === month.key;
+    }).length;
+    return {
+      month: month.label,
+      completedTasks: completed,
+      startedProjects
+    };
+  });
+  const hasActivityData = activityLineData.some((d) => d.completed > 0 || d.started > 0);
+  const hasWorkloadData = workloadChannelData.some((d) => d.critical > 0 || d.high > 0 || d.medium > 0 || d.low > 0);
+  const hasTeamLoadData = teamLoadData.length > 0 && teamLoadData.some((d) => d.assigned > 0 || d.done > 0);
+  const severityTotal = severityData.reduce((sum, item) => sum + item.value, 0);
   const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -129,7 +255,7 @@ export function AdminDashboard() {
       </div>
 
       {/* Alerts row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="dark:bg-yellow-500/5 dark:border-yellow-500/20 bg-yellow-50 border border-yellow-200 rounded-card p-4 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-yellow-500/15 flex items-center justify-center flex-shrink-0">
             <DollarSignIcon size={16} className="text-yellow-400" />
@@ -168,6 +294,26 @@ export function AdminDashboard() {
             <ArrowUpRightIcon size={14} />
           </button>
         </div>
+        <div className="dark:bg-green-primary/5 dark:border-green-primary/20 bg-green-50 border border-green-200 rounded-card p-4 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-green-primary/15 flex items-center justify-center flex-shrink-0">
+            <FolderKanbanIcon size={16} className="text-green-primary" />
+          </div>
+          <div>
+            <div className="text-lg font-bold dark:text-dark-text text-light-text">
+              {employeeCompletionSubmissions}
+            </div>
+            <div className="text-xs text-green-primary">
+              Employee Completion Submissions
+            </div>
+          </div>
+          <button
+            onClick={() => setCurrentPage('admin-projects')}
+            className="ml-auto text-green-primary hover:text-green-progress"
+            title="Open Projects"
+          >
+            <ArrowUpRightIcon size={14} />
+          </button>
+        </div>
         <div className="dark:bg-red-500/5 dark:border-red-500/20 bg-red-50 border border-red-200 rounded-card p-4 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-red-500/15 flex items-center justify-center flex-shrink-0">
             <AlertTriangleIcon size={16} className="text-red-400" />
@@ -202,6 +348,118 @@ export function AdminDashboard() {
               Avg Project Progress
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Analytics charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-5">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold dark:text-dark-text text-light-text">
+              Work Activity Trend
+            </h2>
+            <span className="text-xs dark:text-dark-subtle text-light-subtle">Last 7 days</span>
+          </div>
+          <div className="text-2xl font-bold dark:text-dark-text text-light-text tabular-nums mb-3">
+            {completedTasks}
+            <span className="ml-1 text-xs font-medium dark:text-dark-subtle text-light-subtle">completed tasks</span>
+          </div>
+          <ResponsiveContainer width="100%" height={235}>
+            <LineChart data={activityLineData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
+              <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Line type="monotone" dataKey="completed" name="Completed" stroke="#0E8F79" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="started" name="Started" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+          {!hasActivityData && (
+            <p className="mt-2 text-xs dark:text-dark-subtle text-light-subtle">No activity records found for this period.</p>
+          )}
+        </div>
+        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-5">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold dark:text-dark-text text-light-text">
+              Due Workload by Priority
+            </h2>
+            <span className="text-xs dark:text-dark-subtle text-light-subtle">Last 7 days</span>
+          </div>
+          <ResponsiveContainer width="100%" height={275}>
+            <BarChart data={workloadChannelData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
+              <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <ReBar dataKey="critical" name="Critical" stackId="work" fill="#ef4444" radius={[3, 3, 0, 0]} />
+              <ReBar dataKey="high" name="High" stackId="work" fill="#f97316" radius={[3, 3, 0, 0]} />
+              <ReBar dataKey="medium" name="Medium" stackId="work" fill="#f59e0b" radius={[3, 3, 0, 0]} />
+              <ReBar dataKey="low" name="Low" stackId="work" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          {!hasWorkloadData && (
+            <p className="mt-2 text-xs dark:text-dark-subtle text-light-subtle">No due-priority records found for this period.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold dark:text-dark-text text-light-text">Top Active Projects</h3>
+            <span className="text-xs dark:text-dark-subtle text-light-subtle">This month</span>
+          </div>
+          <div className="space-y-2.5">
+            {recentProjects.slice(0, 5).map((project) => (
+              <div key={project.id} className="flex items-center justify-between">
+                <span className="text-xs dark:text-dark-text text-light-text truncate pr-2">{project.name}</span>
+                <span className="text-xs font-semibold text-green-primary tabular-nums">{project.progress}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold dark:text-dark-text text-light-text">Team Task Load</h3>
+            <span className="text-xs dark:text-dark-subtle text-light-subtle">Top 6</span>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={teamLoadData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+              <Tooltip />
+              <ReBar dataKey="assigned" name="Assigned" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <ReBar dataKey="done" name="Done" fill="#63D44A" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          {!hasTeamLoadData && (
+            <p className="mt-2 text-xs dark:text-dark-subtle text-light-subtle">No team workload records available.</p>
+          )}
+        </div>
+        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold dark:text-dark-text text-light-text">Issue Severity</h3>
+            <span className="text-xs dark:text-dark-subtle text-light-subtle">Open / In-progress</span>
+          </div>
+          {severityTotal > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={severityData} dataKey="value" nameKey="name" innerRadius={48} outerRadius={72} paddingAngle={2}>
+                  {severityData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[200px] flex items-center justify-center text-xs dark:text-dark-subtle text-light-subtle">
+              No issue severity records available.
+            </div>
+          )}
         </div>
       </div>
 
@@ -281,20 +539,20 @@ export function AdminDashboard() {
           </div>
           <div className="divide-y dark:divide-dark-border divide-light-border">
             {recentTasks.map((task) => {
-              const assignee = useData().users.find(
+              const assignee = users.find(
                 (u) => u.id === task.assignedTo
               );
               return (
                 <div key={task.id} className="px-5 py-3.5">
                   <div className="flex items-start gap-3">
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-black flex-shrink-0 mt-0.5"
-                      style={{
-                        backgroundColor: '#63D44A'
-                      }}>
-
-                      {assignee?.avatar}
-                    </div>
+                    <UserAvatar
+                      name={assignee?.name || 'Unknown User'}
+                      avatarText={assignee?.avatar}
+                      profilePhoto={assignee?.profilePhoto}
+                      className="w-6 h-6 mt-0.5"
+                      textClassName="text-xs font-bold text-black"
+                      fallbackStyle={{ backgroundColor: '#63D44A' }}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm dark:text-dark-text text-light-text font-medium truncate">
                         {task.title}

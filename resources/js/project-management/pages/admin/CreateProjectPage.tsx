@@ -3,6 +3,7 @@ import { ArrowLeftIcon, DollarSignIcon, UsersIcon } from 'lucide-react';
 import { useData, useAuth, useNavigation } from '../../context/AppContext';
 import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
+import { UserAvatar } from '../../components/ui/UserAvatar';
 
 interface FormData {
   name: string;
@@ -13,6 +14,7 @@ interface FormData {
   endDate: string;
   budget: string;
   teamIds: string[];
+  leaderId: string;
 }
 
 export function CreateProjectPage() {
@@ -29,7 +31,8 @@ export function CreateProjectPage() {
     startDate: '',
     endDate: '',
     budget: '',
-    teamIds: []
+    teamIds: [],
+    leaderId: ''
   });
 
   const selectedCount = form.teamIds.length;
@@ -38,6 +41,11 @@ export function CreateProjectPage() {
   const handleSave = async () => {
     if (!form.name.trim()) {
       setError('Project name is required');
+      return;
+    }
+
+    if (form.teamIds.length >= 2 && !form.leaderId) {
+      setError('Please select a project leader for projects with 2 or more team members.');
       return;
     }
 
@@ -56,7 +64,8 @@ export function CreateProjectPage() {
           start_date: form.startDate,
           end_date: form.endDate,
           budget: form.budget ? parseInt(form.budget) : null,
-          team_ids: form.teamIds
+          team_ids: form.teamIds,
+          leader_id: form.leaderId || null,
         })
       });
 
@@ -79,11 +88,12 @@ export function CreateProjectPage() {
   };
 
   const allTeamMembers = users.filter((u) => u.role === 'employee' && u.status === 'active');
+  const selectedTeamMembers = allTeamMembers.filter((u) => form.teamIds.includes(u.id));
 
   return (
-    <div className="min-h-screen dark:bg-dark-bg bg-light-bg">
+    <div className="w-full">
       {/* Header */}
-      <div className="dark:bg-dark-card dark:border-dark-border bg-white border-b border-light-border sticky top-0 z-10">
+      <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -102,7 +112,7 @@ export function CreateProjectPage() {
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-4xl mx-auto px-6 py-8 pb-14">
         {error && (
           <div className="mb-6 p-4 rounded-lg dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 bg-red-50 border border-red-200 text-red-600">
             <p className="text-sm font-medium">{error}</p>
@@ -222,21 +232,28 @@ export function CreateProjectPage() {
                       type="checkbox"
                       checked={form.teamIds.includes(u.id)}
                       onChange={(e) => {
-                        setForm((prev) => ({
-                          ...prev,
-                          teamIds: e.target.checked
+                        setForm((prev) => {
+                          const nextTeamIds = e.target.checked
                             ? [...prev.teamIds, u.id]
-                            : prev.teamIds.filter((id) => id !== u.id),
-                        }));
+                            : prev.teamIds.filter((id) => id !== u.id);
+
+                          return {
+                            ...prev,
+                            teamIds: nextTeamIds,
+                            leaderId: nextTeamIds.includes(prev.leaderId) ? prev.leaderId : '',
+                          };
+                        });
                       }}
                       className="rounded border-gray-400 text-green-primary focus:ring-green-primary cursor-pointer"
                     />
-                    <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-black flex-shrink-0"
-                      style={{ backgroundColor: '#63D44A' }}
-                    >
-                      {u.avatar}
-                    </div>
+                    <UserAvatar
+                      name={u.name}
+                      avatarText={u.avatar}
+                      profilePhoto={u.profilePhoto}
+                      className="w-7 h-7"
+                      textClassName="text-xs font-bold text-black"
+                      fallbackStyle={{ backgroundColor: '#63D44A' }}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm dark:text-dark-text text-light-text truncate font-medium">{u.name}</p>
                       <p className="text-xs dark:text-dark-subtle text-light-subtle truncate">{u.position}</p>
@@ -245,6 +262,23 @@ export function CreateProjectPage() {
                 ))
               )}
             </div>
+
+            {form.teamIds.length >= 2 && (
+              <div className="mt-4">
+                <Select
+                  label="Project Leader *"
+                  value={form.leaderId}
+                  onChange={(e) => setForm((prev) => ({ ...prev, leaderId: e.target.value }))}
+                  options={[
+                    { value: '', label: 'Select leader from assigned team' },
+                    ...selectedTeamMembers.map((member) => ({ value: member.id, label: member.name })),
+                  ]}
+                />
+                <p className="text-xs dark:text-dark-muted text-light-muted mt-1">
+                  Only the selected leader can update project progress when this project has multiple members.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}

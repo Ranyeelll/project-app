@@ -33,6 +33,6 @@ Broadcast::channel('project.{projectId}', function ($user, int $projectId) {
     return $allowed ? [
         'id'            => $user->id,
         'name'          => $user->name,
-        'profile_photo' => $user->profile_photo,
+        'profile_photo' => $user->profile_photo ? '/api/users/' . $user->id . '/photo' : null,
     ] : false;
 });

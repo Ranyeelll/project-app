@@ -23,6 +23,7 @@ import { Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { UserAvatar } from '../../components/ui/UserAvatar';
 
 export function MonitorControlPage() {
   const { projects, tasks, issues, setIssues, users, budgetRequests, timeLogs } = useData();
@@ -545,7 +546,14 @@ export function MonitorControlPage() {
                       <tr key={member.id} className="dark:hover:bg-dark-card2 hover:bg-light-card2 transition-colors">
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-green-primary/10 text-green-primary flex items-center justify-center text-xs font-bold">{member.avatar}</div>
+                            <UserAvatar
+                              name={member.name}
+                              avatarText={member.avatar}
+                              profilePhoto={member.profilePhoto}
+                              className="w-7 h-7"
+                              textClassName="text-xs font-bold text-green-primary"
+                              fallbackStyle={{ backgroundColor: 'rgba(99, 212, 74, 0.1)' }}
+                            />
                             <div>
                               <p className="text-sm font-medium dark:text-dark-text text-light-text">{member.name}</p>
                               <p className="text-[11px] dark:text-dark-subtle text-light-subtle">{member.position}</p>

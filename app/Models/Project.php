@@ -19,6 +19,7 @@ class Project extends Model
         'progress',
         'manager_id',
         'team_ids',
+        'project_leader_id',
         'serial',
         'approval_status',
         'approval_notes',
@@ -49,5 +50,10 @@ class Project extends Model
     public function reviewedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function leader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'project_leader_id');
     }
 }

@@ -17,6 +17,15 @@ use Illuminate\Validation\ValidationException;
 
 class DirectMessageController extends Controller
 {
+    private function profilePhotoUrl(?User $user): ?string
+    {
+        if (!$user || !$user->profile_photo) {
+            return null;
+        }
+
+        return '/api/users/' . $user->id . '/photo';
+    }
+
     /**
      * GET /api/direct-conversations
      * List all DM conversations for the current user (identified by user_id query param).
@@ -50,7 +59,7 @@ class DirectMessageController extends Controller
                     'other_user'   => $otherUser ? [
                         'id'            => $otherUser->id,
                         'name'          => $otherUser->name,
-                        'profile_photo' => $otherUser->profile_photo,
+                        'profile_photo' => $this->profilePhotoUrl($otherUser),
                         'position'      => $otherUser->position,
                         'department'    => $otherUser->department,
                     ] : null,
@@ -92,7 +101,7 @@ class DirectMessageController extends Controller
             'other_user' => $other ? [
                 'id'            => $other->id,
                 'name'          => $other->name,
-                'profile_photo' => $other->profile_photo,
+                'profile_photo' => $this->profilePhotoUrl($other),
                 'position'      => $other->position,
                 'department'    => $other->department,
             ] : null,
@@ -309,7 +318,7 @@ class DirectMessageController extends Controller
             'sender'           => $msg->sender ? [
                 'id'            => $msg->sender->id,
                 'name'          => $msg->sender->name,
-                'profile_photo' => $msg->sender->profile_photo,
+                'profile_photo' => $this->profilePhotoUrl($msg->sender),
             ] : null,
             'reply_to'         => $msg->replyTo ? [
                 'id'           => $msg->replyTo->id,

@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   PlusIcon,
   SearchIcon,
   EditIcon,
+  ArchiveIcon,
   TrashIcon,
   EyeIcon,
   FolderKanbanIcon,
   CalendarIcon,
   DollarSignIcon,
-  UsersIcon,
-  ClipboardListIcon } from
+  UsersIcon } from
 'lucide-react';
 import { useData, useAuth, useNavigation } from '../../context/AppContext';
 import { Project, Task, ApprovalStatus } from '../../data/mockData';
@@ -18,8 +18,8 @@ import { Input, Textarea, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { UserAvatar } from '../../components/ui/UserAvatar';
 import { ApprovalActionModal } from '../../components/projects/ApprovalActionModal';
-import { ProjectFormsPanel } from '../../components/projects/ProjectFormsPanel';
 type ModalMode = 'create' | 'edit' | 'view' | null;
 export function ProjectsPage() {
   const { projects, setProjects, users, tasks, setTasks, refreshTasks, refreshProjects } = useData();
@@ -34,7 +34,8 @@ export function ProjectsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [approvalProject, setApprovalProject] = useState<Project | null>(null);
   const [approvalAction, setApprovalAction] = useState('');
-  const [formsProject, setFormsProject] = useState<Project | null>(null);
+  const [saveError, setSaveError] = useState('');
+  const [savingProject, setSavingProject] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({
@@ -54,8 +55,23 @@ export function ProjectsPage() {
     startDate: '',
     endDate: '',
     budget: '',
-    teamIds: [] as string[]
+    teamIds: [] as string[],
+    leaderId: ''
   });
+
+  // ─── Auto-refresh projects every 5 seconds (pause while modal is open) ───
+  useEffect(() => {
+    if (modalMode) return;
+
+    const interval = setInterval(() => {
+      fetch('/api/projects')
+        .then((res) => res.json())
+        .then((data: Project[]) => { if (Array.isArray(data)) setProjects(data); })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [setProjects, modalMode]);
+
   const filtered = projects.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
@@ -66,6 +82,8 @@ export function ProjectsPage() {
     setCurrentPage('admin-create-project');
   };
   const openEdit = (p: Project) => {
+    const teamIds = (p.teamIds || []).map(String);
+    const derivedLeaderId = p.leaderId || (teamIds.length >= 2 ? teamIds[0] : '');
     setSelectedProject(p);
     setForm({
       name: p.name,
@@ -75,8 +93,10 @@ export function ProjectsPage() {
       startDate: p.startDate,
       endDate: p.endDate,
       budget: String(p.budget),
-      teamIds: p.teamIds || []
+      teamIds,
+      leaderId: derivedLeaderId
     });
+    setSaveError('');
     setModalMode('edit');
   };
   const openView = (p: Project) => {
@@ -89,6 +109,14 @@ export function ProjectsPage() {
   };
   const handleSave = async () => {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    setSaveError('');
+
+    if (form.teamIds.length >= 2 && !form.leaderId) {
+      setSaveError('Please select a project leader when assigning 2 or more team members.');
+      return;
+    }
+
+    setSavingProject(true);
     if (modalMode === 'create') {
       try {
         const res = await fetch('/api/projects', {
@@ -104,13 +132,23 @@ export function ProjectsPage() {
             budget: Number(form.budget) || 0,
             manager_id: currentUser?.id || null,
             team_ids: form.teamIds,
+            leader_id: form.leaderId || null,
           }),
         });
-        if (res.ok) {
-          const saved = await res.json();
-          setProjects((prev) => [saved, ...prev]);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const message = data?.errors?.leader_id?.[0] || data?.message || 'Failed to create project.';
+          setSaveError(message);
+          setSavingProject(false);
+          return;
         }
-      } catch { /* fallback: already in state */ }
+
+        const saved = await res.json();
+        setProjects((prev) => [saved, ...prev]);
+        setModalMode(null);
+      } catch {
+        setSaveError('Failed to create project. Please try again.');
+      }
     } else if (modalMode === 'edit' && selectedProject) {
       try {
         const res = await fetch(`/api/projects/${selectedProject.id}`, {
@@ -125,15 +163,25 @@ export function ProjectsPage() {
             end_date: form.endDate,
             budget: Number(form.budget) || 0,
             team_ids: form.teamIds,
+            leader_id: form.leaderId || null,
           }),
         });
-        if (res.ok) {
-          const updated = await res.json();
-          setProjects((prev) => prev.map((p) => p.id === selectedProject.id ? updated : p));
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const message = data?.errors?.leader_id?.[0] || data?.message || 'Failed to update project.';
+          setSaveError(message);
+          setSavingProject(false);
+          return;
         }
-      } catch { /* fallback */ }
+
+        const updated = await res.json();
+        setProjects((prev) => prev.map((p) => p.id === selectedProject.id ? updated : p));
+        setModalMode(null);
+      } catch {
+        setSaveError('Failed to update project. Please try again.');
+      }
     }
-    setModalMode(null);
+    setSavingProject(false);
   };
   const handleDelete = async (id: string) => {
     try {
@@ -233,15 +281,38 @@ export function ProjectsPage() {
     setApprovalProject(null);
     setApprovalAction('');
   };
-  const handleArchive = (id: string) => {    setProjects((prev) =>
-    prev.map((p) =>
-    p.id === id ?
-    {
-      ...p,
-      status: 'archived'
-    } :
-    p
-    )
+  const handleArchive = async (id: string) => {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({ status: 'archived' }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProjects((prev) => prev.map((p) => p.id === id ? updated : p));
+        return;
+      }
+    } catch {
+      // Fallback to local status update below.
+    }
+
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              status: 'archived',
+            }
+          : p
+      )
     );
   };
   const formatCurrency = (n: number) =>
@@ -354,13 +425,6 @@ export function ProjectsPage() {
 
                     <EyeIcon size={13} />
                   </button>
-                  <button
-                    onClick={() => setFormsProject(project)}
-                    className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 transition-colors"
-                    title="Forms">
-
-                    <ClipboardListIcon size={13} />
-                  </button>
                   {isAdmin && (
                     <>
                       <button
@@ -370,6 +434,15 @@ export function ProjectsPage() {
 
                         <EditIcon size={13} />
                       </button>
+                      {project.status !== 'archived' && (
+                        <button
+                          onClick={() => handleArchive(project.id)}
+                          className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-amber-500/10 dark:hover:text-amber-400 text-light-muted hover:bg-amber-50 hover:text-amber-600 transition-colors"
+                          title="Archive"
+                        >
+                          <ArchiveIcon size={13} />
+                        </button>
+                      )}
                       <button
                         onClick={() => setDeleteConfirm(project.id)}
                         className="p-1.5 rounded dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors"
@@ -439,16 +512,16 @@ export function ProjectsPage() {
               <div className="flex items-center justify-between pt-1 dark:border-dark-border border-t border-light-border">
                 <div className="flex -space-x-1.5">
                   {team.slice(0, 3).map((u) =>
-                  <div
+                  <UserAvatar
                     key={u.id}
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-black border-2 dark:border-dark-card border-white"
-                    style={{
-                      backgroundColor: '#63D44A'
-                    }}
-                    title={u.name}>
-
-                      {u.avatar}
-                    </div>
+                    name={u.name}
+                    avatarText={u.avatar}
+                    profilePhoto={u.profilePhoto}
+                    className="w-6 h-6 border-2 dark:border-dark-card border-white"
+                    textClassName="text-xs font-bold text-black"
+                    fallbackStyle={{ backgroundColor: '#63D44A' }}
+                    title={u.name}
+                  />
                   )}
                   {team.length > 3 &&
                   <div className="w-6 h-6 rounded-full dark:bg-dark-border bg-light-card2 flex items-center justify-center text-xs dark:text-dark-muted text-light-muted border-2 dark:border-dark-card border-white">
@@ -517,21 +590,26 @@ export function ProjectsPage() {
       {/* Edit Modal */}
       <Modal
         isOpen={modalMode === 'edit'}
-        onClose={() => setModalMode(null)}
+        onClose={() => { if (!savingProject) { setModalMode(null); setSaveError(''); } }}
         title="Edit Project"
         size="md"
         footer={
         <>
-            <Button variant="secondary" onClick={() => setModalMode(null)}>
+            <Button variant="secondary" onClick={() => { if (!savingProject) { setModalMode(null); setSaveError(''); } }} disabled={savingProject}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleSave}>
+            <Button variant="primary" onClick={handleSave} loading={savingProject}>
               Save Changes
             </Button>
           </>
         }>
 
         <div className="space-y-4">
+          {saveError && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+              {saveError}
+            </div>
+          )}
           <Input
             label="Project Name"
             placeholder="e.g. GIS Platform Upgrade"
@@ -660,22 +738,29 @@ export function ProjectsPage() {
                     type="checkbox"
                     checked={form.teamIds.includes(u.id)}
                     onChange={(e) => {
-                      setForm((prev) => ({
-                        ...prev,
-                        teamIds: e.target.checked
+                      setForm((prev) => {
+                        const nextTeamIds = e.target.checked
                           ? [...prev.teamIds, u.id]
-                          : prev.teamIds.filter((id) => id !== u.id),
-                      }));
+                          : prev.teamIds.filter((id) => id !== u.id);
+
+                        return {
+                          ...prev,
+                          teamIds: nextTeamIds,
+                          leaderId: nextTeamIds.includes(prev.leaderId) ? prev.leaderId : '',
+                        };
+                      });
                     }}
                     className="rounded border-gray-400 text-green-primary focus:ring-green-primary"
                   />
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-black flex-shrink-0"
-                      style={{ backgroundColor: '#63D44A' }}
-                    >
-                      {u.avatar}
-                    </div>
+                    <UserAvatar
+                      name={u.name}
+                      avatarText={u.avatar}
+                      profilePhoto={u.profilePhoto}
+                      className="w-6 h-6"
+                      textClassName="text-xs font-bold text-black"
+                      fallbackStyle={{ backgroundColor: '#63D44A' }}
+                    />
                     <div className="min-w-0">
                       <p className="text-sm dark:text-dark-text text-light-text truncate">{u.name}</p>
                       <p className="text-xs dark:text-dark-subtle text-light-subtle truncate">{u.position}</p>
@@ -688,6 +773,25 @@ export function ProjectsPage() {
               <p className="text-xs dark:text-dark-muted text-light-muted mt-1">
                 {form.teamIds.length} member{form.teamIds.length !== 1 ? 's' : ''} selected
               </p>
+            )}
+
+            {form.teamIds.length >= 2 && (
+              <div className="mt-3">
+                <Select
+                  label="Project Leader *"
+                  value={form.leaderId}
+                  onChange={(e) => setForm((prev) => ({ ...prev, leaderId: e.target.value }))}
+                  options={[
+                    { value: '', label: 'Select leader from assigned team' },
+                    ...users
+                      .filter((u) => form.teamIds.includes(u.id))
+                      .map((u) => ({ value: u.id, label: u.name })),
+                  ]}
+                />
+                <p className="text-xs dark:text-dark-muted text-light-muted mt-1">
+                  For multi-member projects, only the selected leader can update project progress.
+                </p>
+              </div>
             )}
           </div>
 
@@ -992,19 +1096,10 @@ export function ProjectsPage() {
       {approvalProject && approvalAction && (
         <ApprovalActionModal
           isOpen={!!approvalProject}
-          onClose={() => { setApprovalProject(null); setApprovalAction(''); }}
+          onClose={() => { setApprovalProject(null); setApprovalAction(''); refreshProjects(); }}
           project={approvalProject}
           action={approvalAction}
           onConfirm={handleApprovalConfirm}
-        />
-      )}
-
-      {/* Project Forms Panel */}
-      {formsProject && (
-        <ProjectFormsPanel
-          isOpen={!!formsProject}
-          onClose={() => setFormsProject(null)}
-          project={formsProject}
         />
       )}
     </div>);

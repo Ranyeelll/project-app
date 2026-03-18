@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { SearchIcon, AlertCircleIcon, ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react';
+import {
+  SearchIcon,
+  AlertCircleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  XIcon,
+  DownloadIcon,
+  FileTextIcon,
+  TableIcon,
+  RefreshCwIcon,
+} from 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { Badge } from '../../components/ui/Badge';
 
@@ -38,6 +48,7 @@ const ACTION_LABELS: Record<string, string> = {
   'project_form.submitted': 'SUBMIT',
   'project_form.reviewed': 'REVIEW',
   'budget.approved': 'APPROVE',
+  'audit_log.report_exported': 'EXPORT',
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -50,6 +61,7 @@ const ACTION_COLORS: Record<string, string> = {
   'RESOLVE': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
   'SUBMIT': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
   'REVIEW': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  'EXPORT': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
 };
 
 const RESOURCE_LABELS: Record<string, string> = {
@@ -74,6 +86,10 @@ export function AuditLogPage() {
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'sheet'>('pdf');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const pageSize = 15;
 
   const fetchLogs = async () => {
@@ -170,6 +186,80 @@ export function AuditLogPage() {
   const totalPages = Math.ceil(filteredLogs.length / pageSize);
   const paginatedLogs = filteredLogs.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
 
+  const buildExportUrl = (period: 'weekly' | 'monthly' | 'yearly', format: 'pdf' | 'sheet') => {
+    const params = new URLSearchParams();
+    params.append('period', period);
+    if (search) params.append('search', search);
+    if (filterAction) params.append('action', filterAction);
+    if (filterResourceType) params.append('resourceType', filterResourceType);
+    if (selectedProject && selectedProject !== 'global') params.append('projectId', selectedProject);
+
+    const base = format === 'pdf' ? '/api/audit-logs/export-pdf' : '/api/audit-logs/export-sheet';
+    return `${base}?${params.toString()}`;
+  };
+
+  const handleExportPdf = async (period: 'weekly' | 'monthly' | 'yearly') => {
+    setExporting(true);
+    setShowExportMenu(false);
+    setExportError(null);
+    const url = buildExportUrl(period, 'pdf');
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: 'application/pdf' },
+        credentials: 'include',
+      });
+
+      if (res.ok && res.headers.get('content-type')?.includes('pdf')) {
+        const blob = await res.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `audit-logs-${period}-${new Date().toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(objectUrl);
+      } else {
+        setExportError(`Export failed (${res.status}). Opening in new tab…`);
+        window.open(url, '_blank');
+      }
+    } catch {
+      setExportError('Export failed. Opening in new tab…');
+      window.open(url, '_blank');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportSheet = async (period: 'weekly' | 'monthly' | 'yearly') => {
+    setExporting(true);
+    setShowExportMenu(false);
+    setExportError(null);
+    const url = buildExportUrl(period, 'sheet');
+    try {
+      const res = await fetch(url, { credentials: 'include' });
+      if (res.ok) {
+        const blob = await res.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `audit-logs-${period}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(objectUrl);
+      } else {
+        setExportError(`Export failed (${res.status}). Opening in new tab…`);
+        window.open(url, '_blank');
+      }
+    } catch {
+      setExportError('Export failed. Opening in new tab…');
+      window.open(url, '_blank');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -206,10 +296,78 @@ export function AuditLogPage() {
 
       {/* Filters */}
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg p-4 space-y-3">
-        <div className="flex items-center gap-2 mb-3">
-          <SearchIcon size={16} className="dark:text-dark-muted text-light-muted" />
-          <span className="text-sm font-medium dark:text-dark-text text-light-text">Filters</span>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <SearchIcon size={16} className="dark:text-dark-muted text-light-muted" />
+            <span className="text-sm font-medium dark:text-dark-text text-light-text">Filters</span>
+          </div>
+
+          <div className="relative">
+            {exportError && (
+              <p className="absolute -top-5 right-0 text-[10px] text-red-400 whitespace-nowrap">{exportError}</p>
+            )}
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-green-primary text-black font-medium hover:bg-green-primary/90 transition-colors disabled:opacity-50"
+            >
+              {exporting ? <RefreshCwIcon size={12} className="animate-spin" /> : <DownloadIcon size={12} />}
+              Export Logs
+            </button>
+
+            {showExportMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 w-52 dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg shadow-lg overflow-hidden">
+                  <div className="px-3 pt-2.5 pb-2 border-b dark:border-dark-border border-light-border">
+                    <p className="text-[10px] font-semibold dark:text-dark-muted text-light-muted mb-1.5 uppercase tracking-wide">Format</p>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setExportFormat('pdf')}
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                          exportFormat === 'pdf'
+                            ? 'bg-green-primary text-black'
+                            : 'dark:bg-dark-card2 dark:text-dark-muted bg-gray-100 text-light-muted hover:bg-gray-200 dark:hover:bg-dark-border'
+                        }`}
+                      >
+                        <FileTextIcon size={11} /> PDF
+                      </button>
+                      <button
+                        onClick={() => setExportFormat('sheet')}
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                          exportFormat === 'sheet'
+                            ? 'bg-green-primary text-black'
+                            : 'dark:bg-dark-card2 dark:text-dark-muted bg-gray-100 text-light-muted hover:bg-gray-200 dark:hover:bg-dark-border'
+                        }`}
+                      >
+                        <TableIcon size={11} /> XLS
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="px-3 py-2 text-xs font-semibold dark:text-dark-muted text-light-muted border-b dark:border-dark-border border-light-border">
+                    Select Report Period
+                  </div>
+                  {([
+                    { value: 'weekly' as const, label: 'Weekly Report', desc: 'Current week' },
+                    { value: 'monthly' as const, label: 'Monthly Report', desc: 'Current month' },
+                    { value: 'yearly' as const, label: 'Yearly Report', desc: 'Current year' },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => exportFormat === 'pdf' ? handleExportPdf(opt.value) : handleExportSheet(opt.value)}
+                      className="w-full text-left px-3 py-2.5 text-xs dark:text-dark-text text-light-text dark:hover:bg-dark-card2 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="font-medium">{opt.label}</div>
+                      <div className="dark:text-dark-subtle text-light-subtle text-[10px]">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
+
         <div className="grid grid-cols-4 gap-3">
           {/* Search */}
           <div className="relative">

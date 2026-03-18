@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\Project;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class ProjectSerialService
 {
@@ -12,7 +14,8 @@ class ProjectSerialService
     ) {}
 
     /**
-     * Generate a unique project serial in the format MAP-YYYY-000000.
+     * Generate a unique project serial in the format MAP-YYYY-XXXXXXXXXX.
+     * XXXXXXXXXX is a random 10-digit number.
      * Uses advisory lock to ensure uniqueness under concurrent creation.
      */
     public function generate(?int $year = null): string
@@ -21,18 +24,28 @@ class ProjectSerialService
         $prefix = "MAP-{$year}-";
 
         return DB::transaction(function () use ($prefix) {
-            DB::statement("SELECT pg_advisory_xact_lock(hashtext('project_serial'))");
+            $driver = DB::getDriverName();
 
-            $latestSerial = DB::table('projects')
-                ->where('serial', 'like', $prefix . '%')
-                ->orderByDesc('serial')
-                ->value('serial');
+            if ($driver === 'pgsql') {
+                DB::statement("SELECT pg_advisory_xact_lock(hashtext('project_serial'))");
+            }
 
-            $nextSequence = $latestSerial
-                ? (int) substr($latestSerial, -6) + 1
-                : 1;
+            // lockForUpdate is supported by mysql/pgsql/sqlserver and helps avoid races.
+            $baseQuery = DB::table('projects');
+            if (in_array($driver, ['mysql', 'pgsql', 'sqlsrv'], true)) {
+                $baseQuery->lockForUpdate();
+            }
 
-            return $prefix . str_pad($nextSequence, 6, '0', STR_PAD_LEFT);
+            for ($attempt = 0; $attempt < 20; $attempt++) {
+                $candidate = $prefix . str_pad((string) random_int(0, 9999999999), 10, '0', STR_PAD_LEFT);
+                $exists = (clone $baseQuery)->where('serial', $candidate)->exists();
+
+                if (!$exists) {
+                    return $candidate;
+                }
+            }
+
+            throw new RuntimeException('Unable to generate unique project serial.');
         });
     }
 
@@ -45,12 +58,31 @@ class ProjectSerialService
             return $project->serial;
         }
 
-        $serial = $this->generate($year);
-        $project->serial = $serial;
-        $project->save();
+        $lastError = null;
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $serial = $this->generate($year);
+            $project->serial = $serial;
 
-        $this->audit->serialAssigned($project, $serial, $userId);
+            try {
+                $project->save();
+                $this->audit->serialAssigned($project, $serial, $userId);
+                return $serial;
+            } catch (QueryException $e) {
+                $message = strtolower((string) $e->getMessage());
+                $isDuplicate = str_contains($message, 'duplicate')
+                    || str_contains($message, 'unique')
+                    || str_contains($message, '1062')
+                    || str_contains($message, '23505');
 
-        return $serial;
+                if (!$isDuplicate) {
+                    throw $e;
+                }
+
+                $lastError = $e;
+                $project->serial = null;
+            }
+        }
+
+        throw new RuntimeException('Unable to assign unique project serial.', 0, $lastError);
     }
 }

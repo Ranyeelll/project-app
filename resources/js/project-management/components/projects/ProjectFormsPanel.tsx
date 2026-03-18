@@ -29,7 +29,7 @@ const FORM_TABS: { key: ProjectFormType; label: string }[] = [
 
 export function ProjectFormsPanel({ project, isOpen, onClose }: ProjectFormsPanelProps) {
   const { currentUser } = useAuth();
-  const { users, formSubmissions, refreshFormSubmissions, refreshProjects } = useData();
+  const { users, formSubmissions, refreshFormSubmissions, refreshProjects, refreshAll } = useData();
   const [activeTab, setActiveTab] = useState<ProjectFormType>('project_details');
   const [loading, setLoading] = useState(false);
 
@@ -64,7 +64,8 @@ export function ProjectFormsPanel({ project, isOpen, onClose }: ProjectFormsPane
         throw new Error(errorMsg);
       }
       loadSubmissions();
-      refreshProjects();
+      // Refresh all data to sync across all clients including admin dashboard
+      refreshAll();
     } finally {
       setLoading(false);
     }

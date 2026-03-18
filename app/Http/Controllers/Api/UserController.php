@@ -14,6 +14,35 @@ use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
+    private function profilePhotoUrl(User $user): ?string
+    {
+        return $user->profile_photo ? '/api/users/' . $user->id . '/photo' : null;
+    }
+
+    private function resolveStoredPhotoPath(?string $rawPath): ?string
+    {
+        if (!$rawPath) {
+            return null;
+        }
+
+        $path = $rawPath;
+
+        // Convert full URLs and /storage URLs to disk-relative paths.
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            $parsed = parse_url($path, PHP_URL_PATH);
+            if (is_string($parsed) && $parsed !== '') {
+                $path = $parsed;
+            }
+        }
+
+        $path = ltrim($path, '/');
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        return $path !== '' ? $path : null;
+    }
+
     /**
      * List all users.
      */
@@ -34,7 +63,7 @@ class UserController extends Controller
             'position'     => $u->position ?? '',
             'status'       => $u->status ?? 'active',
             'joinDate'     => $u->created_at?->toDateString() ?? '',
-            'profilePhoto' => $u->profile_photo ? '/api/users/' . $u->id . '/photo' : null,
+            'profilePhoto' => $this->profilePhotoUrl($u),
         ];
     }
 
@@ -127,7 +156,10 @@ class UserController extends Controller
 
         // Delete old photo if it exists
         if ($user->profile_photo) {
-            Storage::disk('public')->delete($user->profile_photo);
+            $oldPath = $this->resolveStoredPhotoPath($user->profile_photo);
+            if ($oldPath) {
+                Storage::disk('public')->delete($oldPath);
+            }
         }
 
         $path = $request->file('photo')->store('profile-photos', 'public');
@@ -177,10 +209,12 @@ class UserController extends Controller
      */
     public function servePhoto(User $user)
     {
-        if (!$user->profile_photo || !Storage::disk('public')->exists($user->profile_photo)) {
+        $path = $this->resolveStoredPhotoPath($user->profile_photo);
+
+        if (!$path || !Storage::disk('public')->exists($path)) {
             abort(404);
         }
 
-        return Storage::disk('public')->response($user->profile_photo);
+        return Storage::disk('public')->response($path);
     }
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { ChatBubble } from '../chat/ChatBubble.tsx';
 interface AppLayoutProps {
   children: React.ReactNode;
 }
@@ -21,6 +22,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         <Header onMenuToggle={() => setSidebarOpen((o) => !o)} />
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-6">{children}</main>
       </div>
+
+      {/* Global floating chat launcher */}
+      <ChatBubble />
     </div>);
 
 }

@@ -68,6 +68,18 @@ export function GanttItemForm({
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { setError('Name is required.'); return; }
+    if (!form.startDate) {
+      setError(isMilestone ? 'Date is required for milestone.' : 'Start date is required.');
+      return;
+    }
+    if (!isMilestone && !form.endDate) {
+      setError('End date is required.');
+      return;
+    }
+    if (!isMilestone && form.endDate < form.startDate) {
+      setError('End date must be the same as or after start date.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {

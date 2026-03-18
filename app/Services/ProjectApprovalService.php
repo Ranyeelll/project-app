@@ -41,7 +41,12 @@ class ProjectApprovalService
     private function submitForReview(Project $project, User $actor, string $current): Project
     {
         $this->requireStatus($current, ['draft'], 'submit_for_review');
-        $this->requireDepartment($actor, [Department::Admin], 'submit_for_review');
+        $this->requireDepartment($actor, [Department::Admin, Department::Employee], 'submit_for_review');
+
+        if ($actor->department === Department::Employee) {
+            $this->requireProjectMember($project, $actor, 'submit_for_review');
+            $this->requireProjectCompletion($project, 'submit_for_review');
+        }
 
         $project->update([
             'approval_status'  => 'technical_review',
@@ -127,7 +132,12 @@ class ProjectApprovalService
     private function resubmit(Project $project, User $actor, string $current): Project
     {
         $this->requireStatus($current, ['revision_requested'], 'resubmit');
-        $this->requireDepartment($actor, [Department::Admin], 'resubmit');
+        $this->requireDepartment($actor, [Department::Admin, Department::Employee], 'resubmit');
+
+        if ($actor->department === Department::Employee) {
+            $this->requireProjectMember($project, $actor, 'resubmit');
+            $this->requireProjectCompletion($project, 'resubmit');
+        }
 
         $project->update([
             'approval_status' => 'technical_review',
@@ -175,6 +185,32 @@ class ProjectApprovalService
         if (!in_array($actor->department, $allowed)) {
             throw new InvalidArgumentException(
                 "Action '{$action}' is not allowed for department '{$actor->department->value}'.",
+            );
+        }
+    }
+
+    private function requireProjectMember(Project $project, User $actor, string $action): void
+    {
+        $teamIds = array_map(static fn ($id) => (string) $id, $project->team_ids ?? []);
+        $actorId = (string) $actor->id;
+        $isManager = (string) ($project->manager_id ?? '') === $actorId;
+        $isTeamMember = in_array($actorId, $teamIds, true);
+
+        if (!$isManager && !$isTeamMember) {
+            throw new InvalidArgumentException(
+                "Action '{$action}' is only allowed for users assigned to this project.",
+            );
+        }
+    }
+
+    private function requireProjectCompletion(Project $project, string $action): void
+    {
+        $avgProgress = (float) (Task::where('project_id', $project->id)->avg('progress') ?? 0);
+        $hasTasks = Task::where('project_id', $project->id)->exists();
+
+        if (!$hasTasks || $avgProgress < 100) {
+            throw new InvalidArgumentException(
+                "Action '{$action}' requires project progress to be 100%.",
             );
         }
     }

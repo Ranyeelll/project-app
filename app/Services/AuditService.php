@@ -368,6 +368,22 @@ class AuditService
         );
     }
 
+    /**
+     * Log: Audit log report exported.
+     */
+    public function auditLogReportExported(string $format, string $period): AuditLog
+    {
+        return self::log(
+            action: 'audit_log.report_exported',
+            resourceType: 'audit_log_report',
+            resourceId: 0,
+            context: [
+                'format' => $format,
+                'period' => $period,
+            ]
+        );
+    }
+
     // ─── Task Enhancement Logging ─────────────────────────────────────
 
     /**

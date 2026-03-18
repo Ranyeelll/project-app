@@ -20,6 +20,15 @@ use Illuminate\Validation\ValidationException;
 
 class MessageController extends Controller
 {
+    private function profilePhotoUrl(?User $user): ?string
+    {
+        if (!$user || !$user->profile_photo) {
+            return null;
+        }
+
+        return '/api/users/' . $user->id . '/photo';
+    }
+
     /**
      * GET /api/projects/{project}/messages
      * Returns all messages for a project (flat array, newest last).
@@ -292,7 +301,7 @@ class MessageController extends Controller
             'sender'           => $msg->sender ? [
                 'id'            => $msg->sender->id,
                 'name'          => $msg->sender->name,
-                'profile_photo' => $msg->sender->profile_photo,
+                'profile_photo' => $this->profilePhotoUrl($msg->sender),
             ] : null,
             'reply_to'         => $msg->replyTo ? [
                 'id'           => $msg->replyTo->id,

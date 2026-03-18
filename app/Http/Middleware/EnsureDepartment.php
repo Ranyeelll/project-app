@@ -32,18 +32,23 @@ class EnsureDepartment
             ], 401);
         }
 
-        // Admin always has access
-        if ($user->department === Department::Admin) {
+        $userRole = strtolower((string) ($user->role ?? ''));
+        $userDepartment = $user->department instanceof Department
+            ? $user->department->value
+            : (string) ($user->department ?? '');
+
+        // Admin always has access (role or department)
+        if ($userRole === 'admin' || strcasecmp($userDepartment, Department::Admin->value) === 0) {
             return $next($request);
         }
 
         // Check if user's department is in allowed list
-        $allowedDepts = array_map(
-            fn($d) => Department::tryFrom($d),
-            $departments
-        );
+        $allowedDeptValues = array_values(array_filter(array_map(function ($d) {
+            $enum = Department::tryFrom($d);
+            return $enum?->value;
+        }, $departments)));
 
-        if (!in_array($user->department, $allowedDepts, true)) {
+        if (!in_array($userDepartment, $allowedDeptValues, true)) {
             return response()->json([
                 'error' => 'Forbidden',
                 'message' => 'You do not have permission to access this resource.',

@@ -18,6 +18,7 @@ import { Button } from '../../components/ui/Button';
 import { Input, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge } from '../../components/ui/Badge';
+import { UserAvatar } from '../../components/ui/UserAvatar';
 export function TeamManagementPage() {
   const { users, setUsers } = useData();
   const [search, setSearch] = useState('');
@@ -292,15 +293,14 @@ export function TeamManagementPage() {
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-black flex-shrink-0"
-                      style={{
-                        backgroundColor:
-                        DEPT_COLORS[user.department] || '#63D44A'
-                      }}>
-
-                        {user.avatar}
-                      </div>
+                      <UserAvatar
+                        name={user.name}
+                        avatarText={user.avatar}
+                        profilePhoto={user.profilePhoto}
+                        className="w-8 h-8"
+                        textClassName="text-xs font-bold text-black"
+                        fallbackStyle={{ backgroundColor: DEPT_COLORS[user.department] || '#63D44A' }}
+                      />
                       <div>
                         <p className="text-sm font-medium dark:text-dark-text text-light-text">
                           {user.name}

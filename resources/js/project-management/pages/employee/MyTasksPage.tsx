@@ -22,7 +22,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 export function MyTasksPage() {
-  const { tasks, setTasks, projects, users, media, refreshMedia, refreshProjects } = useData();
+  const { tasks, setTasks, projects, users, media, refreshMedia, refreshProjects, refreshTasks, refreshAll } = useData();
   const { currentUser } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -41,10 +41,19 @@ export function MyTasksPage() {
   const [reportFile, setReportFile] = useState<File | null>(null);
   const [submittingReport, setSubmittingReport] = useState(false);
   const [teamModal, setTeamModal] = useState<string | null>(null); // project id
+  const [submittingProjectId, setSubmittingProjectId] = useState<string | null>(null);
+  const [notifyFeedback, setNotifyFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const myProjects = projects.filter((p) => p.teamIds?.includes(currentUser?.id || ''));
   const myProjectIds = myProjects.map((p) => p.id);
-  // Show only tasks assigned to the current user
-  const myTasks = tasks.filter((t) => t.assignedTo === currentUser?.id);
+
+  const isLeaderForProject = (projectId: string) => {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project || !currentUser?.id) return false;
+    return (project.teamIds?.length || 0) >= 2 && project.leaderId === currentUser.id;
+  };
+
+  // Leaders in multi-member projects can manage progress for all project tasks.
+  const myTasks = tasks.filter((t) => t.assignedTo === currentUser?.id || isLeaderForProject(t.projectId));
   const filtered = myTasks.filter((t) => {
     const matchSearch = t.title.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || t.status === statusFilter;
@@ -57,15 +66,21 @@ export function MyTasksPage() {
   };
   const handleProgressSave = async () => {
     if (!progressModal) return;
-    const newStatus = newProgress === 100 ? 'completed' : newProgress > 0 ? 'in-progress' : progressModal.status;
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      await fetch(`/api/tasks/${progressModal.id}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/tasks/${progressModal.id}/progress`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-        body: JSON.stringify({ progress: newProgress, status: newStatus }),
+        body: JSON.stringify({ percentage_completed: newProgress }),
       });
+      
+      if (response.ok) {
+        // Immediately refresh all data to sync across all clients
+        refreshAll();
+      }
     } catch { /* continue with local update */ }
+    
+    const newStatus = newProgress === 100 ? 'completed' : newProgress > 0 ? 'in-progress' : progressModal.status;
     setTasks((prev) =>
     prev.map((t) =>
     t.id === progressModal.id ?
@@ -77,8 +92,10 @@ export function MyTasksPage() {
     t
     )
     );
+    
     setProgressModal(null);
   };
+
   const handleReportSubmit = async () => {
     if (!reportModal) return;
     setSubmittingReport(true);
@@ -142,6 +159,46 @@ export function MyTasksPage() {
       setReportFile(null);
     }
   };
+
+  const handleNotifyAdmin = async (projectId: string, action: 'submit_for_review' | 'resubmit') => {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    setNotifyFeedback(null);
+    setSubmittingProjectId(projectId);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/approval`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({ action, notes: 'Submitted by employee after project completion.' }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || 'Failed to notify admin.');
+      }
+
+      await refreshProjects();
+      setNotifyFeedback({
+        type: 'success',
+        text: action === 'resubmit'
+          ? 'Project resubmitted successfully. Admin review has been requested.'
+          : 'Project submitted successfully. Admin review has been requested.',
+      });
+    } catch (e: any) {
+      setNotifyFeedback({ type: 'error', text: e?.message || 'Failed to notify admin.' });
+    } finally {
+      setSubmittingProjectId(null);
+    }
+  };
+
+  const completionReadyProjects = myProjects.filter((project) => {
+    const approvalStatus = project.approvalStatus || 'draft';
+    return project.progress >= 100 && (approvalStatus === 'draft' || approvalStatus === 'revision_requested');
+  });
+
   return (
     <div className="space-y-5">
       {/* My Projects Summary */}
@@ -183,6 +240,55 @@ export function MyTasksPage() {
               </button>
             );
           })}
+        </div>
+      )}
+
+      {completionReadyProjects.length > 0 && (
+        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <p className="text-sm font-semibold dark:text-dark-text text-light-text">
+              Ready to notify admin
+            </p>
+            <Badge variant="info">{completionReadyProjects.length} ready</Badge>
+          </div>
+          {notifyFeedback && (
+            <div
+              className={`mb-3 rounded-lg border px-3 py-2 text-xs ${
+                notifyFeedback.type === 'success'
+                  ? 'border-green-500/30 bg-green-500/10 text-green-primary'
+                  : 'border-red-500/30 bg-red-500/10 text-red-400'
+              }`}
+            >
+              {notifyFeedback.text}
+            </div>
+          )}
+          <div className="space-y-2">
+            {completionReadyProjects.map((project) => {
+              const approvalStatus = project.approvalStatus || 'draft';
+              const action = approvalStatus === 'revision_requested' ? 'resubmit' : 'submit_for_review';
+              const label = action === 'resubmit' ? 'Resubmit to Admin' : 'Notify Admin';
+
+              return (
+                <div
+                  key={project.id}
+                  className="flex items-center justify-between gap-3 dark:bg-dark-card2 bg-light-card2 rounded-lg px-3 py-2"
+                >
+                  <div>
+                    <p className="text-sm dark:text-dark-text text-light-text">{project.name}</p>
+                    <p className="text-xs dark:text-dark-subtle text-light-subtle">Project progress is 100%</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    loading={submittingProjectId === project.id}
+                    onClick={() => handleNotifyAdmin(project.id, action)}
+                  >
+                    {label}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -386,14 +492,32 @@ export function MyTasksPage() {
                     </span>
                   }
                 </span>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<ClockIcon size={12} />}
-                  onClick={() => openProgress(task)}>
 
-                  Update Progress
-                </Button>
+                {(() => {
+                  const teamSize = project?.teamIds?.length || 0;
+                  const hasLeaderRule = teamSize >= 2 && !!project?.leaderId;
+                  const canUpdateProgress = !hasLeaderRule || project?.leaderId === currentUser?.id;
+
+                  return (
+                    <>
+                      {hasLeaderRule && !canUpdateProgress && (
+                        <span className="text-[10px] dark:text-dark-subtle text-light-subtle">
+                          Only the project leader can update progress.
+                        </span>
+                      )}
+
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={<ClockIcon size={12} />}
+                        onClick={() => openProgress(task)}
+                        disabled={!canUpdateProgress}
+                      >
+                        Update Progress
+                      </Button>
+                    </>
+                  );
+                })()}
                 <Button
                   variant="outline"
                   size="sm"

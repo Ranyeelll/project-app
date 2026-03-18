@@ -12,22 +12,45 @@ import { Modal } from '../../components/ui/Modal';
 import { Badge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 export function ArchivePage() {
-  const { projects, setProjects, tasks } = useData();
+  const { projects, setProjects, tasks, refreshProjects } = useData();
   const [search, setSearch] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const archived = projects.
   filter((p) => p.status === 'archived' || p.status === 'completed').
   filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
-  const handleRestore = (id: string) => {
+  const handleRestore = async (id: string) => {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({ status: 'active' }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProjects((prev) => prev.map((p) => p.id === id ? updated : p));
+        refreshProjects();
+        return;
+      }
+    } catch {
+      // Fallback to local update below when request fails.
+    }
+
     setProjects((prev) =>
-    prev.map((p) =>
-    p.id === id ?
-    {
-      ...p,
-      status: 'active'
-    } :
-    p
-    )
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              status: 'active',
+            }
+          : p
+      )
     );
   };
   const handleDelete = (id: string) => {

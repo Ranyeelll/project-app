@@ -14,34 +14,101 @@ import {
 import { useData, useAuth } from '../../context/AppContext';
 import { GanttItem, GanttDependency, User } from '../../data/mockData';
 import { GanttItemForm } from '../../components/gantt/GanttItemForm';
+import { UserAvatar } from '../../components/ui/UserAvatar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ZoomLevel = 'week' | 'month' | 'quarter';
 interface Column { label: string; subLabel?: string; startDate: Date; endDate: Date; }
+interface VisualDependency { id: string; predecessorId: string; successorId: string; auto?: boolean; }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const ROW_HEIGHT = 42;
-const BAR_H = 20;
-const TREE_W = 520;
+const ROW_HEIGHT = 38;
+const BAR_H = 16;
+const TREE_W = 720;
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-const TYPE_COLOR: Record<string, string> = {
-  phase:     '#1FAF8E',
-  step:      '#8b5cf6',
-  subtask:   '#3BC25B',
-  milestone: '#f59e0b',
-};
+const GANTT_STATUS_COLOR = {
+  done: '#63D44A',
+  working: '#f59e0b',
+  stuck: '#ef4444',
+  milestone: '#1FAF8E',
+} as const;
+
+function getItemColor(item: GanttItem): string {
+  if (item.type === 'milestone') return GANTT_STATUS_COLOR.milestone;
+  if (item.progress >= 100) return GANTT_STATUS_COLOR.done;
+  if (item.progress <= 0) return GANTT_STATUS_COLOR.stuck;
+  return GANTT_STATUS_COLOR.working;
+}
+
+type ItemState = 'planned' | 'in process' | 'completed';
+
+function progressToState(progress: number): ItemState {
+  if (progress >= 100) return 'completed';
+  if (progress <= 0) return 'planned';
+  return 'in process';
+}
+
+function stateToProgress(state: ItemState): number {
+  if (state === 'planned') return 0;
+  if (state === 'completed') return 100;
+  return 50;
+}
+
+function getStateMetaFromState(state: ItemState): { label: ItemState; dot: string } {
+  if (state === 'planned') return { label: 'planned', dot: GANTT_STATUS_COLOR.stuck };
+  if (state === 'completed') return { label: 'completed', dot: GANTT_STATUS_COLOR.done };
+  return { label: 'in process', dot: GANTT_STATUS_COLOR.working };
+}
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
-function daysBetween(a: Date, b: Date) { return Math.round((b.getTime() - a.getTime()) / 86400000); }
-function parseDate(s: string): Date { return new Date(s + 'T00:00:00'); }
+function daysBetween(a: Date, b: Date) { return Math.floor((b.getTime() - a.getTime()) / 86400000); }
+function parseDate(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+function toYmd(d: Date): string { return d.toISOString().slice(0, 10); }
+function addDays(s: string, days: number): string {
+  const d = parseDate(s);
+  d.setDate(d.getDate() + days);
+  return toYmd(d);
+}
+function durationByType(type: GanttItem['type']): number {
+  if (type === 'phase') return 10;
+  if (type === 'step') return 7;
+  if (type === 'subtask') return 4;
+  return 1;
+}
+function dependencyPath(from: { y: number; rightX: number }, to: { y: number; leftX: number }): string {
+  const x1 = from.rightX + 3;
+  const y1 = from.y;
+  const x2 = to.leftX - 3;
+  const y2 = to.y;
+
+  const lead = 10;
+  if (x2 >= x1 + lead) {
+    const pivotX = x1 + lead;
+    return `M ${x1} ${y1} H ${pivotX} V ${y2} H ${x2}`;
+  }
+
+  const detourX = Math.max(x1 + 22, x2 + 22);
+  return `M ${x1} ${y1} H ${detourX} V ${y2} H ${x2}`;
+}
 function dateShort(s: string) {
   const d = parseDate(s);
-  return `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}`;
+  return `${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+function dateLong(s: string) {
+  const d = parseDate(s);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
 }
 function getWeekNumber(d: Date) {
   const onejan = new Date(d.getFullYear(), 0, 1);
   return Math.ceil(((d.getTime() - onejan.getTime()) / 86400000 + onejan.getDay() + 1) / 7);
+}
+function dayLabel(d: Date): string {
+  const labels = ['S', 'M', 'T', 'W', 'Th', 'F', 'S'];
+  return labels[d.getUTCDay()];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,6 +126,8 @@ export function GanttPage() {
   const [editItem, setEditItem] = useState<GanttItem | null>(null);
   const [addParent, setAddParent] = useState<GanttItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const [stateOverrides, setStateOverrides] = useState<Record<string, ItemState>>({});
+  const [stateSavingIds, setStateSavingIds] = useState<Set<string>>(new Set());
 
   const treeScrollRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
@@ -144,14 +213,15 @@ export function GanttPage() {
     if (project?.endDate) dates.push(parseDate(project.endDate));
     if (dates.length === 0) {
       const now = new Date();
-      const end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
-      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end, totalDays: 90 };
+      const start = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+      const end = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 3, 0));
+      return { start, end, totalDays: daysBetween(start, end) + 1 };
     }
     const min = new Date(Math.min(...dates.map(d => d.getTime())));
     const max = new Date(Math.max(...dates.map(d => d.getTime())));
-    const start = new Date(min.getFullYear(), min.getMonth(), 1);
-    const end = new Date(max.getFullYear(), max.getMonth() + 2, 0);
-    const totalDays = Math.max(daysBetween(start, end), 1);
+    const start = new Date(Date.UTC(min.getUTCFullYear(), min.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(max.getUTCFullYear(), max.getUTCMonth() + 2, 0));
+    const totalDays = Math.max(daysBetween(start, end) + 1, 1);
     return { start, end, totalDays };
   }, [projectItems, project]);
 
@@ -162,40 +232,63 @@ export function GanttPage() {
     if (zoom === 'week') {
       const cur = new Date(start);
       while (cur <= end) {
-        const ws = new Date(cur); const we = new Date(cur); we.setDate(we.getDate() + 6);
-        cols.push({ label: `W${getWeekNumber(ws)}`, subLabel: `${MONTHS_SHORT[ws.getMonth()]} ${ws.getDate()}`, startDate: new Date(ws), endDate: we > end ? new Date(end) : we });
-        cur.setDate(cur.getDate() + 7);
+        cols.push({
+          label: dayLabel(cur),
+          subLabel: String(cur.getUTCDate()),
+          startDate: new Date(cur),
+          endDate: new Date(cur),
+        });
+        cur.setUTCDate(cur.getUTCDate() + 1);
       }
     } else if (zoom === 'month') {
-      const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+      const cur = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
       while (cur <= end) {
-        const me = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
-        cols.push({ label: MONTHS_SHORT[cur.getMonth()], subLabel: String(cur.getFullYear()), startDate: new Date(cur), endDate: me > end ? new Date(end) : me });
-        cur.setMonth(cur.getMonth() + 1);
+        const me = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 0));
+        cols.push({ label: MONTHS_SHORT[cur.getUTCMonth()], subLabel: String(cur.getUTCFullYear()), startDate: new Date(cur), endDate: me > end ? new Date(end) : me });
+        cur.setUTCMonth(cur.getUTCMonth() + 1);
       }
     } else {
-      const cur = new Date(start.getFullYear(), Math.floor(start.getMonth() / 3) * 3, 1);
+      const cur = new Date(Date.UTC(start.getUTCFullYear(), Math.floor(start.getUTCMonth() / 3) * 3, 1));
       while (cur <= end) {
-        const qe = new Date(cur.getFullYear(), cur.getMonth() + 3, 0);
-        cols.push({ label: `Q${Math.floor(cur.getMonth() / 3) + 1}`, subLabel: String(cur.getFullYear()), startDate: new Date(cur), endDate: qe > end ? new Date(end) : qe });
-        cur.setMonth(cur.getMonth() + 3);
+        const qe = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 3, 0));
+        cols.push({ label: `Q${Math.floor(cur.getUTCMonth() / 3) + 1}`, subLabel: String(cur.getUTCFullYear()), startDate: new Date(cur), endDate: qe > end ? new Date(end) : qe });
+        cur.setUTCMonth(cur.getUTCMonth() + 3);
       }
     }
     return cols;
   }, [timelineRange, zoom]);
 
-  const COL_BASE = zoom === 'week' ? 80 : zoom === 'month' ? 100 : 140;
-  const COL_W = Math.round(COL_BASE * zoomScale);
-  const totalW = columns.length * COL_W;
+  const DAY_BASE = zoom === 'week' ? 34 : zoom === 'month' ? 10 : 6;
+  const DAY_W = Math.max(4, Math.round(DAY_BASE * zoomScale));
+  const colWidth = (col: Column) => (daysBetween(col.startDate, col.endDate) + 1) * DAY_W;
+  const totalW = columns.reduce((sum, col) => sum + colWidth(col), 0);
 
-  const barLeft = (s: string) => (daysBetween(timelineRange.start, parseDate(s)) / timelineRange.totalDays) * totalW;
-  const barWidth = (s: string, e: string) => Math.max(14, (daysBetween(parseDate(s), parseDate(e)) + 1) / timelineRange.totalDays * totalW);
+  const barLeft = (s: string) => daysBetween(timelineRange.start, parseDate(s)) * DAY_W;
+  const barWidth = (s: string, e: string) => Math.max(14, (daysBetween(parseDate(s), parseDate(e)) + 1) * DAY_W);
+  const effectiveDatesById = useMemo(() => {
+    const map = new Map<string, { start: string; end: string }>();
+    const anchor = project?.startDate || toYmd(timelineRange.start);
 
-  const today = new Date();
+    visibleItems.forEach((item, idx) => {
+      const parentRange = item.parentId ? map.get(item.parentId) : null;
+      const start = item.startDate || item.endDate || (parentRange ? addDays(parentRange.end, 1) : addDays(anchor, idx * 4));
+      let end = item.endDate || item.startDate || addDays(start, durationByType(item.type) - 1);
+      if (parseDate(end) < parseDate(start)) end = start;
+      map.set(item.id, { start, end });
+    });
+
+    return map;
+  }, [visibleItems, project?.startDate, timelineRange.start]);
+  const getEffectiveDates = (item: GanttItem): { start: string; end: string } => (
+    effectiveDatesById.get(item.id) || { start: project?.startDate || toYmd(timelineRange.start), end: project?.startDate || toYmd(timelineRange.start) }
+  );
+
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
   const todayX = (() => {
     const d = daysBetween(timelineRange.start, today);
-    if (d < 0 || d > timelineRange.totalDays) return null;
-    return (d / timelineRange.totalDays) * totalW;
+    if (d < 0 || d >= timelineRange.totalDays) return null;
+    return d * DAY_W;
   })();
 
   // Map item id → row index (for dependency arrows)
@@ -205,18 +298,37 @@ export function GanttPage() {
     return map;
   }, [visibleItems]);
 
+  const visualDeps = useMemo<VisualDependency[]>(() => {
+    if (projectDeps.length > 0) {
+      return projectDeps.map((dep) => ({
+        id: dep.id,
+        predecessorId: dep.predecessorId,
+        successorId: dep.successorId,
+      }));
+    }
+
+    return visibleItems
+      .filter((item) => !!item.parentId && rowIndex.has(item.parentId as string))
+      .map((item) => ({
+        id: `auto-${item.parentId}-${item.id}`,
+        predecessorId: item.parentId as string,
+        successorId: item.id,
+        auto: true,
+      }));
+  }, [projectDeps, visibleItems, rowIndex]);
+
   // Bar center positions for dependencies
   const barPositions = useMemo(() => {
     const map = new Map<string, { y: number; leftX: number; rightX: number }>();
     visibleItems.forEach((item, i) => {
       const y = i * ROW_HEIGHT + ROW_HEIGHT / 2;
-      if (!item.startDate) return;
-      const x = barLeft(item.startDate);
-      const w = item.endDate ? barWidth(item.startDate, item.endDate) : 14;
+      const range = getEffectiveDates(item);
+      const x = barLeft(range.start);
+      const w = barWidth(range.start, range.end);
       map.set(item.id, { y, leftX: x, rightX: x + w });
     });
     return map;
-  }, [visibleItems, barLeft, barWidth]);
+  }, [visibleItems, barLeft, barWidth, effectiveDatesById, timelineRange.start, project?.startDate]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const hasChildren = (itemId: string) => projectItems.some(i => i.parentId === itemId);
@@ -234,7 +346,18 @@ export function GanttPage() {
   const handleSave = async (data: Partial<GanttItem>) => {
     if (!selectedProject) return;
     setSaving(true);
-    const payload = { ...data, parent_id: addParent?.id ?? null };
+    const payload = {
+      parent_id: addParent?.id ?? editItem?.parentId ?? null,
+      type: data.type,
+      name: data.name,
+      description: data.description ?? '',
+      start_date: data.startDate || null,
+      end_date: data.endDate || (data.type === 'milestone' ? data.startDate || null : null),
+      progress: typeof data.progress === 'number' ? data.progress : 0,
+      assignee_ids: data.assigneeIds ?? [],
+      visible_to_roles: data.visibleToRoles ?? [],
+      visible_to_users: data.visibleToUsers ?? [],
+    };
     if (editItem) {
       await fetch(`/api/projects/${selectedProject}/gantt-items/${editItem.id}`, {
         method: 'PUT',
@@ -248,7 +371,7 @@ export function GanttPage() {
         body: JSON.stringify(payload),
       });
     }
-    await refreshGanttItems(selectedProject);
+    await refreshGanttItems(selectedProject, previewAs || undefined);
     setSaving(false);
     setShowForm(false);
     setEditItem(null);
@@ -263,6 +386,56 @@ export function GanttPage() {
     });
     refreshGanttItems(selectedProject);
     refreshGanttDependencies(selectedProject);
+  };
+
+  const handleStateChange = async (item: GanttItem, nextState: ItemState) => {
+    if (!selectedProject) return;
+
+    // Immediate visual response while saving in background.
+    setStateOverrides(prev => ({ ...prev, [item.id]: nextState }));
+    setStateSavingIds(prev => {
+      const next = new Set(prev);
+      next.add(item.id);
+      return next;
+    });
+
+    const payload = {
+      parent_id: item.parentId ?? null,
+      type: item.type,
+      name: item.name,
+      description: item.description ?? '',
+      start_date: item.startDate || null,
+      end_date: item.endDate || (item.type === 'milestone' ? item.startDate || null : null),
+      progress: stateToProgress(nextState),
+      assignee_ids: item.assigneeIds ?? [],
+      visible_to_roles: item.visibleToRoles ?? [],
+      visible_to_users: item.visibleToUsers ?? [],
+    };
+
+    try {
+      const res = await fetch(`/api/projects/${selectedProject}/gantt-items/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error('Failed to update item state');
+
+      await refreshGanttItems(selectedProject, previewAs || undefined);
+    } catch (_e) {
+      // Revert optimistic state on failure.
+      setStateOverrides(prev => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+    } finally {
+      setStateSavingIds(prev => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -291,16 +464,19 @@ export function GanttPage() {
           {/* Preview as (Admin only) */}
           {isAdmin && (
             <div className="flex items-center gap-1.5">
-              <EyeIcon size={13} className="dark:text-dark-muted text-light-muted" />
+              <span title="Preview gantt visibility as another department">
+                <EyeIcon size={13} className="dark:text-dark-muted text-light-muted" />
+              </span>
               <select
                 value={previewAs}
                 onChange={e => setPreviewAs(e.target.value)}
                 className="pl-2 pr-6 py-1.5 text-xs rounded-lg dark:bg-dark-card dark:border-dark-border dark:text-dark-muted bg-white border border-light-border text-light-muted focus:outline-none"
+                title="Preview what each department can see in this gantt chart"
               >
-                <option value="">Admin view</option>
-                <option value="Technical">Technical view</option>
-                <option value="Accounting">Accounting view</option>
-                <option value="Employee">Employee view</option>
+                <option value="">Preview: Admin</option>
+                <option value="Technical">Preview: Technical</option>
+                <option value="Accounting">Preview: Accounting</option>
+                <option value="Employee">Preview: Employee</option>
               </select>
             </div>
           )}
@@ -335,8 +511,13 @@ export function GanttPage() {
         {/* Column header row */}
         <div className="flex dark:border-dark-border border-b border-light-border sticky top-0 z-10 dark:bg-dark-card bg-white">
           {/* Tree header */}
-          <div className="flex-shrink-0 dark:border-dark-border border-r border-light-border" style={{ width: TREE_W }}>
-            <div className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted">Task Name & Details</div>
+          <div className="flex-shrink-0 flex items-center dark:border-dark-border border-r border-light-border" style={{ width: TREE_W }}>
+            <div className="w-10 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted border-r dark:border-dark-border border-light-border">#</div>
+            <div className="flex-1 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted">Task Name</div>
+            <div className="w-20 px-1 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted text-center">Duration</div>
+            <div className="w-24 px-1 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted text-center">Start</div>
+            <div className="w-24 px-1 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted text-center">End</div>
+            <div className="w-36 px-1 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted text-center">State</div>
           </div>
 
           {/* Timeline header */}
@@ -345,9 +526,9 @@ export function GanttPage() {
               {columns.map((col, i) => {
                 const isCur = today >= col.startDate && today <= col.endDate;
                 return (
-                  <div key={i} className={`flex-shrink-0 py-2 text-center dark:border-dark-border border-r border-light-border last:border-r-0 ${isCur ? 'dark:bg-green-primary/5 bg-green-50/50' : ''}`} style={{ width: COL_W }}>
-                    <div className="text-xs font-semibold dark:text-dark-text text-light-text">{col.label}</div>
-                    {col.subLabel && <div className="text-[10px] dark:text-dark-subtle text-light-subtle">{col.subLabel}</div>}
+                  <div key={i} className={`flex-shrink-0 py-2 text-center dark:border-dark-border border-r border-light-border last:border-r-0 overflow-hidden ${isCur ? 'dark:bg-green-primary/5 bg-green-50/50' : ''}`} style={{ width: colWidth(col) }}>
+                    <div className="text-xs font-semibold dark:text-dark-text text-light-text whitespace-nowrap">{col.label}</div>
+                    {col.subLabel && <div className="text-[10px] dark:text-dark-subtle text-light-subtle whitespace-nowrap">{col.subLabel}</div>}
                   </div>
                 );
               })}
@@ -371,102 +552,116 @@ export function GanttPage() {
               </div>
             ) : visibleItems.map(item => {
               const depth = item.depth ?? 0;
-              const color = TYPE_COLOR[item.type] || '#6b7280';
+              const color = getItemColor(item);
+              const range = getEffectiveDates(item);
               const canExpand = hasChildren(item.id);
               const isCollapsed = collapsedIds.has(item.id);
               const assignees = users.filter(u => (item.assigneeIds || []).includes(u.id));
+              const durationDays = Math.max(daysBetween(parseDate(range.start), parseDate(range.end)) + 1, 1);
+              const durationLabel = `${durationDays} day${durationDays === 1 ? '' : 's'}`;
+              const currentState = stateOverrides[item.id] || progressToState(item.progress);
+              const state = getStateMetaFromState(currentState);
+              const isStateSaving = stateSavingIds.has(item.id);
 
               return (
                 <div
                   key={item.id}
-                  className="dark:border-dark-border border-b border-light-border dark:hover:bg-dark-card2/30 hover:bg-gray-50/50 group"
+                  className="flex items-center dark:border-dark-border border-b border-light-border dark:hover:bg-dark-card2/30 hover:bg-gray-50/50 group"
                   style={{ height: ROW_HEIGHT }}
                 >
-                  <div className="flex items-center h-full gap-2 px-4" style={{ paddingLeft: `${depth * 16 + 16}px` }}>
-                    {/* Expand button */}
+                  <div className="w-10 px-2 flex-shrink-0 border-r dark:border-dark-border border-light-border flex items-center justify-end" style={{ height: ROW_HEIGHT }}>
+                    <span className="text-[10px] dark:text-dark-subtle text-light-subtle font-mono">{item.treeIndex || ''}</span>
+                  </div>
+
+                  <div className="flex-1 min-w-0 flex items-center gap-1 px-2" style={{ paddingLeft: `${depth * 16 + 6}px` }}>
                     {canExpand ? (
                       <button onClick={() => toggleCollapse(item.id)} className="flex-shrink-0 dark:text-dark-muted text-light-muted hover:dark:text-dark-text hover:text-light-text transition-colors">
-                        {isCollapsed ? <ChevronRightIcon size={14} /> : <ChevronDownIcon size={14} />}
+                        {isCollapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />}
                       </button>
                     ) : (
-                      <div className="w-5 flex-shrink-0" />
+                      <div className="w-3 flex-shrink-0" />
                     )}
-
-                    {/* Type indicator */}
-                    <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} title={item.type} />
-
-                    {/* Name and details */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium dark:text-dark-text text-light-text truncate" title={item.name}>{item.name}</span>
-                        {/* Assignees */}
-                        {assignees.length > 0 && (
-                          <div className="flex -space-x-1 flex-shrink-0">
-                            {assignees.slice(0, 2).map(u => (
-                              <div key={u.id} className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold border border-white dark:border-dark-card flex-shrink-0 bg-green-primary text-black" title={u.name}>
-                                {u.avatar}
-                              </div>
-                            ))}
-                            {assignees.length > 2 && (
-                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border border-white dark:border-dark-card bg-gray-400 text-white dark:text-dark-text flex-shrink-0" title={assignees.map(a => a.name).join(', ')}>
-                                +{assignees.length - 2}
-                              </div>
-                            )}
-                          </div>
+                    <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} title={item.type} />
+                    <span className="text-xs font-medium dark:text-dark-text text-light-text truncate" title={item.name}>{item.name}</span>
+                    {assignees.length > 0 && (
+                      <div className="flex -space-x-1 ml-auto flex-shrink-0">
+                        {assignees.slice(0, 2).map(u => (
+                          <UserAvatar
+                            key={u.id}
+                            name={u.name}
+                            avatarText={u.avatar}
+                            profilePhoto={u.profilePhoto}
+                            className="w-4 h-4 border border-white dark:border-dark-card"
+                            textClassName="text-[6px] font-bold text-black"
+                            fallbackStyle={{ backgroundColor: '#63D44A' }}
+                            title={u.name}
+                          />
+                        ))}
+                        {assignees.length > 2 && (
+                          <div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold border border-white dark:border-dark-card bg-gray-400 text-white" title={assignees.map(a => a.name).join(', ')}>+{assignees.length - 2}</div>
                         )}
                       </div>
-                      {/* Dates and progress info */}
-                      <div className="flex items-center gap-3 text-[11px] dark:text-dark-subtle text-light-subtle">
-                        {item.startDate && (
-                          <span>{dateShort(item.startDate)}</span>
-                        )}
-                        {item.endDate && item.type !== 'milestone' && (
-                          <>
-                            <span>→</span>
-                            <span>{dateShort(item.endDate)}</span>
-                          </>
-                        )}
-                        {item.type !== 'milestone' && (
-                          <div className="flex items-center gap-1 flex-1 max-w-[100px]">
-                            <div className="h-1 flex-1 rounded-full dark:bg-dark-border bg-gray-200 overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${item.progress}%`, backgroundColor: color }} />
-                            </div>
-                            <span className="font-medium w-7 text-right">{item.progress}%</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Action buttons */}
+                    )}
                     {(isAdmin || currentUser?.department === 'Technical') && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity ml-2">
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity ml-1">
                         <button
                           onClick={() => { setEditItem(item); setAddParent(null); setShowForm(true); }}
-                          className="p-1 rounded dark:text-dark-muted dark:hover:text-blue-400 text-light-muted hover:text-blue-500 transition-colors"
+                          className="p-0.5 rounded dark:text-dark-muted dark:hover:text-blue-400 text-light-muted hover:text-blue-500 transition-colors"
                           title="Edit"
                         >
-                          <PencilIcon size={13} />
+                          <PencilIcon size={12} />
                         </button>
                         {isAdmin && (
                           <>
                             <button
                               onClick={() => { setAddParent(item); setEditItem(null); setShowForm(true); }}
-                              className="p-1 rounded dark:text-dark-muted dark:hover:text-green-400 text-light-muted hover:text-green-500 transition-colors"
+                              className="p-0.5 rounded dark:text-dark-muted dark:hover:text-green-400 text-light-muted hover:text-green-500 transition-colors"
                               title="Add child"
                             >
-                              <PlusIcon size={13} />
+                              <PlusIcon size={12} />
                             </button>
                             <button
                               onClick={() => handleDelete(item)}
-                              className="p-1 rounded dark:text-dark-muted dark:hover:text-red-400 text-light-muted hover:text-red-500 transition-colors"
+                              className="p-0.5 rounded dark:text-dark-muted dark:hover:text-red-400 text-light-muted hover:text-red-500 transition-colors"
                               title="Delete"
                             >
-                              <TrashIcon size={13} />
+                              <TrashIcon size={12} />
                             </button>
                           </>
                         )}
                       </div>
                     )}
+                  </div>
+
+                  <div className="w-20 px-1 flex-shrink-0 flex items-center justify-center" style={{ height: ROW_HEIGHT }}>
+                    <span className="text-[10px] dark:text-dark-subtle text-light-subtle">{durationLabel}</span>
+                  </div>
+
+                  <div className="w-24 px-1 flex-shrink-0 flex items-center justify-center" style={{ height: ROW_HEIGHT }}>
+                    <span className="text-[10px] dark:text-dark-subtle text-light-subtle" title={dateShort(range.start)}>{dateLong(range.start)}</span>
+                  </div>
+
+                  <div className="w-24 px-1 flex-shrink-0 flex items-center justify-center" style={{ height: ROW_HEIGHT }}>
+                    <span className="text-[10px] dark:text-dark-subtle text-light-subtle" title={dateShort(range.end)}>{dateLong(range.end)}</span>
+                  </div>
+
+                  <div className="w-36 px-1 flex-shrink-0 flex items-center" style={{ height: ROW_HEIGHT }}>
+                    <div className="w-full h-6 rounded-sm dark:bg-dark-card2 bg-gray-100 border dark:border-dark-border border-gray-200 flex items-center px-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: state.dot, opacity: isStateSaving ? 0.6 : 1 }} />
+                        <select
+                          value={currentState}
+                          onChange={(e) => handleStateChange(item, e.target.value as ItemState)}
+                          disabled={isStateSaving}
+                          className="w-full text-[11px] leading-none dark:text-dark-text text-light-text lowercase bg-transparent border-0 focus:outline-none focus:ring-0 pr-1 disabled:opacity-60"
+                          title="Change task state"
+                        >
+                          <option value="planned">planned</option>
+                          <option value="in process">in process</option>
+                          <option value="completed">completed</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -481,7 +676,7 @@ export function GanttPage() {
           >
             <div style={{ width: totalW, position: 'relative' }}>
               {/* Grid rows */}
-              {visibleItems.map((item, idx) => (
+              {visibleItems.map((item) => (
                 <div
                   key={item.id}
                   className="dark:border-dark-border border-b border-light-border relative"
@@ -492,49 +687,55 @@ export function GanttPage() {
                     {columns.map((col, i) => {
                       const isCur = today >= col.startDate && today <= col.endDate;
                       return (
-                        <div key={i} className={`flex-shrink-0 h-full dark:border-dark-border border-r border-light-border last:border-r-0 ${isCur ? 'dark:bg-green-primary/3 bg-green-50/20' : ''}`} style={{ width: COL_W }} />
+                        <div key={i} className={`flex-shrink-0 h-full dark:border-dark-border border-r border-light-border last:border-r-0 ${isCur ? 'dark:bg-green-primary/3 bg-green-50/20' : ''}`} style={{ width: colWidth(col) }} />
                       );
                     })}
                   </div>
 
                   {/* Bar */}
-                  {item.startDate && (
-                    item.type === 'milestone' ? (
+                  {(() => {
+                    const range = getEffectiveDates(item);
+                    const w = barWidth(range.start, range.end);
+                    const x = barLeft(range.start);
+                    return item.type === 'milestone' ? (
                       // Diamond milestone
                       <div
-                        className="absolute top-1/2 z-10 pointer-events-none"
-                        style={{ left: barLeft(item.startDate) + 7, transform: 'translate(-50%, -50%)' }}
+                        className="absolute top-1/2 z-20 pointer-events-none"
+                        style={{ left: x + 7, transform: 'translate(-50%, -50%)' }}
                       >
                         <div
                           className="w-3.5 h-3.5 rotate-45 border-2 border-white dark:border-dark-card shadow-sm"
-                          style={{ backgroundColor: TYPE_COLOR.milestone }}
+                          style={{ backgroundColor: GANTT_STATUS_COLOR.milestone }}
                           title={item.name}
                         />
                       </div>
                     ) : (
                       <div
-                        className="absolute top-1/2 -translate-y-1/2 rounded z-10"
+                        className="absolute top-1/2 -translate-y-1/2 rounded-[3px] z-20"
                         style={{
-                          left: barLeft(item.startDate),
-                          width: item.endDate ? barWidth(item.startDate, item.endDate) : 60,
+                          left: x,
+                          width: w,
                           height: BAR_H,
+                          backgroundColor: getItemColor(item),
+                          border: '1px solid rgba(15, 23, 42, 0.35)',
+                          boxShadow: '0 1px 2px rgba(15, 23, 42, 0.2)',
                         }}
+                        title={`${item.name} (${dateShort(range.start)} - ${dateShort(range.end)})`}
                       >
-                        {/* Background */}
-                        <div className="absolute inset-0 rounded" style={{ backgroundColor: TYPE_COLOR[item.type], opacity: 0.15 }} />
-                        {/* Progress fill */}
-                        <div className="absolute left-0 top-0 h-full rounded-l" style={{ width: `${item.progress}%`, backgroundColor: TYPE_COLOR[item.type], opacity: 0.8, borderRadius: item.progress === 100 ? '3px' : '3px 0 0 3px' }} />
-                        {/* Border */}
-                        <div className="absolute inset-0 rounded border" style={{ borderColor: TYPE_COLOR[item.type], borderWidth: '1.5px' }} />
-                        {/* Label */}
-                        {(item.endDate ? barWidth(item.startDate, item.endDate) : 60) > 40 && (
-                          <div className="absolute inset-0 flex items-center px-1.5 z-10">
-                            <span className="text-[9px] font-medium dark:text-white text-gray-900 truncate dark:drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] drop-shadow-[0_0px_3px_rgba(255,255,255,0.9)]">{item.name}</span>
-                          </div>
+                        <div className="absolute -left-[1px] top-1/2 h-2 w-px -translate-y-1/2 bg-slate-500/60" />
+                        <div className="absolute -right-[1px] top-1/2 h-2 w-px -translate-y-1/2 bg-slate-500/60" />
+                        {w > 90 ? (
+                          <span className="absolute inset-0 flex items-center px-2 text-[9px] font-semibold text-black/85 truncate">
+                            {item.name}
+                          </span>
+                        ) : (
+                          <span className="absolute top-1/2 -translate-y-1/2 text-[9px] font-semibold dark:text-dark-text text-light-text whitespace-nowrap" style={{ left: w + 6 }}>
+                            {item.name}
+                          </span>
                         )}
                       </div>
                     )
-                  )}
+                  })()}
 
                   {/* Today line */}
                   {todayX !== null && (
@@ -544,29 +745,34 @@ export function GanttPage() {
               ))}
 
               {/* Dependency arrows SVG */}
-              {projectDeps.length > 0 && (
+              {visualDeps.length > 0 && (
                 <svg
-                  className="absolute top-0 left-0 pointer-events-none z-30"
+                  className="absolute top-0 left-0 pointer-events-none z-[5]"
                   style={{ width: totalW, height: visibleItems.length * ROW_HEIGHT }}
                 >
                   <defs>
-                    <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                      <path d="M0,0 L0,6 L6,3 z" fill="#94a3b8" />
+                    <marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                      <path d="M0,0 L0,7 L7,3.5 z" fill="#6b7280" />
+                    </marker>
+                    <marker id="arrow-auto" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                      <path d="M0,0 L0,7 L7,3.5 z" fill="#6b7280" />
                     </marker>
                   </defs>
-                  {projectDeps.map(dep => {
+                  {visualDeps.map(dep => {
                     const from = barPositions.get(dep.predecessorId);
                     const to = barPositions.get(dep.successorId);
                     if (!from || !to) return null;
-                    const midX = from.rightX + 8;
+                    const stroke = '#6b7280';
                     return (
                       <path
                         key={dep.id}
-                        d={`M ${from.rightX} ${from.y} H ${midX} V ${to.y} H ${to.leftX}`}
-                        stroke="#94a3b8"
-                        strokeWidth="1.5"
+                        d={dependencyPath(from, to)}
+                        stroke={stroke}
+                        strokeWidth="1.35"
                         fill="none"
-                        markerEnd="url(#arrow)"
+                        strokeLinecap="square"
+                        strokeLinejoin="miter"
+                        markerEnd={dep.auto ? 'url(#arrow-auto)' : 'url(#arrow)'}
                       />
                     );
                   })}
@@ -588,22 +794,28 @@ export function GanttPage() {
       {/* ── Legend ──────────────────────────────────────────────────────── */}
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card px-5 py-3">
         <div className="flex items-center gap-5 flex-wrap">
-          {Object.entries(TYPE_COLOR).map(([type, color]) => (
-            <div key={type} className="flex items-center gap-1.5">
-              {type === 'milestone' ? (
-                <div className="w-2.5 h-2.5 rotate-45" style={{ backgroundColor: color }} />
-              ) : (
-                <div className="w-3 h-1.5 rounded-sm" style={{ backgroundColor: color }} />
-              )}
-              <span className="text-[10px] dark:text-dark-muted text-light-muted capitalize">{type}</span>
-            </div>
-          ))}
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-1.5 rounded-sm" style={{ backgroundColor: GANTT_STATUS_COLOR.done }} />
+            <span className="text-[10px] dark:text-dark-muted text-light-muted">Done</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-1.5 rounded-sm" style={{ backgroundColor: GANTT_STATUS_COLOR.stuck }} />
+            <span className="text-[10px] dark:text-dark-muted text-light-muted">Stuck</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-1.5 rounded-sm" style={{ backgroundColor: GANTT_STATUS_COLOR.working }} />
+            <span className="text-[10px] dark:text-dark-muted text-light-muted">Working on it</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rotate-45" style={{ backgroundColor: GANTT_STATUS_COLOR.milestone }} />
+            <span className="text-[10px] dark:text-dark-muted text-light-muted">Milestone</span>
+          </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-px bg-red-500" />
             <span className="text-[10px] dark:text-dark-muted text-light-muted">Today</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-px" style={{ borderTop: '1.5px solid #94a3b8' }} />
+            <div className="w-3 h-px" style={{ borderTop: '2px solid #4b5563' }} />
             <span className="text-[10px] dark:text-dark-muted text-light-muted">Dependency</span>
           </div>
         </div>

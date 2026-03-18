@@ -113,6 +113,27 @@ class AuthController extends Controller
     }
 
     /* ================================================================== */
+    /*  GET /api/me                                                      */
+    /*  Returns the current authenticated user payload.                  */
+    /* ================================================================== */
+    public function me(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Unauthenticated',
+            ], 401);
+        }
+
+        return response()->json([
+            'success' => true,
+            'user' => $this->userPayload($user),
+        ]);
+    }
+
+    /* ================================================================== */
     /*  POST /api/change-password                                         */
     /*  Used on first login (must_change_password) or voluntary change.   */
     /*  Returns a NEW recovery code (shown once) after success.           */

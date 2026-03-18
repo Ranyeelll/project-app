@@ -29,6 +29,7 @@ export interface Project {
   progress: number;
   managerId: string;
   teamIds: string[];
+  leaderId?: string | null;
   createdAt: string;
   approvalStatus?: ApprovalStatus;
   approvalNotes?: string | null;

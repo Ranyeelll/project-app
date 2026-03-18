@@ -41,7 +41,7 @@ class DirectMessageSent implements ShouldBroadcastNow
             'sender'           => $msg->sender ? [
                 'id'            => $msg->sender->id,
                 'name'          => $msg->sender->name,
-                'profile_photo' => $msg->sender->profile_photo,
+                'profile_photo' => $msg->sender->profile_photo ? '/api/users/' . $msg->sender->id . '/photo' : null,
             ] : null,
             'reply_to'         => $msg->replyTo ? [
                 'id'           => $msg->replyTo->id,

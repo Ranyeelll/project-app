@@ -102,11 +102,20 @@ export function BudgetReportPage() {
     try {
       const res = await fetch('/api/budget-report', {
         headers: { Accept: 'application/json' },
+        credentials: 'include',
       });
-      if (res.ok) {
-        const data = await res.json();
-        setReport(data);
+      if (!res.ok) {
+        if (res.status === 401) {
+          localStorage.removeItem('maptech-current-user');
+          window.location.href = '/';
+          return;
+        }
+        setReport(null);
+        return;
       }
+
+      const data = await res.json();
+      setReport(data);
     } catch {
       // silently fail
     } finally {
@@ -126,7 +135,7 @@ export function BudgetReportPage() {
     try {
       const res = await fetch(url, {
         headers: { Accept: 'application/pdf' },
-        credentials: 'same-origin',
+        credentials: 'include',
       });
       if (res.ok && res.headers.get('content-type')?.includes('pdf')) {
         const blob = await res.blob();
@@ -156,7 +165,7 @@ export function BudgetReportPage() {
     setExportError(null);
     const url = `/api/budget-report/export-sheet?period=${period}`;
     try {
-      const res = await fetch(url, { credentials: 'same-origin' });
+      const res = await fetch(url, { credentials: 'include' });
       if (res.ok) {
         const blob = await res.blob();
         const objectUrl = window.URL.createObjectURL(blob);
