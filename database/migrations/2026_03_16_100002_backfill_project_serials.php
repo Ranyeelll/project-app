@@ -39,18 +39,19 @@ return new class extends Migration
                 $project->save();
 
                 AuditLog::create([
-                    'action'      => 'project.serial.backfilled',
-                    'entity_type' => 'project',
-                    'entity_id'   => $project->id,
-                    'data'        => [
-                        'serial'             => $serial,
-                        'project_name'       => $project->name,
-                        'backfilled_at'      => now()->toIso8601String(),
+                    'action'        => 'project.serial.backfilled',
+                    'resource_type' => 'project',
+                    'resource_id'   => $project->id,
+                    'changes'       => [
+                        'serial'              => $serial,
+                        'project_name'        => $project->name,
+                        'backfilled_at'       => now()->toIso8601String(),
                         'original_created_at' => $project->created_at->toIso8601String(),
                     ],
-                    'user_id'    => null,
-                    'ip_address' => null,
-                    'user_agent' => 'Migration: backfill_project_serials',
+                    'user_id'       => null,
+                    'ip_address'    => null,
+                    'user_agent'    => 'Migration: backfill_project_serials',
+                    'performed_via' => 'migration',
                 ]);
             });
         }
