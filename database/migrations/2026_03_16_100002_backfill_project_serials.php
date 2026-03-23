@@ -40,15 +40,16 @@ return new class extends Migration
 
                 AuditLog::create([
                     'action'      => 'project.serial.backfilled',
-                    'entity_type' => 'project',
-                    'entity_id'   => $project->id,
-                    'data'        => [
+                    'resource_type' => 'project',
+                    'resource_id'   => $project->id,
+                    'changes'       => [
                         'serial'             => $serial,
                         'project_name'       => $project->name,
                         'backfilled_at'      => now()->toIso8601String(),
                         'original_created_at' => $project->created_at->toIso8601String(),
                     ],
                     'user_id'    => null,
+                    'performed_via' => 'migration',
                     'ip_address' => null,
                     'user_agent' => 'Migration: backfill_project_serials',
                 ]);
