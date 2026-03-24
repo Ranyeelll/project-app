@@ -1,9 +1,14 @@
+function normalizeRole(role?: string | null): string {
+  return (role || '').trim().toLowerCase();
+}
+
 export function isSuperadmin(role?: string | null): boolean {
-  return (role || '').toLowerCase() === 'superadmin' || (role || '').toLowerCase() === 'admin';
+  const normalized = normalizeRole(role);
+  return normalized === 'superadmin' || normalized === 'admin';
 }
 
 export function isSupervisor(role?: string | null): boolean {
-  return (role || '').toLowerCase() === 'supervisor';
+  return normalizeRole(role) === 'supervisor';
 }
 
 export function isElevatedRole(role?: string | null): boolean {
@@ -11,5 +16,5 @@ export function isElevatedRole(role?: string | null): boolean {
 }
 
 export function isEmployeeRole(role?: string | null): boolean {
-  return (role || '').toLowerCase() === 'employee';
+  return normalizeRole(role) === 'employee';
 }

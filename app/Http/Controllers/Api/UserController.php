@@ -57,7 +57,7 @@ class UserController extends Controller
             'id'           => (string) $u->id,
             'name'         => $u->name,
             'email'        => $u->email,
-            'role'         => $u->role,
+            'role'         => strtolower(trim((string) $u->role)),
             'avatar'       => collect(explode(' ', $u->name))->map(fn ($n) => strtoupper($n[0] ?? ''))->join(''),
             'department'   => $department,
             'position'     => $u->position ?? '',

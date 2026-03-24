@@ -24,7 +24,7 @@ class AuthController extends Controller
             'id'              => (string) $user->id,
             'name'            => $user->name,
             'email'           => $user->email,
-            'role'            => $user->role,
+            'role'            => strtolower(trim((string) $user->role)),
             'avatar'          => collect(explode(' ', $user->name))
                                     ->map(fn ($n) => strtoupper($n[0] ?? ''))
                                     ->join(''),
@@ -202,11 +202,13 @@ class AuthController extends Controller
     public function verifyRecovery(Request $request): JsonResponse
     {
         $request->validate([
-            'employee_id'   => 'required|integer',
+            'employee_id'   => 'required|string',
             'recovery_code' => 'required|string',
         ]);
 
-        $user = User::find($request->employee_id);
+        $employeeId = trim((string) $request->employee_id);
+        $normalizedRecoveryCode = trim((string) $request->recovery_code);
+        $user = ctype_digit($employeeId) ? User::find((int) $employeeId) : null;
 
         if (! $user) {
             return response()->json([
@@ -222,7 +224,7 @@ class AuthController extends Controller
             ], 403);
         }
 
-        if (! Hash::check($request->recovery_code, $user->recovery_code)) {
+        if (! Hash::check($normalizedRecoveryCode, $user->recovery_code)) {
             return response()->json([
                 'success' => false,
                 'error'   => 'Invalid recovery code.',
@@ -243,15 +245,24 @@ class AuthController extends Controller
     public function resetPasswordOffline(Request $request): JsonResponse
     {
         $request->validate([
-            'employee_id'   => 'required|integer|exists:users,id',
+            'employee_id'   => 'required|string',
             'recovery_code' => 'required|string',
             'new_password'  => 'required|string|min:8|confirmed',
         ]);
 
-        $user = User::findOrFail($request->employee_id);
+        $employeeId = trim((string) $request->employee_id);
+        $normalizedRecoveryCode = trim((string) $request->recovery_code);
+        $user = ctype_digit($employeeId) ? User::find((int) $employeeId) : null;
+
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No account found with that Employee ID.',
+            ], 404);
+        }
 
         // Re-verify recovery code to prevent tampering
-        if (! $user->recovery_code || ! Hash::check($request->recovery_code, $user->recovery_code)) {
+        if (! $user->recovery_code || ! Hash::check($normalizedRecoveryCode, $user->recovery_code)) {
             // Log failed password reset attempt
             $this->audit->log(
                 action: 'auth.password_reset_failed',

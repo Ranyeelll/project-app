@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/AppContext';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { useAuth } from '../../context/AppContext';
+import { isSuperadmin } from '../../utils/roles';
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 interface CategoryItem {
@@ -84,7 +86,21 @@ const STATUS_COLORS: Record<string, string> = {
 
 /* ═══════════════════════════════════════════════════════════════════════ */
 export function BudgetReportPage() {
+  const { currentUser } = useAuth();
   const { projects } = useData();
+
+  const canViewBudget = isSuperadmin(currentUser?.role) || currentUser?.department === 'Accounting';
+  if (!canViewBudget) {
+    return (
+      <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-6">
+        <p className="text-sm dark:text-dark-text text-light-text font-medium">Access denied.</p>
+        <p className="text-xs dark:text-dark-subtle text-light-subtle mt-1">
+          Budget reports are limited to Accounting and Superadmin.
+        </p>
+      </div>
+    );
+  }
+
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');

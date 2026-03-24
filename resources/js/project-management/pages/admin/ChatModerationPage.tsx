@@ -13,6 +13,7 @@ import {
   XIcon,
 } from 'lucide-react';
 import { useAuth } from '../../context/AppContext';
+import { isSuperadmin } from '../../utils/roles';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,17 @@ interface MutedUser {
 
 export function ChatModerationPage() {
   const { currentUser } = useAuth();
+  if (!isSuperadmin(currentUser?.role)) {
+    return (
+      <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-6">
+        <p className="text-sm dark:text-dark-text text-light-text font-medium">Access denied.</p>
+        <p className="text-xs dark:text-dark-subtle text-light-subtle mt-1">
+          Only superadmin can access Chat Moderation.
+        </p>
+      </div>
+    );
+  }
+
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
   const [tab, setTab] = useState<'flagged' | 'muted'>('flagged');

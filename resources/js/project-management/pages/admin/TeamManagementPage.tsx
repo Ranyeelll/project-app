@@ -13,6 +13,7 @@ import {
   ShieldIcon } from
 'lucide-react';
 import { useData } from '../../context/AppContext';
+import { useAuth } from '../../context/AppContext';
 import { User } from '../../data/mockData';
 import { Button } from '../../components/ui/Button';
 import { Input, Select } from '../../components/ui/Input';
@@ -21,7 +22,19 @@ import { Badge, StatusBadge } from '../../components/ui/Badge';
 import { UserAvatar } from '../../components/ui/UserAvatar';
 import { isSuperadmin } from '../../utils/roles';
 export function TeamManagementPage() {
+  const { currentUser } = useAuth();
   const { users, setUsers } = useData();
+
+  if (!isSuperadmin(currentUser?.role)) {
+    return (
+      <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-6">
+        <p className="text-sm dark:text-dark-text text-light-text font-medium">Access denied.</p>
+        <p className="text-xs dark:text-dark-subtle text-light-subtle mt-1">
+          Only superadmin can access Team Management.
+        </p>
+      </div>
+    );
+  }
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);

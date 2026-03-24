@@ -10,14 +10,29 @@ import {
   AlertTriangleIcon } from
 'lucide-react';
 import { useData } from '../../context/AppContext';
+import { useAuth } from '../../context/AppContext';
 import { BudgetRequest } from '../../data/mockData';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Textarea } from '../../components/ui/Input';
 import { Badge, StatusBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { isSuperadmin } from '../../utils/roles';
 export function BudgetApprovalsPage() {
+  const { currentUser } = useAuth();
   const { budgetRequests, setBudgetRequests, projects, users, refreshBudgetRequests, refreshProjects } = useData();
+
+  const canManageBudget = isSuperadmin(currentUser?.role) || currentUser?.department === 'Accounting';
+  if (!canManageBudget) {
+    return (
+      <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-6">
+        <p className="text-sm dark:text-dark-text text-light-text font-medium">Access denied.</p>
+        <p className="text-xs dark:text-dark-subtle text-light-subtle mt-1">
+          Budget approvals are limited to Accounting and Superadmin.
+        </p>
+      </div>
+    );
+  }
   const [statusFilter, setStatusFilter] = useState('all');
   const [reviewModal, setReviewModal] = useState<{
     request: BudgetRequest;

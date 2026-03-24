@@ -58,7 +58,7 @@ export function ForgotPasswordPage() {
       const res = await fetch('/api/verify-recovery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-        body: JSON.stringify({ employee_id: Number(employeeId), recovery_code: recoveryCode }),
+        body: JSON.stringify({ employee_id: employeeId.trim(), recovery_code: recoveryCode.trim() }),
       });
       const data = await res.json();
       if (data.success) {
@@ -98,8 +98,8 @@ export function ForgotPasswordPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({
-          employee_id: Number(employeeId),
-          recovery_code: recoveryCode,
+          employee_id: employeeId.trim(),
+          recovery_code: recoveryCode.trim(),
           new_password: newPassword,
           new_password_confirmation: confirmPassword,
         }),
