@@ -206,7 +206,7 @@ class AuthController extends Controller
             'recovery_code' => 'required|string',
         ]);
 
-        $employeeId = trim((string) $request->employee_id);
+        $employeeId = preg_replace('/\D+/', '', trim((string) $request->employee_id)) ?? '';
         $normalizedRecoveryCode = trim((string) $request->recovery_code);
         $user = ctype_digit($employeeId) ? User::find((int) $employeeId) : null;
 
@@ -250,7 +250,7 @@ class AuthController extends Controller
             'new_password'  => 'required|string|min:8|confirmed',
         ]);
 
-        $employeeId = trim((string) $request->employee_id);
+        $employeeId = preg_replace('/\D+/', '', trim((string) $request->employee_id)) ?? '';
         $normalizedRecoveryCode = trim((string) $request->recovery_code);
         $user = ctype_digit($employeeId) ? User::find((int) $employeeId) : null;
 

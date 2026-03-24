@@ -24,7 +24,7 @@ class EnsureRole
             ], 401);
         }
 
-        $userRole = strtolower((string) ($user->role ?? ''));
+        $userRole = strtolower(trim((string) ($user->role ?? '')));
 
         if (in_array($userRole, ['superadmin', 'admin'], true)) {
             return $next($request);

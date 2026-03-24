@@ -61,7 +61,7 @@ class User extends Authenticatable
      */
     public function isAdmin(): bool
     {
-        $role = strtolower((string) ($this->role ?? ''));
+        $role = strtolower(trim((string) ($this->role ?? '')));
         return $role === 'superadmin' || $role === 'admin' || $this->department === Department::Admin;
     }
 
@@ -70,7 +70,7 @@ class User extends Authenticatable
      */
     public function isSupervisor(): bool
     {
-        return strtolower((string) ($this->role ?? '')) === 'supervisor';
+        return strtolower(trim((string) ($this->role ?? ''))) === 'supervisor';
     }
 
     /**

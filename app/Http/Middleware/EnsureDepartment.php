@@ -32,7 +32,7 @@ class EnsureDepartment
             ], 401);
         }
 
-        $userRole = strtolower((string) ($user->role ?? ''));
+        $userRole = strtolower(trim((string) ($user->role ?? '')));
         $userDepartment = $user->department instanceof Department
             ? $user->department->value
             : (string) ($user->department ?? '');
