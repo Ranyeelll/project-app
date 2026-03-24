@@ -6,10 +6,7 @@ use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
-    /**
-     * Reformat project serials to MAP-YYYY-XXXXXXXXXX.
-     * XXXXXXXXXX is a random 10-digit unique number.
-     */
+    
     public function up(): void
     {
         $projects = Project::orderBy('created_at', 'asc')->get();
@@ -50,11 +47,9 @@ return new class extends Migration
         }
     }
 
-    /**
-     * Do not attempt to restore previous serial formats.
-     */
+    
     public function down(): void
     {
-        // Intentionally left blank.
+       
     }
 };

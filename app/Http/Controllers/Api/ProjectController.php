@@ -53,11 +53,11 @@ class ProjectController extends Controller
     {
         $data = $request->validate([
             'name'        => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'required|string|max:5000',
             'status'      => 'required|in:active,on-hold,completed,archived',
             'priority'    => 'required|in:low,medium,high,critical',
-            'start_date'  => 'nullable|date',
-            'end_date'    => 'nullable|date',
+            'start_date'  => 'required|date',
+            'end_date'    => 'required|date|after_or_equal:start_date',
             'budget'      => 'nullable|numeric|min:0',
             'manager_id'  => 'nullable|exists:users,id',
             'team_ids'    => 'nullable|array',

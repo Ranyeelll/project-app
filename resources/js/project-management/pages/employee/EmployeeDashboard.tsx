@@ -140,6 +140,7 @@ export function EmployeeDashboard() {
   }
   ];
   const hasMyActivityData = myActivityLineData.some((d) => d.completed > 0 || d.started > 0);
+  const completedTasksLast7Days = myActivityLineData.reduce((sum, day) => sum + day.completed, 0);
   const hasMyWorkloadData = myWorkloadChannelData.some((d) => d.critical > 0 || d.high > 0 || d.medium > 0 || d.low > 0);
   const hasMyTaskBreakdownData = myTaskStatusChartData.some((d) => d.count > 0);
   const hasMyHoursTrendData = myHoursTrendData.some((d) => d.hours > 0 || d.completed > 0);
@@ -237,8 +238,8 @@ export function EmployeeDashboard() {
             <span className="text-xs dark:text-dark-subtle text-light-subtle">Last 7 days</span>
           </div>
           <div className="text-2xl font-bold dark:text-dark-text text-light-text tabular-nums mb-3">
-            {completedTasks}
-            <span className="ml-1 text-xs font-medium dark:text-dark-subtle text-light-subtle">completed tasks</span>
+            {completedTasksLast7Days}
+            <span className="ml-1 text-xs font-medium dark:text-dark-subtle text-light-subtle">completed in last 7 days</span>
           </div>
           <ResponsiveContainer width="100%" height={235}>
             <LineChart data={myActivityLineData}>

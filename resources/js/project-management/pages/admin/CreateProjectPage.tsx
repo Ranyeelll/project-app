@@ -17,12 +17,15 @@ interface FormData {
   leaderId: string;
 }
 
+type FieldErrors = Partial<Record<keyof FormData, string>>;
+
 export function CreateProjectPage() {
   const { setCurrentPage } = useNavigation();
   const { users, refreshProjects } = useData();
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [form, setForm] = useState<FormData>({
     name: '',
     description: '',
@@ -37,6 +40,13 @@ export function CreateProjectPage() {
 
   const selectedCount = form.teamIds.length;
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  const [serialPreview] = useState(() => {
+    const year = new Date().getFullYear();
+    const randomDigits = Math.floor(Math.random() * 10000000000)
+      .toString()
+      .padStart(10, '0');
+    return `MAP-${year}-${randomDigits}`;
+  });
 
   const selectedTeamMembers = useMemo(
     () => users.filter((u) => form.teamIds.includes(u.id)),
@@ -49,26 +59,53 @@ export function CreateProjectPage() {
   );
 
   const validateForm = (): string | null => {
+    const nextFieldErrors: FieldErrors = {};
+
     if (!form.name.trim()) {
-      return 'Project name is required.';
+      nextFieldErrors.name = 'Project name is required.';
+    }
+
+    if (!form.description.trim()) {
+      nextFieldErrors.description = 'Description is required.';
+    }
+
+    if (!form.startDate) {
+      nextFieldErrors.startDate = 'Start date is required.';
+    }
+
+    if (!form.endDate) {
+      nextFieldErrors.endDate = 'End date is required.';
     }
 
     if (form.startDate && form.endDate && form.endDate < form.startDate) {
-      return 'End date cannot be earlier than start date.';
+      nextFieldErrors.endDate = 'End date cannot be earlier than start date.';
     }
 
     if (form.budget) {
       const budget = Number(form.budget);
       if (Number.isNaN(budget) || budget < 0) {
-        return 'Budget must be a valid non-negative number.';
+        nextFieldErrors.budget = 'Budget must be a valid non-negative number.';
       }
     }
 
     if (form.teamIds.length >= 2 && !form.leaderId) {
-      return 'Please select a project leader when assigning 2 or more team members.';
+      nextFieldErrors.leaderId = 'Select a project leader when assigning 2 or more team members.';
+    }
+
+    setFieldErrors(nextFieldErrors);
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      return 'Please complete the required fields.';
     }
 
     return null;
+  };
+
+  const updateField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (fieldErrors[key]) {
+      setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
+    }
   };
 
   const handleSave = async () => {
@@ -80,11 +117,13 @@ export function CreateProjectPage() {
 
     setLoading(true);
     setError('');
+    setFieldErrors({});
 
     try {
       const res = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+        credentials: 'same-origin',
         body: JSON.stringify({
           name: form.name,
           description: form.description,
@@ -100,7 +139,19 @@ export function CreateProjectPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        const apiErrors = data?.errors || {};
+
+        const mappedErrors: FieldErrors = {
+          name: apiErrors.name?.[0],
+          description: apiErrors.description?.[0],
+          startDate: apiErrors.start_date?.[0],
+          endDate: apiErrors.end_date?.[0],
+          budget: apiErrors.budget?.[0],
+          leaderId: apiErrors.leader_id?.[0],
+        };
+
+        setFieldErrors(mappedErrors);
         throw new Error(data.message || 'Failed to create project');
       }
 
@@ -151,6 +202,14 @@ export function CreateProjectPage() {
         <div className="space-y-6">
           {/* Project Details Section */}
           <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg p-6">
+            <div className="mb-6 flex justify-center">
+              <div className="inline-flex items-center rounded-lg bg-green-500/10 border border-green-500/20 px-4 py-2">
+                <p className="text-center font-mono text-lg font-semibold tracking-[0.06em] dark:text-green-primary text-green-600 sm:text-xl">
+                  {serialPreview}
+                </p>
+              </div>
+            </div>
+
             <div className="mb-6">
               <h2 className="text-lg font-semibold dark:text-dark-text text-light-text mb-1">Project Information</h2>
               <p className="text-sm dark:text-dark-subtle text-light-subtle">Basic information about the project</p>
@@ -161,14 +220,16 @@ export function CreateProjectPage() {
                 label="Project Name *"
                 placeholder="e.g. GIS Platform Upgrade"
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={(e) => updateField('name', e.target.value)}
+                error={fieldErrors.name}
               />
 
               <Textarea
                 label="Description *"
                 placeholder="Describe the project objectives, scope, and expected outcomes..."
                 value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                onChange={(e) => updateField('description', e.target.value)}
+                error={fieldErrors.description}
               />
 
               <Input
@@ -180,17 +241,19 @@ export function CreateProjectPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <Input
-                  label="Start Date"
+                  label="Start Date *"
                   type="date"
                   value={form.startDate}
-                  onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                  onChange={(e) => updateField('startDate', e.target.value)}
+                  error={fieldErrors.startDate}
                 />
 
                 <Input
-                  label="End Date"
+                  label="End Date *"
                   type="date"
                   value={form.endDate}
-                  onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                  onChange={(e) => updateField('endDate', e.target.value)}
+                  error={fieldErrors.endDate}
                 />
               </div>
 
@@ -199,8 +262,9 @@ export function CreateProjectPage() {
                 type="number"
                 placeholder="e.g. 250000"
                 value={form.budget}
-                onChange={(e) => setForm({ ...form, budget: e.target.value })}
+                onChange={(e) => updateField('budget', e.target.value)}
                 icon={<DollarSignIcon size={14} />}
+                error={fieldErrors.budget}
                 hint="Optional. Leave blank if budget is not yet finalized."
               />
             </div>
@@ -217,7 +281,7 @@ export function CreateProjectPage() {
               <Select
                 label="Status"
                 value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                onChange={(e) => updateField('status', e.target.value)}
                 options={[
                   { value: 'active', label: 'Active' },
                   { value: 'on-hold', label: 'On Hold' },
@@ -229,7 +293,7 @@ export function CreateProjectPage() {
               <Select
                 label="Priority"
                 value={form.priority}
-                onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                onChange={(e) => updateField('priority', e.target.value)}
                 options={[
                   { value: 'low', label: 'Low' },
                   { value: 'medium', label: 'Medium' },
@@ -306,7 +370,8 @@ export function CreateProjectPage() {
                 <Select
                   label="Project Leader *"
                   value={form.leaderId}
-                  onChange={(e) => setForm((prev) => ({ ...prev, leaderId: e.target.value }))}
+                  onChange={(e) => updateField('leaderId', e.target.value)}
+                  error={fieldErrors.leaderId}
                   options={[
                     { value: '', label: 'Select leader from assigned team' },
                     ...selectedTeamMembers.map((member) => ({ value: member.id, label: member.name })),

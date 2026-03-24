@@ -496,7 +496,6 @@ export function GanttPage() {
             <button onClick={() => setZoomScale(1)} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text"><Maximize2Icon size={12} /></button>
           </div>
 
-          {/* Add Phase */}
           <button
             onClick={() => { setEditItem(null); setAddParent(null); setShowForm(true); }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-primary text-black rounded-lg hover:bg-green-progress transition-colors"

@@ -384,6 +384,24 @@ class AuditService
         );
     }
 
+    /**
+     * Log: Gantt report exported.
+     */
+    public function ganttReportExported(string $format, string $period, ?string $projectId = null): AuditLog
+    {
+        return self::log(
+            action: 'gantt.report_exported',
+            resourceType: 'gantt_report',
+            resourceId: 0,
+            projectId: $projectId ? (int) $projectId : null,
+            context: [
+                'format' => $format,
+                'period' => $period,
+                'project_id' => $projectId,
+            ]
+        );
+    }
+
     // ─── Task Enhancement Logging ─────────────────────────────────────
 
     /**
