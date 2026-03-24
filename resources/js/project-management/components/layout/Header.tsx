@@ -20,6 +20,7 @@ import {
   MenuIcon,
 } from 'lucide-react';
 import { ChangePasswordModal } from '../ui/ChangePasswordModal';
+import { ProfilePhotoModal } from '../ui/ProfilePhotoModal';
 import { useTheme, useAuth, useNavigation, useData } from '../../context/AppContext';
 
 interface Notification {
@@ -41,12 +42,11 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showProfilePhotoModal, setShowProfilePhotoModal] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const dropdownRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -374,34 +374,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
     setShowNotifications(false);
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUser) return;
 
-    setUploadingPhoto(true);
-    try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const formData = new FormData();
-      formData.append('photo', file);
-
-      const res = await fetch(`/api/users/${currentUser.id}/profile-photo`, {
-        method: 'POST',
-        headers: { 'X-CSRF-TOKEN': csrfToken },
-        body: formData,
-      });
-
-      if (res.ok) {
-        const updatedUser = await res.json();
-        updateCurrentUser(updatedUser);
-      }
-    } catch (err) {
-      console.error('Photo upload failed:', err);
-    } finally {
-      setUploadingPhoto(false);
-      // Reset file input
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
 
   const pageTitles: Record<string, string> = {
     'admin-dashboard': 'Dashboard',
@@ -573,7 +546,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
             {/* Avatar / Photo */}
             {currentUser?.profilePhoto ? (
               <img
-                src={currentUser.profilePhoto}
+                src={`${currentUser.profilePhoto}?t=${Date.now()}`}
                 alt={currentUser.name}
                 className="w-8 h-8 rounded-full object-cover flex-shrink-0 ring-2 ring-green-primary/30"
               />
@@ -603,10 +576,10 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
               <div className="px-4 py-4 dark:border-dark-border border-b border-light-border">
                 <div className="flex items-center gap-3">
                   {/* Profile photo with upload overlay */}
-                  <div className="relative group">
+                  <div className="relative group cursor-pointer" onClick={() => setShowProfilePhotoModal(true)}>
                     {currentUser?.profilePhoto ? (
                       <img
-                        src={currentUser.profilePhoto}
+                        src={`${currentUser.profilePhoto}?t=${Date.now()}`}
                         alt={currentUser?.name}
                         className="w-12 h-12 rounded-full object-cover ring-2 ring-green-primary/30"
                       />
@@ -619,17 +592,9 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                       </div>
                     )}
                     {/* Camera overlay */}
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingPhoto}
-                      className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                    >
-                      {uploadingPhoto ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <CameraIcon size={16} className="text-white" />
-                      )}
-                    </button>
+                    <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <CameraIcon size={16} className="text-white" />
+                    </div>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold dark:text-dark-text text-light-text truncate">
@@ -653,12 +618,14 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
               {/* Upload photo button */}
               <div className="px-2 py-2 dark:border-dark-border border-b border-light-border">
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingPhoto}
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    setShowProfilePhotoModal(true);
+                  }}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors"
                 >
                   <CameraIcon size={14} />
-                  {uploadingPhoto ? 'Uploading...' : currentUser?.profilePhoto ? 'Change Photo' : 'Upload Photo'}
+                  {currentUser?.profilePhoto ? 'Change Photo' : 'Upload Photo'}
                 </button>
                 <button
                   onClick={() => { setShowProfileMenu(false); setShowChangePassword(true); }}
@@ -685,16 +652,18 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
             </div>
           )}
 
-          {/* Hidden file input for photo upload */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/jpg,image/gif,image/webp"
-            onChange={handlePhotoUpload}
-            className="hidden"
-          />
         </div>
       </div>
+
+      {/* Profile Photo Modal */}
+      {currentUser && (
+        <ProfilePhotoModal
+          isOpen={showProfilePhotoModal}
+          onClose={() => setShowProfilePhotoModal(false)}
+          user={currentUser}
+          onPhotoUpdated={updateCurrentUser}
+        />
+      )}
 
       {/* Change Password Modal */}
       <ChangePasswordModal

@@ -18,6 +18,13 @@ function getInitials(name: string, avatarText?: string): string {
   return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
 }
 
+function getPhotoUrlWithCache(url?: string | null): string | null {
+  if (!url) return null;
+  // Add cache-busting timestamp for real-time photo updates
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}t=${Date.now()}`;
+}
+
 export function UserAvatar({
   name,
   avatarText,
@@ -28,11 +35,12 @@ export function UserAvatar({
   title,
 }: UserAvatarProps) {
   const initials = getInitials(name, avatarText);
+  const cachedPhoto = getPhotoUrlWithCache(profilePhoto);
 
-  if (profilePhoto) {
+  if (cachedPhoto) {
     return (
       <img
-        src={profilePhoto}
+        src={cachedPhoto}
         alt={name}
         title={title || name}
         className={`${className} rounded-full object-cover flex-shrink-0`}
