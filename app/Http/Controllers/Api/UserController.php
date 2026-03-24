@@ -86,7 +86,7 @@ class UserController extends Controller
             'name'       => 'required|string|max:255',
             'email'      => 'required|email|unique:users,email',
             'password'   => 'sometimes|string|min:6',
-            'role'       => 'required|in:admin,employee',
+            'role'       => 'required|in:superadmin,supervisor,employee',
             'department' => ['required', Rule::in(Department::values())],
             'position'   => 'nullable|string|max:255',
             'status'     => 'required|in:active,inactive',
@@ -116,7 +116,7 @@ class UserController extends Controller
             'name'       => 'sometimes|string|max:255',
             'email'      => 'sometimes|email|unique:users,email,' . $user->id,
             'password'   => 'sometimes|nullable|string|min:6',
-            'role'       => 'sometimes|in:admin,employee',
+            'role'       => 'sometimes|in:superadmin,supervisor,employee',
             'department' => ['sometimes', Rule::in(Department::values())],
             'position'   => 'nullable|string|max:255',
             'status'     => 'sometimes|in:active,inactive',
@@ -190,12 +190,12 @@ class UserController extends Controller
      */
     public function destroy(User $user): JsonResponse
     {
-        // Protect the primary admin (lowest-ID admin) from deletion
-        $primaryAdmin = User::where('role', 'admin')->orderBy('id')->first();
-        if ($primaryAdmin && $user->id === $primaryAdmin->id) {
+        // Protect the primary superadmin (lowest-ID superadmin) from deletion
+        $primarySuperadmin = User::where('role', 'superadmin')->orderBy('id')->first();
+        if ($primarySuperadmin && $user->id === $primarySuperadmin->id) {
             return response()->json([
                 'success' => false,
-                'error'   => 'The primary administrator account cannot be deleted.',
+                'error'   => 'The primary superadmin account cannot be deleted.',
             ], 403);
         }
 

@@ -90,11 +90,6 @@ Route::prefix('api')->group(function () {
             Route::get('/audit-logs/export-pdf', [AuditLogController::class, 'exportPdf']);
             Route::get('/audit-logs/export-sheet', [AuditLogController::class, 'exportSheet']);
 
-            // Project management (full CRUD)
-            Route::post('/projects', [ProjectController::class, 'store']);
-            Route::put('/projects/{project}', [ProjectController::class, 'update']);
-            Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
-
             // Task delete (Admin only)
             Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
@@ -109,6 +104,13 @@ Route::prefix('api')->group(function () {
             Route::post('/admin/chat/mute', [ChatModerationController::class, 'muteUser']);
             Route::delete('/admin/chat/mute/{user}', [ChatModerationController::class, 'unmuteUser']);
             Route::get('/admin/chat/muted', [ChatModerationController::class, 'mutedUsers']);
+        });
+
+        // ─── Superadmin + Supervisor (Project management) ───────────
+        Route::middleware('role:supervisor')->group(function () {
+            Route::post('/projects', [ProjectController::class, 'store']);
+            Route::put('/projects/{project}', [ProjectController::class, 'update']);
+            Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
         });
 
         // ─── Admin + Technical (Task management + Gantt writes) ────

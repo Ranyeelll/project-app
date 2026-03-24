@@ -61,7 +61,24 @@ class User extends Authenticatable
      */
     public function isAdmin(): bool
     {
-        return $this->department === Department::Admin;
+        $role = strtolower((string) ($this->role ?? ''));
+        return $role === 'superadmin' || $role === 'admin' || $this->department === Department::Admin;
+    }
+
+    /**
+     * Check if user is a supervisor.
+     */
+    public function isSupervisor(): bool
+    {
+        return strtolower((string) ($this->role ?? '')) === 'supervisor';
+    }
+
+    /**
+     * Check if user has elevated role permissions.
+     */
+    public function isElevatedRole(): bool
+    {
+        return $this->isAdmin() || $this->isSupervisor();
     }
 
     /**

@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
+import { isSuperadmin } from '../../utils/roles';
 export function ReportsMediaPage() {
   const { media, projects, users, refreshMedia } = useData();
   const { currentUser } = useAuth();
@@ -181,7 +182,7 @@ export function ReportsMediaPage() {
           const project = projects.find((p) => p.id === item.projectId);
           const uploader = users.find((u) => u.id === item.uploadedBy);
           const canDelete =
-          currentUser?.role === 'admin' || item.uploadedBy === currentUser?.id;
+          isSuperadmin(currentUser?.role) || item.uploadedBy === currentUser?.id;
           return (
             <div
               key={item.id}

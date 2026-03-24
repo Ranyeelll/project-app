@@ -13,6 +13,7 @@ import { useData, useAuth } from '../../context/AppContext';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
+import { isSuperadmin } from '../../utils/roles';
 
 export function ResourcesPage() {
   const { media, projects, users } = useData();
@@ -26,7 +27,7 @@ export function ResourcesPage() {
   // Only show media uploaded by admins AND visible to this employee
   const adminMedia = media.filter((m) => {
     const uploader = users.find((u) => u.id === m.uploadedBy);
-    if (uploader?.role !== 'admin') return false;
+    if (!isSuperadmin(uploader?.role)) return false;
     // If visibleTo is empty/null, visible to all employees
     if (!m.visibleTo || m.visibleTo.length === 0) return true;
     // Otherwise, only show if current user is in the list

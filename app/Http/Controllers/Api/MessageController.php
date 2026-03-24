@@ -247,8 +247,9 @@ class MessageController extends Controller
     {
         $requestUserId = (int) $request->query('user_id', 0);
         $requestRole   = $request->query('user_role', '');
+        $isElevatedRole = in_array(strtolower((string) $requestRole), ['superadmin', 'admin'], true);
 
-        if ($message->sender_id !== $requestUserId && $requestRole !== 'admin') {
+        if ($message->sender_id !== $requestUserId && ! $isElevatedRole) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 

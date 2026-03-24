@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowLeftIcon, DollarSignIcon, UsersIcon } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ArrowLeftIcon, CalendarIcon, DollarSignIcon, ListChecksIcon, UsersIcon } from 'lucide-react';
 import { useData, useAuth, useNavigation } from '../../context/AppContext';
 import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
@@ -19,7 +19,7 @@ interface FormData {
 
 export function CreateProjectPage() {
   const { setCurrentPage } = useNavigation();
-  const { users, setProjects, projects, refreshProjects } = useData();
+  const { users, refreshProjects } = useData();
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,14 +38,43 @@ export function CreateProjectPage() {
   const selectedCount = form.teamIds.length;
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-  const handleSave = async () => {
+  const selectedTeamMembers = useMemo(
+    () => users.filter((u) => form.teamIds.includes(u.id)),
+    [users, form.teamIds]
+  );
+
+  const leaderName = useMemo(
+    () => selectedTeamMembers.find((u) => u.id === form.leaderId)?.name || 'Not selected',
+    [selectedTeamMembers, form.leaderId]
+  );
+
+  const validateForm = (): string | null => {
     if (!form.name.trim()) {
-      setError('Project name is required');
-      return;
+      return 'Project name is required.';
+    }
+
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      return 'End date cannot be earlier than start date.';
+    }
+
+    if (form.budget) {
+      const budget = Number(form.budget);
+      if (Number.isNaN(budget) || budget < 0) {
+        return 'Budget must be a valid non-negative number.';
+      }
     }
 
     if (form.teamIds.length >= 2 && !form.leaderId) {
-      setError('Please select a project leader for projects with 2 or more team members.');
+      return 'Please select a project leader when assigning 2 or more team members.';
+    }
+
+    return null;
+  };
+
+  const handleSave = async () => {
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -61,9 +90,10 @@ export function CreateProjectPage() {
           description: form.description,
           status: form.status,
           priority: form.priority,
-          start_date: form.startDate,
-          end_date: form.endDate,
-          budget: form.budget ? parseInt(form.budget) : null,
+          start_date: form.startDate || null,
+          end_date: form.endDate || null,
+          budget: form.budget ? Number(form.budget) : null,
+          manager_id: currentUser?.id || null,
           team_ids: form.teamIds,
           leader_id: form.leaderId || null,
         })
@@ -88,13 +118,12 @@ export function CreateProjectPage() {
   };
 
   const allTeamMembers = users.filter((u) => u.role === 'employee' && u.status === 'active');
-  const selectedTeamMembers = allTeamMembers.filter((u) => form.teamIds.includes(u.id));
 
   return (
-    <div className="w-full">
+    <div className="w-full pb-8">
       {/* Header */}
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={handleCancel}
@@ -105,25 +134,25 @@ export function CreateProjectPage() {
             </button>
             <div>
               <h1 className="text-2xl font-bold dark:text-dark-text text-light-text">Create New Project</h1>
-              <p className="text-sm dark:text-dark-subtle text-light-subtle mt-0.5">Set up a new project with details, settings and team members</p>
+              <p className="text-sm dark:text-dark-subtle text-light-subtle mt-0.5">Use this form to add a project that aligns with your current project workflow.</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-6 py-8 pb-14">
+      <div className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6">
         {error && (
-          <div className="mb-6 p-4 rounded-lg dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 bg-red-50 border border-red-200 text-red-600">
+          <div className="xl:col-span-2 p-4 rounded-lg dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 bg-red-50 border border-red-200 text-red-600">
             <p className="text-sm font-medium">{error}</p>
           </div>
         )}
 
-        <div className="space-y-8">
+        <div className="space-y-6">
           {/* Project Details Section */}
           <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg p-6">
             <div className="mb-6">
-              <h2 className="text-lg font-semibold dark:text-dark-text text-light-text mb-1">Project Details</h2>
+              <h2 className="text-lg font-semibold dark:text-dark-text text-light-text mb-1">Project Information</h2>
               <p className="text-sm dark:text-dark-subtle text-light-subtle">Basic information about the project</p>
             </div>
 
@@ -136,10 +165,17 @@ export function CreateProjectPage() {
               />
 
               <Textarea
-                label="Description"
+                label="Description *"
                 placeholder="Describe the project objectives, scope, and expected outcomes..."
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
+
+              <Input
+                label="Project Manager"
+                value={currentUser?.name || 'Current user'}
+                disabled
+                hint="Automatically set to the user creating this project."
               />
 
               <div className="grid grid-cols-2 gap-4">
@@ -165,6 +201,7 @@ export function CreateProjectPage() {
                 value={form.budget}
                 onChange={(e) => setForm({ ...form, budget: e.target.value })}
                 icon={<DollarSignIcon size={14} />}
+                hint="Optional. Leave blank if budget is not yet finalized."
               />
             </div>
           </div>
@@ -184,7 +221,8 @@ export function CreateProjectPage() {
                 options={[
                   { value: 'active', label: 'Active' },
                   { value: 'on-hold', label: 'On Hold' },
-                  { value: 'completed', label: 'Completed' }
+                  { value: 'completed', label: 'Completed' },
+                  { value: 'archived', label: 'Archived' },
                 ]}
               />
 
@@ -281,21 +319,58 @@ export function CreateProjectPage() {
             )}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pb-8">
-            <Button
-              variant="secondary"
-              onClick={handleCancel}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSave}
-              loading={loading}
-            >
-              Create Project
-            </Button>
+          <div className="xl:hidden flex items-center justify-end gap-3 pb-2">
+            <Button variant="secondary" onClick={handleCancel}>Cancel</Button>
+            <Button variant="primary" onClick={handleSave} loading={loading}>Create Project</Button>
+          </div>
+        </div>
+
+        {/* Summary Sidebar */}
+        <div className="space-y-4">
+          <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg p-5 sticky top-20">
+            <h3 className="text-sm font-semibold dark:text-dark-text text-light-text mb-4">Form Summary</h3>
+
+            <div className="space-y-3 text-sm">
+              <div className="flex items-start gap-2">
+                <ListChecksIcon size={14} className="mt-0.5 dark:text-dark-muted text-light-muted" />
+                <div>
+                  <p className="dark:text-dark-subtle text-light-subtle">Project Name</p>
+                  <p className="font-medium dark:text-dark-text text-light-text">{form.name.trim() || 'Not set'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <CalendarIcon size={14} className="mt-0.5 dark:text-dark-muted text-light-muted" />
+                <div>
+                  <p className="dark:text-dark-subtle text-light-subtle">Timeline</p>
+                  <p className="font-medium dark:text-dark-text text-light-text">
+                    {form.startDate || 'Start not set'} - {form.endDate || 'End not set'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <DollarSignIcon size={14} className="mt-0.5 dark:text-dark-muted text-light-muted" />
+                <div>
+                  <p className="dark:text-dark-subtle text-light-subtle">Budget</p>
+                  <p className="font-medium dark:text-dark-text text-light-text">{form.budget ? `PHP ${Number(form.budget).toLocaleString()}` : 'Not set'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <UsersIcon size={14} className="mt-0.5 dark:text-dark-muted text-light-muted" />
+                <div>
+                  <p className="dark:text-dark-subtle text-light-subtle">Team</p>
+                  <p className="font-medium dark:text-dark-text text-light-text">{selectedCount} member{selectedCount === 1 ? '' : 's'}</p>
+                  <p className="text-xs dark:text-dark-subtle text-light-subtle mt-1">Leader: {leaderName}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 pt-4 border-t dark:border-dark-border border-light-border space-y-2">
+              <Button variant="primary" onClick={handleSave} loading={loading} className="w-full">Create Project</Button>
+              <Button variant="secondary" onClick={handleCancel} className="w-full">Cancel</Button>
+            </div>
           </div>
         </div>
       </div>

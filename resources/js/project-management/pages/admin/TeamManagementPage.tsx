@@ -19,6 +19,7 @@ import { Input, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge } from '../../components/ui/Badge';
 import { UserAvatar } from '../../components/ui/UserAvatar';
+import { isSuperadmin } from '../../utils/roles';
 export function TeamManagementPage() {
   const { users, setUsers } = useData();
   const [search, setSearch] = useState('');
@@ -204,8 +205,12 @@ export function TeamManagementPage() {
               label: 'All Roles'
             },
             {
-              value: 'admin',
-              label: 'Admin'
+              value: 'superadmin',
+              label: 'Superadmin'
+            },
+            {
+              value: 'supervisor',
+              label: 'Supervisor'
             },
             {
               value: 'employee',
@@ -323,7 +328,7 @@ export function TeamManagementPage() {
                   </td>
                   <td className="px-5 py-3.5">
                     <Badge
-                    variant={user.role === 'admin' ? 'success' : 'info'}
+                    variant={isSuperadmin(user.role) ? 'success' : user.role === 'supervisor' ? 'purple' : 'info'}
                     size="sm">
 
                       {user.role}
@@ -367,9 +372,9 @@ export function TeamManagementPage() {
                       <KeyIcon size={13} />
                       </button>
                       {(() => {
-                        // Find the primary admin (lowest ID among admins)
+                        // Find the primary superadmin (lowest ID among superadmins)
                         const primaryAdminId = users
-                          .filter((u) => u.role === 'admin')
+                          .filter((u) => isSuperadmin(u.role))
                           .reduce((min, u) => {
                             const uid = parseInt(u.id, 10);
                             const mid = parseInt(min, 10);
@@ -378,7 +383,7 @@ export function TeamManagementPage() {
                         return user.id === primaryAdminId ? (
                           <span
                             className="p-1.5 rounded dark:text-green-400 text-green-600 cursor-default"
-                            title="Primary Admin — cannot be deleted">
+                            title="Primary Superadmin — cannot be deleted">
                             <ShieldIcon size={13} />
                           </span>
                         ) : (
@@ -495,8 +500,12 @@ export function TeamManagementPage() {
                 label: 'Employee'
               },
               {
-                value: 'admin',
-                label: 'Admin'
+                value: 'supervisor',
+                label: 'Supervisor'
+              },
+              {
+                value: 'superadmin',
+                label: 'Superadmin'
               }]
               } />
 

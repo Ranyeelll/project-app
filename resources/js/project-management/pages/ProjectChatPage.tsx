@@ -9,6 +9,7 @@ import { useAuth, useData } from '../context/AppContext';
 import { Project, User } from '../data/mockData';
 import { ProjectChat } from '../components/chat/ProjectChat';
 import { DirectChat } from '../components/chat/DirectChat';
+import { isElevatedRole } from '../utils/roles';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ export function ProjectChatPage() {
 
   const myProjects = projects.filter((p) => {
     if (!currentUser) return false;
-    if (currentUser.role === 'admin') return true;
+    if (isElevatedRole(currentUser.role)) return true;
     return p.managerId === currentUser.id || (p.teamIds ?? []).includes(currentUser.id);
   });
 

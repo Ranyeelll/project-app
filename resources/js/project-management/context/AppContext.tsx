@@ -24,6 +24,7 @@ import {
   MOCK_MEDIA,
   MOCK_TIME_LOGS } from
 '../data/mockData';
+import { isElevatedRole } from '../utils/roles';
 // ─── Theme Context ───────────────────────────────────────────────────────────
 interface ThemeContextType {
   isDark: boolean;
@@ -291,7 +292,7 @@ export function AppProvider({ children }: AppProviderProps) {
   // Once auth state changes, set the right default page and push URL
   useEffect(() => {
     if (currentUser) {
-      const target = currentUser.role === 'admin' ? 'admin-dashboard' : 'employee-dashboard';
+      const target = isElevatedRole(currentUser.role) ? 'admin-dashboard' : 'employee-dashboard';
       navigate(target);
     }
   }, [currentUser]);

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangleIcon, XIcon, ArrowRightIcon } from 'lucide-react';
 import { Button } from './Button';
 import { useAuth, useData, useNavigation } from '../../context/AppContext';
+import { isEmployeeRole } from '../../utils/roles';
 
 interface OverdueWarningModalProps {
   isOpen: boolean;
@@ -27,7 +28,7 @@ export function OverdueWarningModal({ isOpen, onClose }: OverdueWarningModalProp
 
   // Find overdue tasks assigned to the current employee
   const overdueTasks = useMemo(() => {
-    if (!currentUser || currentUser.role !== 'employee') return [];
+    if (!currentUser || !isEmployeeRole(currentUser.role)) return [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return tasks.filter((t) => {

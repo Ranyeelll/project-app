@@ -29,7 +29,7 @@ return new class extends Migration
 
         // Update admin role users to have Admin department
         DB::table('users')
-            ->where('role', 'admin')
+            ->whereIn('role', ['admin', 'superadmin'])
             ->update(['department' => 'Admin']);
 
         // Any remaining non-standard departments become Employee

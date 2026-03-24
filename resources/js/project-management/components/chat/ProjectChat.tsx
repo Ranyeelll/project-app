@@ -26,6 +26,7 @@ import {
   CornerUpRightIcon,
 } from 'lucide-react';
 import { useAuth, useData } from '../../context/AppContext';
+import { isSuperadmin } from '../../utils/roles';
 import { Project, User } from '../../data/mockData';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -452,7 +453,7 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
   const lastIdRef = useRef<number>(0);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = isSuperadmin(currentUser?.role);
 
   // Members for @mentions — exclude current user
   const projectMembers = useMemo((): User[] => {

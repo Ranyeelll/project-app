@@ -25,8 +25,8 @@ Broadcast::channel('project.{projectId}', function ($user, int $projectId) {
     if (!$project) {
         return false;
     }
-    // Admin can join any project; employees must be on the team or be the manager
-    $allowed = $user->role === 'admin'
+    // Elevated roles can join any project; others must be on the team or be the manager
+    $allowed = in_array(strtolower((string) ($user->role ?? '')), ['superadmin', 'supervisor', 'admin'], true)
         || (int) $project->manager_id === $user->id
         || in_array($user->id, (array) $project->team_ids);
 

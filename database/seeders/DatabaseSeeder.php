@@ -21,7 +21,7 @@ class DatabaseSeeder extends Seeder
                 'name' => 'Alex Rivera',
                 'email' => 'admin@maptech.com',
                 'password' => Hash::make('admin123'),
-                'role' => 'admin',
+                'role' => 'superadmin',
                 'department' => 'Admin',
                 'position' => 'Project Manager',
                 'status' => 'active',

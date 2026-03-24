@@ -20,6 +20,7 @@ import {
   ShieldAlertIcon } from
 'lucide-react';
 import { useAuth, useNavigation, useTheme } from '../../context/AppContext';
+import { isElevatedRole } from '../../utils/roles';
 
 interface NavItem {
   id: string;
@@ -80,7 +81,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
   const department = currentUser?.department;
   const navItems = department && DEPARTMENT_NAV[department]
     ? DEPARTMENT_NAV[department]
-    : (currentUser?.role === 'admin' ? ADMIN_NAV : EMPLOYEE_NAV);
+    : (isElevatedRole(currentUser?.role) ? ADMIN_NAV : EMPLOYEE_NAV);
   return (
     <aside className={`
       fixed inset-y-0 left-0 z-50 w-64 flex flex-col h-full

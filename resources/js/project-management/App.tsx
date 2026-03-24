@@ -32,6 +32,7 @@ import { BudgetRequestPage } from './pages/employee/BudgetRequestPage';
 import { LogTimePage } from './pages/employee/LogTimePage';
 import { ReportIssuePage } from './pages/employee/ReportIssuePage';
 import { ResourcesPage } from './pages/employee/ResourcesPage';
+import { isElevatedRole, isEmployeeRole, isSuperadmin } from './utils/roles';
 function AppContent() {
   const { currentUser } = useAuth();
   const { currentPage } = useNavigation();
@@ -54,7 +55,7 @@ function AppContent() {
   useEffect(() => {
     if (
       currentUser &&
-      currentUser.role === 'employee' &&
+      isEmployeeRole(currentUser.role) &&
       !currentUser.mustChangePassword &&
       tasks.length > 0
     ) {
@@ -162,7 +163,7 @@ function AppContent() {
 
     // Employee department (default) - assigned tasks and basic access
     // Also fallback for legacy role-based routing
-    if (dept === 'Employee' || currentUser.role === 'employee') {
+    if (dept === 'Employee' || isEmployeeRole(currentUser.role)) {
       switch (currentPage) {
         case 'employee-dashboard':
           return <EmployeeDashboard />;
@@ -186,7 +187,7 @@ function AppContent() {
     }
 
     // Fallback for admin role (legacy)
-    if (currentUser.role === 'admin') {
+    if (isElevatedRole(currentUser.role) || isSuperadmin(currentUser.role)) {
       switch (currentPage) {
         case 'admin-dashboard':
           return <AdminDashboard />;

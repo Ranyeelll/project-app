@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'employee';
+export type UserRole = 'superadmin' | 'supervisor' | 'employee' | 'admin';
 export type Department = 'Admin' | 'Accounting' | 'Technical' | 'Employee';
 
 export interface User {
@@ -183,7 +183,7 @@ export const MOCK_USERS: User[] = [
   id: 'u1',
   name: 'Alex Rivera',
   email: 'admin@maptech.com',
-  role: 'admin',
+  role: 'superadmin',
   avatar: 'AR',
   department: 'Engineering',
   position: 'Project Manager',

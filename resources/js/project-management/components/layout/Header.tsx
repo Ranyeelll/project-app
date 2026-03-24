@@ -22,6 +22,7 @@ import {
 import { ChangePasswordModal } from '../ui/ChangePasswordModal';
 import { ProfilePhotoModal } from '../ui/ProfilePhotoModal';
 import { useTheme, useAuth, useNavigation, useData } from '../../context/AppContext';
+import { isElevatedRole, isSuperadmin } from '../../utils/roles';
 
 interface Notification {
   id: string;
@@ -89,7 +90,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   // ── Build notifications based on role ──────────────────────────────────
   const notifications = useMemo((): Notification[] => {
     const notifs: Notification[] = [];
-    const isAdmin = currentUser?.role === 'admin';
+    const isAdmin = isElevatedRole(currentUser?.role);
 
     if (isAdmin) {
       // 1. Pending task reviews
@@ -414,7 +415,9 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
             {title}
           </h1>
           <p className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5 hidden sm:block">
-            {currentUser?.role === 'admin' ? 'Administrator' : 'Employee'} ·{' '}
+            {isSuperadmin(currentUser?.role)
+              ? 'Superadmin'
+              : (currentUser?.role === 'supervisor' ? 'Supervisor' : 'Employee')} ·{' '}
             {currentUser?.department}
           </p>
         </div>
@@ -515,7 +518,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                 <div className="px-4 py-2.5 dark:border-dark-border border-t border-light-border text-center">
                   <button
                     onClick={() => {
-                      setCurrentPage(currentUser?.role === 'admin' ? 'admin-dashboard' : 'employee-dashboard');
+                      setCurrentPage(isElevatedRole(currentUser?.role) ? 'admin-dashboard' : 'employee-dashboard');
                       setShowNotifications(false);
                     }}
                     className="text-[11px] font-medium text-green-primary hover:text-green-400 transition-colors"
