@@ -29,6 +29,8 @@ export function TeamManagementPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [recoveryInfo, setRecoveryInfo] = useState<{ code: string; name: string; id: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -54,6 +56,7 @@ export function TeamManagementPage() {
     return matchSearch && matchRole;
   });
   const openCreate = () => {
+    setSaveError('');
     setForm({
       name: '',
       email: '',
@@ -67,6 +70,7 @@ export function TeamManagementPage() {
   };
   const openEdit = (u: User) => {
     setSelectedUser(u);
+    setSaveError('');
     setForm({
       name: u.name,
       email: u.email,
@@ -79,13 +83,31 @@ export function TeamManagementPage() {
     setModalMode('edit');
   };
   const handleSave = async () => {
+    setSaveError('');
+
+    if (!form.name.trim()) {
+      setSaveError('Full name is required.');
+      return;
+    }
+
+    if (!form.email.trim()) {
+      setSaveError('Email is required.');
+      return;
+    }
+
+    if (modalMode === 'create' && !form.password.trim()) {
+      setSaveError('Password is required when creating a user.');
+      return;
+    }
+
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    setSaving(true);
 
     if (modalMode === 'create') {
       try {
         const res = await fetch('/api/users', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
           body: JSON.stringify({
             name: form.name,
             email: form.email,
@@ -96,21 +118,33 @@ export function TeamManagementPage() {
             status: form.status,
           }),
         });
-        if (res.ok) {
-          const data = await res.json();
-          const newUser: User = data;
-          setUsers((prev) => [...prev, newUser]);
-          // Show recovery code to admin
-          if (data.recovery_code) {
-            setRecoveryInfo({ code: data.recovery_code, name: data.name || form.name, id: data.id || '' });
-          }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const message = err?.errors
+            ? Object.values(err.errors).flat().join(' ')
+            : (err?.message || err?.error || 'Failed to create user.');
+          setSaveError(message);
+          setSaving(false);
+          return;
         }
-      } catch { /* network error — silent fail */ }
+
+        const data = await res.json();
+        const newUser: User = data;
+        setUsers((prev) => [...prev, newUser]);
+        setModalMode(null);
+
+        // Show recovery code to superadmin
+        if (data.recovery_code) {
+          setRecoveryInfo({ code: data.recovery_code, name: data.name || form.name, id: data.id || '' });
+        }
+      } catch {
+        setSaveError('Network error while creating user. Please try again.');
+      }
     } else if (modalMode === 'edit' && selectedUser) {
       try {
         const res = await fetch(`/api/users/${selectedUser.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
           body: JSON.stringify({
             name: form.name,
             email: form.email,
@@ -121,13 +155,24 @@ export function TeamManagementPage() {
             status: form.status,
           }),
         });
-        if (res.ok) {
-          const updated: User = await res.json();
-          setUsers((prev) => prev.map((u) => u.id === selectedUser.id ? updated : u));
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const message = err?.errors
+            ? Object.values(err.errors).flat().join(' ')
+            : (err?.message || err?.error || 'Failed to update user.');
+          setSaveError(message);
+          setSaving(false);
+          return;
         }
-      } catch { /* network error — silent fail */ }
+
+        const updated: User = await res.json();
+        setUsers((prev) => prev.map((u) => u.id === selectedUser.id ? updated : u));
+        setModalMode(null);
+      } catch {
+        setSaveError('Network error while updating user. Please try again.');
+      }
     }
-    setModalMode(null);
+    setSaving(false);
   };
   const handleDelete = async (id: string) => {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -415,13 +460,19 @@ export function TeamManagementPage() {
             <Button variant="secondary" onClick={() => setModalMode(null)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleSave}>
+            <Button variant="primary" onClick={handleSave} loading={saving}>
               {modalMode === 'create' ? 'Add Employee' : 'Save Changes'}
             </Button>
           </>
         }>
 
         <div className="space-y-4">
+          {saveError && (
+            <div className="p-3 rounded-lg dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400 bg-red-50 border border-red-200 text-red-600 text-sm">
+              {saveError}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Full Name"
