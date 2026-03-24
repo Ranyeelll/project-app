@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class GanttController extends Controller
 {
@@ -792,6 +793,8 @@ class GanttController extends Controller
             'visible_to_users.*' => 'string',
         ]);
 
+        $this->assertWithinProjectDateRange($project, $data['start_date'] ?? null, $data['end_date'] ?? null);
+
         $item = GanttItem::create(array_merge($data, [
             'project_id' => $project->id,
             'progress'   => $data['progress'] ?? 0,
@@ -830,6 +833,15 @@ class GanttController extends Controller
             'visible_to_users' => 'nullable|array',
             'visible_to_users.*' => 'string',
         ]);
+
+        $nextStart = array_key_exists('start_date', $data)
+            ? ($data['start_date'] ?: null)
+            : ($item->start_date?->toDateString());
+        $nextEnd = array_key_exists('end_date', $data)
+            ? ($data['end_date'] ?: null)
+            : ($item->end_date?->toDateString());
+
+        $this->assertWithinProjectDateRange($project, $nextStart, $nextEnd);
 
         // Detect visibility changes for audit
         $oldRoles = $item->visible_to_roles ?? [];
@@ -1005,6 +1017,35 @@ class GanttController extends Controller
     {
         if ($item->project_id !== $project->id) {
             abort(404);
+        }
+    }
+
+    private function assertWithinProjectDateRange(Project $project, ?string $startDate, ?string $endDate): void
+    {
+        if (!$startDate && !$endDate) {
+            return;
+        }
+
+        $projectStart = $project->start_date ? Carbon::parse($project->start_date)->startOfDay() : null;
+        $projectEnd = $project->end_date ? Carbon::parse($project->end_date)->startOfDay() : null;
+
+        if (!$projectStart || !$projectEnd) {
+            return;
+        }
+
+        $start = $startDate ? Carbon::parse($startDate)->startOfDay() : null;
+        $end = $endDate ? Carbon::parse($endDate)->startOfDay() : $start;
+
+        if ($start && $start < $projectStart) {
+            throw ValidationException::withMessages([
+                'start_date' => ['Start date must be on or after project start date (' . $projectStart->toDateString() . ').'],
+            ]);
+        }
+
+        if ($end && $end > $projectEnd) {
+            throw ValidationException::withMessages([
+                'end_date' => ['End date must be on or before project end date (' . $projectEnd->toDateString() . ').'],
+            ]);
         }
     }
 

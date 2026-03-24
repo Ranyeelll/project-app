@@ -204,6 +204,14 @@ export function GanttPage() {
 
   // Timeline range
   const timelineRange = useMemo(() => {
+    if (project?.startDate && project?.endDate) {
+      const start = parseDate(project.startDate);
+      const end = parseDate(project.endDate);
+      if (end >= start) {
+        return { start, end, totalDays: Math.max(daysBetween(start, end) + 1, 1) };
+      }
+    }
+
     const dates: Date[] = [];
     projectItems.forEach(i => {
       if (i.startDate) dates.push(parseDate(i.startDate));
@@ -219,8 +227,8 @@ export function GanttPage() {
     }
     const min = new Date(Math.min(...dates.map(d => d.getTime())));
     const max = new Date(Math.max(...dates.map(d => d.getTime())));
-    const start = new Date(Date.UTC(min.getUTCFullYear(), min.getUTCMonth(), 1));
-    const end = new Date(Date.UTC(max.getUTCFullYear(), max.getUTCMonth() + 2, 0));
+    const start = min;
+    const end = max;
     const totalDays = Math.max(daysBetween(start, end) + 1, 1);
     return { start, end, totalDays };
   }, [projectItems, project]);
@@ -268,17 +276,30 @@ export function GanttPage() {
   const effectiveDatesById = useMemo(() => {
     const map = new Map<string, { start: string; end: string }>();
     const anchor = project?.startDate || toYmd(timelineRange.start);
+    const projectStart = project?.startDate ? parseDate(project.startDate) : null;
+    const projectEnd = project?.endDate ? parseDate(project.endDate) : null;
 
     visibleItems.forEach((item, idx) => {
       const parentRange = item.parentId ? map.get(item.parentId) : null;
-      const start = item.startDate || item.endDate || (parentRange ? addDays(parentRange.end, 1) : addDays(anchor, idx * 4));
+      let start = item.startDate || item.endDate || (parentRange ? addDays(parentRange.end, 1) : addDays(anchor, idx * 4));
       let end = item.endDate || item.startDate || addDays(start, durationByType(item.type) - 1);
       if (parseDate(end) < parseDate(start)) end = start;
+
+      if (projectStart && parseDate(start) < projectStart) {
+        start = toYmd(projectStart);
+      }
+      if (projectEnd && parseDate(end) > projectEnd) {
+        end = toYmd(projectEnd);
+      }
+      if (parseDate(end) < parseDate(start)) {
+        end = start;
+      }
+
       map.set(item.id, { start, end });
     });
 
     return map;
-  }, [visibleItems, project?.startDate, timelineRange.start]);
+  }, [visibleItems, project?.startDate, project?.endDate, timelineRange.start]);
   const getEffectiveDates = (item: GanttItem): { start: string; end: string } => (
     effectiveDatesById.get(item.id) || { start: project?.startDate || toYmd(timelineRange.start), end: project?.startDate || toYmd(timelineRange.start) }
   );
@@ -358,24 +379,36 @@ export function GanttPage() {
       visible_to_roles: data.visibleToRoles ?? [],
       visible_to_users: data.visibleToUsers ?? [],
     };
-    if (editItem) {
-      await fetch(`/api/projects/${selectedProject}/gantt-items/${editItem.id}`, {
-        method: 'PUT',
+    try {
+      const endpoint = editItem
+        ? `/api/projects/${selectedProject}/gantt-items/${editItem.id}`
+        : `/api/projects/${selectedProject}/gantt-items`;
+      const method = editItem ? 'PUT' : 'POST';
+
+      const res = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
         body: JSON.stringify(payload),
       });
-    } else {
-      await fetch(`/api/projects/${selectedProject}/gantt-items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
-        body: JSON.stringify(payload),
-      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const firstError = errorData?.errors
+          ? Object.values(errorData.errors)[0]
+          : null;
+        const message = Array.isArray(firstError)
+          ? String(firstError[0])
+          : (typeof firstError === 'string' ? firstError : (errorData?.message || 'Failed to save gantt item.'));
+        throw new Error(message);
+      }
+
+      await refreshGanttItems(selectedProject, previewAs || undefined);
+      setShowForm(false);
+      setEditItem(null);
+      setAddParent(null);
+    } finally {
+      setSaving(false);
     }
-    await refreshGanttItems(selectedProject, previewAs || undefined);
-    setSaving(false);
-    setShowForm(false);
-    setEditItem(null);
-    setAddParent(null);
   };
 
   const handleDelete = async (item: GanttItem) => {
@@ -470,13 +503,13 @@ export function GanttPage() {
               <select
                 value={previewAs}
                 onChange={e => setPreviewAs(e.target.value)}
-                className="pl-2 pr-6 py-1.5 text-xs rounded-lg dark:bg-dark-card dark:border-dark-border dark:text-dark-muted bg-white border border-light-border text-light-muted focus:outline-none"
+                className="pl-2 pr-6 py-1.5 text-xs rounded-lg dark:bg-dark-card dark:border-dark-border dark:text-dark-muted bg-white border border-light-border text-light-muted focus:outline-none dark:[color-scheme:dark]"
                 title="Preview what each department can see in this gantt chart"
               >
-                <option value="">Preview: Admin</option>
-                <option value="Technical">Preview: Technical</option>
-                <option value="Accounting">Preview: Accounting</option>
-                <option value="Employee">Preview: Employee</option>
+                <option value="" className="text-black bg-white">Preview: Admin</option>
+                <option value="Technical" className="text-black bg-white">Preview: Technical</option>
+                <option value="Accounting" className="text-black bg-white">Preview: Accounting</option>
+                <option value="Employee" className="text-black bg-white">Preview: Employee</option>
               </select>
             </div>
           )}
@@ -652,12 +685,12 @@ export function GanttPage() {
                           value={currentState}
                           onChange={(e) => handleStateChange(item, e.target.value as ItemState)}
                           disabled={isStateSaving}
-                          className="w-full text-[11px] leading-none dark:text-dark-text text-light-text lowercase bg-transparent border-0 focus:outline-none focus:ring-0 pr-1 disabled:opacity-60"
+                          className="w-full text-[11px] leading-none dark:text-dark-text text-light-text lowercase bg-transparent border-0 focus:outline-none focus:ring-0 pr-1 disabled:opacity-60 dark:[color-scheme:dark]"
                           title="Change task state"
                         >
-                          <option value="planned">planned</option>
-                          <option value="in process">in process</option>
-                          <option value="completed">completed</option>
+                          <option value="planned" className="text-black bg-white">planned</option>
+                          <option value="in process" className="text-black bg-white">in process</option>
+                          <option value="completed" className="text-black bg-white">completed</option>
                         </select>
                       </div>
                     </div>
@@ -829,6 +862,8 @@ export function GanttPage() {
         parentItem={addParent}
         projectTeam={projectTeam}
         isAdmin={isAdmin}
+        projectStartDate={project?.startDate}
+        projectEndDate={project?.endDate}
       />
     </div>
   );

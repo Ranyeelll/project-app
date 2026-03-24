@@ -12,7 +12,7 @@ use InvalidArgumentException;
 
 /**
  * Project Approval Service: Manages the project approval state machine.
- * Transitions: draft → technical_review → accounting_review → approved/rejected/revision_requested
+ * Transitions: draft → technical_review → accounting_review (admin review) → approved/rejected/revision_requested
  */
 class ProjectApprovalService
 {
@@ -74,7 +74,7 @@ class ProjectApprovalService
     private function approveFinal(Project $project, User $actor, string $current, ?string $notes): Project
     {
         $this->requireStatus($current, ['accounting_review'], 'approve_final');
-        $this->requireDepartment($actor, [Department::Accounting, Department::Admin], 'approve_final');
+        $this->requireFinalApproverRole($actor, 'approve_final');
 
         DB::transaction(function () use ($project, $actor, $notes) {
             $project->update([
@@ -96,7 +96,7 @@ class ProjectApprovalService
         if ($current === 'technical_review') {
             $this->requireDepartment($actor, [Department::Technical, Department::Admin], 'request_revision');
         } else {
-            $this->requireDepartment($actor, [Department::Accounting, Department::Admin], 'request_revision');
+            $this->requireFinalApproverRole($actor, 'request_revision');
         }
 
         $project->update([
@@ -116,7 +116,7 @@ class ProjectApprovalService
         if ($current === 'technical_review') {
             $this->requireDepartment($actor, [Department::Technical, Department::Admin], 'reject');
         } else {
-            $this->requireDepartment($actor, [Department::Admin], 'reject');
+            $this->requireFinalApproverRole($actor, 'reject');
         }
 
         $project->update([
@@ -185,6 +185,15 @@ class ProjectApprovalService
         if (!in_array($actor->department, $allowed)) {
             throw new InvalidArgumentException(
                 "Action '{$action}' is not allowed for department '{$actor->department->value}'.",
+            );
+        }
+    }
+
+    private function requireFinalApproverRole(User $actor, string $action): void
+    {
+        if (!$actor->isSupervisor() && !$actor->isAdmin()) {
+            throw new InvalidArgumentException(
+                "Action '{$action}' is only allowed for supervisor or superadmin.",
             );
         }
     }

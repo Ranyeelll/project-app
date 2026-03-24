@@ -12,6 +12,8 @@ interface GanttItemFormProps {
   parentItem?: GanttItem | null;
   projectTeam: User[];
   isAdmin: boolean;
+  projectStartDate?: string;
+  projectEndDate?: string;
 }
 
 function allowedTypes(parentItem?: GanttItem | null): GanttItemType[] {
@@ -30,6 +32,8 @@ export function GanttItemForm({
   parentItem,
   projectTeam,
   isAdmin,
+  projectStartDate,
+  projectEndDate,
 }: GanttItemFormProps) {
   const types = editItem ? [editItem.type] : allowedTypes(parentItem);
 
@@ -80,6 +84,17 @@ export function GanttItemForm({
       setError('End date must be the same as or after start date.');
       return;
     }
+
+    const effectiveEndDate = isMilestone ? form.startDate : form.endDate;
+    if (projectStartDate && form.startDate < projectStartDate) {
+      setError(`Start date must be on or after project start date (${projectStartDate}).`);
+      return;
+    }
+    if (projectEndDate && effectiveEndDate > projectEndDate) {
+      setError(`End date must be on or before project end date (${projectEndDate}).`);
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -177,6 +192,8 @@ export function GanttItemForm({
               type="date"
               value={form.startDate}
               onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+              min={projectStartDate}
+              max={projectEndDate}
               className="w-full px-3 py-2 text-sm rounded-lg dark:bg-dark-bg dark:border-dark-border dark:text-dark-text bg-gray-50 border border-light-border text-light-text focus:outline-none focus:ring-1 focus:ring-green-primary/50"
             />
           </div>
@@ -187,6 +204,8 @@ export function GanttItemForm({
                 type="date"
                 value={form.endDate}
                 onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                min={projectStartDate}
+                max={projectEndDate}
                 className="w-full px-3 py-2 text-sm rounded-lg dark:bg-dark-bg dark:border-dark-border dark:text-dark-text bg-gray-50 border border-light-border text-light-text focus:outline-none focus:ring-1 focus:ring-green-primary/50"
               />
             </div>

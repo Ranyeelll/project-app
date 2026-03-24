@@ -3,7 +3,6 @@ import {
   AppProvider,
   useAuth,
   useNavigation,
-  useTheme,
   useData } from
 './context/AppContext';
 import { AppLayout } from './components/layout/AppLayout';
@@ -36,7 +35,6 @@ import { isElevatedRole, isEmployeeRole, isSuperadmin, isSupervisor } from './ut
 function AppContent() {
   const { currentUser } = useAuth();
   const { currentPage } = useNavigation();
-  const { isDark } = useTheme();
   const { tasks } = useData();
 
   // Force password-change modal when must_change_password is set

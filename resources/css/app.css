@@ -1,3 +1,12 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+	.theme-switching *,
+	.theme-switching *::before,
+	.theme-switching *::after {
+		transition: none !important;
+		animation: none !important;
+	}
+}

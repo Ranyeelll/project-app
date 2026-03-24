@@ -20,12 +20,14 @@ import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { UserAvatar } from '../../components/ui/UserAvatar';
 import { ApprovalActionModal } from '../../components/projects/ApprovalActionModal';
+import { isSuperadmin, isSupervisor } from '../../utils/roles';
 type ModalMode = 'create' | 'edit' | 'view' | null;
 export function ProjectsPage() {
   const { projects, setProjects, users, tasks, setTasks, refreshTasks, refreshProjects } = useData();
   const { currentUser } = useAuth();
   const { setCurrentPage } = useNavigation();
   const isAdmin = currentUser?.department === 'Admin';
+  const canFinalApprove = isSuperadmin(currentUser?.role) || isSupervisor(currentUser?.role);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [approvalFilter, setApprovalFilter] = useState('all');
@@ -270,11 +272,15 @@ export function ProjectsPage() {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const res = await fetch(`/api/projects/${approvalProject.id}/approval`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
       body: JSON.stringify({ action: approvalAction, notes }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        throw new Error('Your session expired. Please log in again.');
+      }
       throw new Error(data.message || 'Approval action failed.');
     }
     await refreshProjects();
@@ -368,7 +374,7 @@ export function ProjectsPage() {
             { value: 'all', label: 'All Approval' },
             { value: 'draft', label: 'Draft' },
             { value: 'technical_review', label: 'Tech Review' },
-            { value: 'accounting_review', label: 'Acct Review' },
+            { value: 'accounting_review', label: 'Admin Review' },
             { value: 'approved', label: 'Approved' },
             { value: 'rejected', label: 'Rejected' },
             { value: 'revision_requested', label: 'Revision Requested' },
@@ -544,16 +550,26 @@ export function ProjectsPage() {
                 if (dept === 'Admin') {
                   if (as === 'draft') actions.push({ action: 'submit_for_review', label: 'Submit for Review', variant: 'primary' });
                   if (as === 'revision_requested') actions.push({ action: 'resubmit', label: 'Resubmit', variant: 'primary' });
-                  if (as === 'accounting_review') actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
+                  if (as === 'technical_review') {
+                    actions.push({ action: 'approve_technical', label: 'Approve', variant: 'primary' });
+                    actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
+                    actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
+                  }
+                  if (as === 'accounting_review') {
+                    actions.push({ action: 'approve_final', label: 'Final Approve', variant: 'primary' });
+                    actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
+                    actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
+                  }
                 }
                 if (dept === 'Technical' && as === 'technical_review') {
                   actions.push({ action: 'approve_technical', label: 'Approve', variant: 'primary' });
                   actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
                   actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
                 }
-                if (dept === 'Accounting' && as === 'accounting_review') {
+                if (canFinalApprove && as === 'accounting_review') {
                   actions.push({ action: 'approve_final', label: 'Final Approve', variant: 'primary' });
                   actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
+                  actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
                 }
 
                 if (actions.length === 0) return null;

@@ -19,7 +19,7 @@ import {
   ShieldIcon,
   ShieldAlertIcon } from
 'lucide-react';
-import { useAuth, useNavigation, useTheme } from '../../context/AppContext';
+import { useAuth, useNavigation } from '../../context/AppContext';
 import { isElevatedRole, isSupervisor } from '../../utils/roles';
 
 interface NavItem {
@@ -82,7 +82,6 @@ const SUPERVISOR_NAV: NavItem[] = [
 export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { currentUser, logout } = useAuth();
   const { currentPage, setCurrentPage } = useNavigation();
-  const { isDark } = useTheme();
 
   // Use department-based navigation with fallback to role-based
   const department = currentUser?.department;
@@ -111,10 +110,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         <img
           src="/Maptech_Official_Logo_version2_(1).png"
           alt="Maptech Information Solutions Inc."
-          className="h-14 w-auto object-contain"
-          style={{
-            filter: isDark ? 'brightness(1.5) contrast(1.1)' : 'brightness(1)'
-          }} />
+          className="h-14 w-auto object-contain brightness-100 dark:brightness-150 dark:contrast-110" />
         <p className="mt-1.5 text-[10px] font-medium tracking-wide dark:text-dark-muted text-gray-500 text-center">
           Maptech Information Solutions Inc.
         </p>

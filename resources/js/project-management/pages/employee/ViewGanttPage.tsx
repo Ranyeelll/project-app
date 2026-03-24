@@ -157,6 +157,14 @@ export function ViewGanttPage() {
   }, [projectItems, collapsedIds]);
 
   const timelineRange = useMemo(() => {
+    if (project?.startDate && project?.endDate) {
+      const start = parseDate(project.startDate);
+      const end = parseDate(project.endDate);
+      if (end >= start) {
+        return { start, end, totalDays: Math.max(daysBetween(start, end) + 1, 1) };
+      }
+    }
+
     const dates: Date[] = [];
     projectItems.forEach(i => { if (i.startDate) dates.push(parseDate(i.startDate)); if (i.endDate) dates.push(parseDate(i.endDate)); });
     if (project?.startDate) dates.push(parseDate(project.startDate));
@@ -169,8 +177,8 @@ export function ViewGanttPage() {
     }
     const min = new Date(Math.min(...dates.map(d => d.getTime())));
     const max = new Date(Math.max(...dates.map(d => d.getTime())));
-    const start = new Date(Date.UTC(min.getUTCFullYear(), min.getUTCMonth(), 1));
-    const end = new Date(Date.UTC(max.getUTCFullYear(), max.getUTCMonth() + 2, 0));
+    const start = min;
+    const end = max;
     return { start, end, totalDays: Math.max(daysBetween(start, end) + 1, 1) };
   }, [projectItems, project]);
 
@@ -216,17 +224,30 @@ export function ViewGanttPage() {
   const effectiveDatesById = useMemo(() => {
     const map = new Map<string, { start: string; end: string }>();
     const anchor = project?.startDate || toYmd(timelineRange.start);
+    const projectStart = project?.startDate ? parseDate(project.startDate) : null;
+    const projectEnd = project?.endDate ? parseDate(project.endDate) : null;
 
     visibleItems.forEach((item, idx) => {
       const parentRange = item.parentId ? map.get(item.parentId) : null;
-      const start = item.startDate || item.endDate || (parentRange ? addDays(parentRange.end, 1) : addDays(anchor, idx * 4));
+      let start = item.startDate || item.endDate || (parentRange ? addDays(parentRange.end, 1) : addDays(anchor, idx * 4));
       let end = item.endDate || item.startDate || addDays(start, durationByType(item.type) - 1);
       if (parseDate(end) < parseDate(start)) end = start;
+
+      if (projectStart && parseDate(start) < projectStart) {
+        start = toYmd(projectStart);
+      }
+      if (projectEnd && parseDate(end) > projectEnd) {
+        end = toYmd(projectEnd);
+      }
+      if (parseDate(end) < parseDate(start)) {
+        end = start;
+      }
+
       map.set(item.id, { start, end });
     });
 
     return map;
-  }, [visibleItems, project?.startDate, timelineRange.start]);
+  }, [visibleItems, project?.startDate, project?.endDate, timelineRange.start]);
   const getEffectiveDates = (item: GanttItem): { start: string; end: string } => (
     effectiveDatesById.get(item.id) || { start: project?.startDate || toYmd(timelineRange.start), end: project?.startDate || toYmd(timelineRange.start) }
   );

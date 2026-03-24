@@ -1,6 +1,8 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useState,
   createContext,
   useContext } from
@@ -146,23 +148,34 @@ export function AppProvider({ children }: AppProviderProps) {
     const saved = localStorage.getItem('maptech-theme');
     return saved !== null ? saved === 'dark' : true;
   });
+
+  const applyThemeToRoot = useCallback((dark: boolean) => {
+    const root = document.documentElement;
+
+    // Prevent thousands of color transitions from animating during theme flips.
+    root.classList.add('theme-switching');
+    root.classList.toggle('dark', dark);
+    root.classList.toggle('light', !dark);
+    root.style.colorScheme = dark ? 'dark' : 'light';
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        root.classList.remove('theme-switching');
+      });
+    });
+  }, []);
+
   const toggleTheme = useCallback(() => {
     setIsDark((prev) => {
       const next = !prev;
+      applyThemeToRoot(next);
       localStorage.setItem('maptech-theme', next ? 'dark' : 'light');
       return next;
     });
-  }, []);
-  useEffect(() => {
-    const root = document.documentElement;
-    if (isDark) {
-      root.classList.add('dark');
-      root.classList.remove('light');
-    } else {
-      root.classList.remove('dark');
-      root.classList.add('light');
-    }
-  }, [isDark]);
+  }, [applyThemeToRoot]);
+  useLayoutEffect(() => {
+    applyThemeToRoot(isDark);
+  }, [isDark, applyThemeToRoot]);
   // Auth — persisted in localStorage, validated against the database
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
@@ -228,7 +241,7 @@ export function AppProvider({ children }: AppProviderProps) {
   const [currentPage, setCurrentPage] = useState<string>('login');
 
   // Map internal page keys to URL paths
-  const pageToPath = (page: string) => {
+  const pageToPath = useCallback((page: string) => {
     switch (page) {
       case 'login':
         return '/';
@@ -241,10 +254,10 @@ export function AppProvider({ children }: AppProviderProps) {
       default:
         return `/${page}`.replace('//', '/');
     }
-  };
+  }, []);
 
   // Wrapper to navigate: updates state and browser URL (pushState)
-  const navigate = (page: string) => {
+  const navigate = useCallback((page: string) => {
     setCurrentPage(page);
     try {
       const path = pageToPath(page);
@@ -254,7 +267,7 @@ export function AppProvider({ children }: AppProviderProps) {
     } catch (e) {
       // server-side rendering / unavailable window
     }
-  };
+  }, [pageToPath]);
 
   // Validate persisted user against current backend session.
   useEffect(() => {
@@ -405,49 +418,49 @@ export function AppProvider({ children }: AppProviderProps) {
   }, [users]);
 
   // ─── Refresh helpers (can be called from any page) ────────────────────────
-  const refreshUsers = () => {
+  const refreshUsers = useCallback(() => {
     fetch('/api/users')
       .then((res) => res.json())
       .then((data: User[]) => { if (Array.isArray(data) && data.length > 0) setUsers(data); })
       .catch(() => {});
-  };
-  const refreshProjects = () => {
+  }, []);
+  const refreshProjects = useCallback(() => {
     fetch('/api/projects')
       .then((res) => res.json())
       .then((data: Project[]) => { if (Array.isArray(data)) setProjects(data); })
       .catch(() => {});
-  };
-  const refreshTasks = () => {
+  }, []);
+  const refreshTasks = useCallback(() => {
     fetch('/api/tasks')
       .then((res) => res.json())
       .then((data: Task[]) => { if (Array.isArray(data)) setTasks(data); })
       .catch(() => {});
-  };
-  const refreshMedia = () => {
+  }, []);
+  const refreshMedia = useCallback(() => {
     fetch('/api/media')
       .then((res) => res.json())
       .then((data: MediaUpload[]) => { if (Array.isArray(data)) setMedia(data); })
       .catch(() => {});
-  };
-  const refreshTimeLogs = () => {
+  }, []);
+  const refreshTimeLogs = useCallback(() => {
     fetch('/api/time-logs')
       .then((res) => res.json())
       .then((data: TimeLog[]) => { if (Array.isArray(data)) setTimeLogs(data); })
       .catch(() => {});
-  };
-  const refreshBudgetRequests = () => {
+  }, []);
+  const refreshBudgetRequests = useCallback(() => {
     fetch('/api/budget-requests')
       .then((res) => res.json())
       .then((data: BudgetRequest[]) => { if (Array.isArray(data)) setBudgetRequests(data); })
       .catch(() => {});
-  };
-  const refreshIssues = () => {
+  }, []);
+  const refreshIssues = useCallback(() => {
     fetch('/api/issues')
       .then((res) => res.json())
       .then((data: Issue[]) => { if (Array.isArray(data)) setIssues(data); })
       .catch(() => {});
-  };
-  const refreshGanttItems = (projectId: string, previewAs?: string) => {
+  }, []);
+  const refreshGanttItems = useCallback((projectId: string, previewAs?: string) => {
     const url = previewAs
       ? `/api/projects/${projectId}/gantt-items?preview_as=${previewAs}`
       : `/api/projects/${projectId}/gantt-items`;
@@ -455,14 +468,14 @@ export function AppProvider({ children }: AppProviderProps) {
       .then((res) => res.json())
       .then((data: GanttItem[]) => { if (Array.isArray(data)) setGanttItems(data); })
       .catch(() => {});
-  };
-  const refreshGanttDependencies = (projectId: string) => {
+  }, []);
+  const refreshGanttDependencies = useCallback((projectId: string) => {
     fetch(`/api/projects/${projectId}/gantt-dependencies`)
       .then((res) => res.json())
       .then((data: GanttDependency[]) => { if (Array.isArray(data)) setGanttDependencies(data); })
       .catch(() => {});
-  };
-  const refreshFormSubmissions = (projectId: string, formType?: string) => {
+  }, []);
+  const refreshFormSubmissions = useCallback((projectId: string, formType?: string) => {
     const url = formType
       ? `/api/projects/${projectId}/form-submissions?form_type=${formType}`
       : `/api/projects/${projectId}/form-submissions`;
@@ -470,8 +483,8 @@ export function AppProvider({ children }: AppProviderProps) {
       .then((res) => res.json())
       .then((data: ProjectFormSubmission[]) => { if (Array.isArray(data)) setFormSubmissions(data); })
       .catch(() => {});
-  };
-  const refreshAll = () => {
+  }, []);
+  const refreshAll = useCallback(() => {
     refreshUsers();
     refreshProjects();
     refreshTasks();
@@ -479,67 +492,97 @@ export function AppProvider({ children }: AppProviderProps) {
     refreshTimeLogs();
     refreshBudgetRequests();
     refreshIssues();
-  };
+  }, [refreshUsers, refreshProjects, refreshTasks, refreshMedia, refreshTimeLogs, refreshBudgetRequests, refreshIssues]);
 
   // ─── Load all data from the database on mount ────────────────────────────
-  useEffect(() => { refreshAll(); }, []);
+  useEffect(() => { refreshAll(); }, [refreshAll]);
 
   // ─── Auto-refresh every 5 seconds ───────────────────────────────────────
   useEffect(() => {
     const interval = setInterval(refreshAll, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshAll]);
+
+  const themeContextValue = useMemo(() => ({
+    isDark,
+    toggleTheme,
+  }), [isDark, toggleTheme]);
+
+  const authContextValue = useMemo(() => ({
+    currentUser,
+    login,
+    logout,
+    updateCurrentUser,
+  }), [currentUser, login, logout, updateCurrentUser]);
+
+  const navigationContextValue = useMemo(() => ({
+    currentPage,
+    setCurrentPage: navigate,
+  }), [currentPage, navigate]);
+
+  const dataContextValue = useMemo(() => ({
+    users,
+    projects,
+    tasks,
+    budgetRequests,
+    issues,
+    media,
+    timeLogs,
+    ganttItems,
+    ganttDependencies,
+    formSubmissions,
+    setUsers,
+    setProjects,
+    setTasks,
+    setBudgetRequests,
+    setIssues,
+    setMedia,
+    setTimeLogs,
+    refreshTasks,
+    refreshProjects,
+    refreshMedia,
+    refreshTimeLogs,
+    refreshBudgetRequests,
+    refreshIssues,
+    refreshGanttItems,
+    refreshGanttDependencies,
+    refreshFormSubmissions,
+    refreshAll,
+  }), [
+    users,
+    projects,
+    tasks,
+    budgetRequests,
+    issues,
+    media,
+    timeLogs,
+    ganttItems,
+    ganttDependencies,
+    formSubmissions,
+    refreshTasks,
+    refreshProjects,
+    refreshMedia,
+    refreshTimeLogs,
+    refreshBudgetRequests,
+    refreshIssues,
+    refreshGanttItems,
+    refreshGanttDependencies,
+    refreshFormSubmissions,
+    refreshAll,
+  ]);
+
   return (
     <ThemeContext.Provider
-      value={{
-        isDark,
-        toggleTheme
-      }}>
+      value={themeContextValue}>
 
       <AuthContext.Provider
-        value={{
-          currentUser,
-          login,
-          logout,
-          updateCurrentUser
-        }}>
+        value={authContextValue}>
 
         <NavigationContext.Provider
-          value={{
-            currentPage,
-            setCurrentPage: navigate
-          }}>
+          value={navigationContextValue}>
 
           <DataContext.Provider
-            value={{
-              users,
-              projects,
-              tasks,
-              budgetRequests,
-              issues,
-              media,
-              timeLogs,
-              ganttItems,
-              ganttDependencies,
-              formSubmissions,
-              setUsers,
-              setProjects,
-              setTasks,
-              setBudgetRequests,
-              setIssues,
-              setMedia,
-              setTimeLogs,
-              refreshTasks,
-              refreshProjects,
-              refreshMedia,
-              refreshTimeLogs,
-              refreshBudgetRequests,
-              refreshIssues,
-              refreshGanttItems,
-              refreshGanttDependencies,
-              refreshFormSubmissions,
-              refreshAll
-            }}>
+            value={dataContextValue}>
 
             {children}
           </DataContext.Provider>

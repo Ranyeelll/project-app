@@ -167,6 +167,7 @@ export function MyTasksPage() {
     try {
       const res = await fetch(`/api/projects/${projectId}/approval`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -177,6 +178,9 @@ export function MyTasksPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          throw new Error('Your session expired. Please log in again.');
+        }
         throw new Error(data?.message || 'Failed to notify admin.');
       }
 
