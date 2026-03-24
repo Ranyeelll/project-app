@@ -32,7 +32,7 @@ import { BudgetRequestPage } from './pages/employee/BudgetRequestPage';
 import { LogTimePage } from './pages/employee/LogTimePage';
 import { ReportIssuePage } from './pages/employee/ReportIssuePage';
 import { ResourcesPage } from './pages/employee/ResourcesPage';
-import { isElevatedRole, isEmployeeRole, isSuperadmin } from './utils/roles';
+import { isElevatedRole, isEmployeeRole, isSuperadmin, isSupervisor } from './utils/roles';
 function AppContent() {
   const { currentUser } = useAuth();
   const { currentPage } = useNavigation();
@@ -87,8 +87,30 @@ function AppContent() {
   const renderPage = () => {
     const dept = currentUser.department;
 
-    // Admin department - full access
-    if (dept === 'Admin') {
+    // Supervisor role - project and monitoring access only
+    if (isSupervisor(currentUser.role)) {
+      switch (currentPage) {
+        case 'admin-dashboard':
+          return <AdminDashboard />;
+        case 'admin-projects':
+          return <ProjectsPage />;
+        case 'admin-create-project':
+          return <CreateProjectPage />;
+        case 'admin-gantt':
+          return <GanttPage />;
+        case 'admin-monitor':
+          return <MonitorControlPage />;
+        case 'admin-reviews':
+          return <TaskReviewsPage />;
+        case 'admin-chat':
+          return <ProjectChatPage />;
+        default:
+          return <AdminDashboard />;
+      }
+    }
+
+    // Admin department - full access (superadmin)
+    if (dept === 'Admin' && isSuperadmin(currentUser.role)) {
       switch (currentPage) {
         case 'admin-dashboard':
           return <AdminDashboard />;
@@ -187,7 +209,7 @@ function AppContent() {
     }
 
     // Fallback for admin role (legacy)
-    if (isElevatedRole(currentUser.role) || isSuperadmin(currentUser.role)) {
+    if (isSuperadmin(currentUser.role)) {
       switch (currentPage) {
         case 'admin-dashboard':
           return <AdminDashboard />;

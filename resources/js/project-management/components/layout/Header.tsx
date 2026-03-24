@@ -91,6 +91,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   const notifications = useMemo((): Notification[] => {
     const notifs: Notification[] = [];
     const isAdmin = isElevatedRole(currentUser?.role);
+    const canManageBudget = isSuperadmin(currentUser?.role) || currentUser?.department === 'Accounting';
 
     if (isAdmin) {
       // 1. Pending task reviews
@@ -109,33 +110,35 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       }
 
       // 2. Pending budget requests
-      const pendingBudgets = budgetRequests.filter((b) => b.status === 'pending');
-      if (pendingBudgets.length > 0) {
-        notifs.push({
-          id: 'admin-pending-budgets',
-          icon: <DollarSignIcon size={14} />,
-          iconBg: 'bg-yellow-500/15 text-yellow-400',
-          title: 'Budget Requests Pending',
-          description: `${pendingBudgets.length} budget request${pendingBudgets.length > 1 ? 's' : ''} need approval`,
-          time: 'Action needed',
-          navigateTo: 'admin-budget',
-          read: false,
-        });
-      }
+      if (canManageBudget) {
+        const pendingBudgets = budgetRequests.filter((b) => b.status === 'pending');
+        if (pendingBudgets.length > 0) {
+          notifs.push({
+            id: 'admin-pending-budgets',
+            icon: <DollarSignIcon size={14} />,
+            iconBg: 'bg-yellow-500/15 text-yellow-400',
+            title: 'Budget Requests Pending',
+            description: `${pendingBudgets.length} budget request${pendingBudgets.length > 1 ? 's' : ''} need approval`,
+            time: 'Action needed',
+            navigateTo: 'admin-budget',
+            read: false,
+          });
+        }
 
-      // 2b. Budgets awaiting employee revision
-      const revisionBudgets = budgetRequests.filter((b) => b.status === 'revision_requested');
-      if (revisionBudgets.length > 0) {
-        notifs.push({
-          id: 'admin-revision-budgets',
-          icon: <ClockIcon size={14} />,
-          iconBg: 'bg-purple-500/15 text-purple-400',
-          title: 'Budgets Awaiting Revision',
-          description: `${revisionBudgets.length} request${revisionBudgets.length > 1 ? 's' : ''} sent back for revision`,
-          time: 'Waiting on employee',
-          navigateTo: 'admin-budget',
-          read: false,
-        });
+        // Budgets awaiting employee revision
+        const revisionBudgets = budgetRequests.filter((b) => b.status === 'revision_requested');
+        if (revisionBudgets.length > 0) {
+          notifs.push({
+            id: 'admin-revision-budgets',
+            icon: <ClockIcon size={14} />,
+            iconBg: 'bg-purple-500/15 text-purple-400',
+            title: 'Budgets Awaiting Revision',
+            description: `${revisionBudgets.length} request${revisionBudgets.length > 1 ? 's' : ''} sent back for revision`,
+            time: 'Waiting on employee',
+            navigateTo: 'admin-budget',
+            read: false,
+          });
+        }
       }
 
       // 3. Overdue tasks

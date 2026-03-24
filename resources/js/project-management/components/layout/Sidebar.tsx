@@ -20,7 +20,7 @@ import {
   ShieldAlertIcon } from
 'lucide-react';
 import { useAuth, useNavigation, useTheme } from '../../context/AppContext';
-import { isElevatedRole } from '../../utils/roles';
+import { isElevatedRole, isSupervisor } from '../../utils/roles';
 
 interface NavItem {
   id: string;
@@ -71,6 +71,13 @@ const DEPARTMENT_NAV: Record<string, NavItem[]> = {
 // Keep legacy role-based navigation as fallback
 const ADMIN_NAV: NavItem[] = DEPARTMENT_NAV.Admin;
 const EMPLOYEE_NAV: NavItem[] = DEPARTMENT_NAV.Employee;
+const SUPERVISOR_NAV: NavItem[] = [
+  { id: 'admin-dashboard', label: 'Dashboard', icon: <LayoutDashboardIcon size={16} /> },
+  { id: 'admin-projects', label: 'Projects', icon: <FolderKanbanIcon size={16} /> },
+  { id: 'admin-gantt', label: 'Gantt Hub', icon: <GanttChartIcon size={16} /> },
+  { id: 'admin-monitor', label: 'Analytics', icon: <BarChart2Icon size={16} /> },
+  { id: 'admin-reviews', label: 'Task Reviews', icon: <ClipboardCheckIcon size={16} /> },
+];
 
 export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { currentUser, logout } = useAuth();
@@ -79,9 +86,11 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
 
   // Use department-based navigation with fallback to role-based
   const department = currentUser?.department;
-  const navItems = department && DEPARTMENT_NAV[department]
-    ? DEPARTMENT_NAV[department]
-    : (isElevatedRole(currentUser?.role) ? ADMIN_NAV : EMPLOYEE_NAV);
+  const navItems = isSupervisor(currentUser?.role)
+    ? SUPERVISOR_NAV
+    : department && DEPARTMENT_NAV[department]
+      ? DEPARTMENT_NAV[department]
+      : (isElevatedRole(currentUser?.role) ? ADMIN_NAV : EMPLOYEE_NAV);
   return (
     <aside className={`
       fixed inset-y-0 left-0 z-50 w-64 flex flex-col h-full

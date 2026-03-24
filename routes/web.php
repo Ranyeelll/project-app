@@ -76,8 +76,8 @@ Route::prefix('api')->group(function () {
         // Password change (any authenticated user)
         Route::post('/change-password', [AuthController::class, 'changePassword']);
 
-        // ─── Admin Only ───────────────────────────────────────────
-        Route::middleware('department:Admin')->group(function () {
+        // ─── Superadmin Only ───────────────────────────────────────
+        Route::middleware('role:superadmin')->group(function () {
             // User management
             Route::get('/users', [UserController::class, 'index']);
             Route::post('/users', [UserController::class, 'store']);
@@ -85,18 +85,7 @@ Route::prefix('api')->group(function () {
             Route::delete('/users/{user}', [UserController::class, 'destroy']);
             Route::post('/users/{user}/regenerate-recovery', [UserController::class, 'regenerateRecovery']);
 
-            // Audit logs (admin only)
-            Route::get('/audit-logs', [AuditLogController::class, 'index']);
-            Route::get('/audit-logs/export-pdf', [AuditLogController::class, 'exportPdf']);
-            Route::get('/audit-logs/export-sheet', [AuditLogController::class, 'exportSheet']);
-
-            // Task delete (Admin only)
-            Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
-
-            // Issue delete (Admin only)
-            Route::delete('/issues/{issue}', [IssueController::class, 'destroy']);
-
-            // ─── Chat Moderation (Admin only) ──────────────────────
+            // ─── Chat Moderation (Superadmin only) ─────────────────
             Route::delete('/admin/chat/messages/{message}', [ChatModerationController::class, 'deleteMessage']);
             Route::post('/admin/chat/messages/{message}/flag', [ChatModerationController::class, 'flagMessage']);
             Route::delete('/admin/chat/messages/{message}/flag', [ChatModerationController::class, 'unflagMessage']);
@@ -104,6 +93,17 @@ Route::prefix('api')->group(function () {
             Route::post('/admin/chat/mute', [ChatModerationController::class, 'muteUser']);
             Route::delete('/admin/chat/mute/{user}', [ChatModerationController::class, 'unmuteUser']);
             Route::get('/admin/chat/muted', [ChatModerationController::class, 'mutedUsers']);
+
+            // Audit logs (superadmin only)
+            Route::get('/audit-logs', [AuditLogController::class, 'index']);
+            Route::get('/audit-logs/export-pdf', [AuditLogController::class, 'exportPdf']);
+            Route::get('/audit-logs/export-sheet', [AuditLogController::class, 'exportSheet']);
+
+            // Task delete (superadmin only)
+            Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
+
+            // Issue delete (superadmin only)
+            Route::delete('/issues/{issue}', [IssueController::class, 'destroy']);
         });
 
         // ─── Superadmin + Supervisor (Project management) ───────────
@@ -129,8 +129,8 @@ Route::prefix('api')->group(function () {
             Route::delete('/projects/{project}/gantt-dependencies/{dependency}', [GanttController::class, 'destroyDependency']);
         });
 
-        // ─── Admin + Accounting (Budget management) ───────────────
-        Route::middleware('department:Admin,Accounting')->group(function () {
+        // ─── Accounting (+ superadmin bypass) Budget management ────
+        Route::middleware('department:Accounting')->group(function () {
             // Budget approvals and management
             Route::put('/budget-requests/{budget_request}', [BudgetRequestController::class, 'update']);
             Route::delete('/budget-requests/{budget_request}', [BudgetRequestController::class, 'destroy']);
