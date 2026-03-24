@@ -141,12 +141,18 @@ class AuthController extends Controller
     public function changePassword(Request $request): JsonResponse
     {
         $request->validate([
-            'user_id'      => 'required|integer|exists:users,id',
             'old_password' => 'required|string',
             'new_password' => 'required|string|min:8|confirmed',
         ]);
 
-        $user = User::findOrFail($request->user_id);
+        $user = $request->user();
+
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Unauthenticated',
+            ], 401);
+        }
 
         if (! Hash::check($request->old_password, $user->password)) {
             // Log failed password change attempt

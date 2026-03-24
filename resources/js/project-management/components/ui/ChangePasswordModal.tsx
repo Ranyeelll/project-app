@@ -77,7 +77,12 @@ export function ChangePasswordModal({ isOpen, onClose, forced }: ChangePasswordM
         document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
       const res = await fetch('/api/change-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        credentials: 'include',
         body: JSON.stringify({
           user_id: currentUser?.id ? Number(currentUser.id) : 0,
           old_password: oldPassword,
@@ -85,7 +90,13 @@ export function ChangePasswordModal({ isOpen, onClose, forced }: ChangePasswordM
           new_password_confirmation: confirmPassword,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        setError('Your session expired. Please log in again, then change your password.');
+        return;
+      }
+
       if (data.success) {
         setRecoveryCode(data.recovery_code || '');
         setDone(true);
