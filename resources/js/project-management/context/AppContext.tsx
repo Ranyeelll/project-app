@@ -388,6 +388,10 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // ─── Load users from the database on mount ───────────────────────────────
   useEffect(() => {
+    if (!currentUser || String(currentUser.role).toLowerCase() !== 'superadmin') {
+      return;
+    }
+
     fetch('/api/users')
       .then((res) => res.json())
       .then((data: User[]) => {
@@ -396,7 +400,7 @@ export function AppProvider({ children }: AppProviderProps) {
         }
       })
       .catch(() => { /* fallback to localStorage / mock data already loaded */ });
-  }, []);
+  }, [currentUser]);
 
   // ─── Keep currentUser in sync with latest user data from DB ──────────────
   useEffect(() => {
@@ -419,11 +423,15 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // ─── Refresh helpers (can be called from any page) ────────────────────────
   const refreshUsers = useCallback(() => {
+    if (!currentUser || String(currentUser.role).toLowerCase() !== 'superadmin') {
+      return;
+    }
+
     fetch('/api/users')
       .then((res) => res.json())
       .then((data: User[]) => { if (Array.isArray(data) && data.length > 0) setUsers(data); })
       .catch(() => {});
-  }, []);
+  }, [currentUser]);
   const refreshProjects = useCallback(() => {
     fetch('/api/projects')
       .then((res) => res.json())

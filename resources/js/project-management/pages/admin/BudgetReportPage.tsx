@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   DollarSignIcon,
-  TrendingUpIcon,
-  TrendingDownIcon,
   AlertTriangleIcon,
   PieChartIcon,
   BarChart2Icon,
@@ -17,7 +15,6 @@ import {
   FileTextIcon,
   TableIcon,
 } from 'lucide-react';
-import { useData } from '../../context/AppContext';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { useAuth } from '../../context/AppContext';
 import { isSuperadmin } from '../../utils/roles';
@@ -87,7 +84,6 @@ const STATUS_COLORS: Record<string, string> = {
 /* ═══════════════════════════════════════════════════════════════════════ */
 export function BudgetReportPage() {
   const { currentUser } = useAuth();
-  const { projects } = useData();
 
   const canViewBudget = isSuperadmin(currentUser?.role) || currentUser?.department === 'Accounting';
   if (!canViewBudget) {
@@ -107,7 +103,6 @@ export function BudgetReportPage() {
   const [sortField, setSortField] = useState<'name' | 'percentUsed' | 'totalApproved' | 'remaining'>('percentUsed');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const [exportPeriod, setExportPeriod] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
   const [exportFormat, setExportFormat] = useState<'pdf' | 'sheet'>('pdf');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting] = useState(false);

@@ -7,6 +7,7 @@ import {
   TrashIcon,
   EyeIcon,
   FolderKanbanIcon,
+  AlertTriangleIcon,
   CalendarIcon,
   DollarSignIcon,
   UsersIcon } from
@@ -20,14 +21,13 @@ import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { UserAvatar } from '../../components/ui/UserAvatar';
 import { ApprovalActionModal } from '../../components/projects/ApprovalActionModal';
-import { isSuperadmin, isSupervisor } from '../../utils/roles';
+import { isSupervisor } from '../../utils/roles';
 type ModalMode = 'create' | 'edit' | 'view' | null;
 export function ProjectsPage() {
   const { projects, setProjects, users, tasks, setTasks, refreshTasks, refreshProjects } = useData();
   const { currentUser } = useAuth();
   const { setCurrentPage } = useNavigation();
   const isAdmin = currentUser?.department === 'Admin';
-  const canFinalApprove = isSuperadmin(currentUser?.role) || isSupervisor(currentUser?.role);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [approvalFilter, setApprovalFilter] = useState('all');
@@ -40,6 +40,8 @@ export function ProjectsPage() {
   const [savingProject, setSavingProject] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [showBudgetWarning, setShowBudgetWarning] = useState(false);
+  const [budgetWarningProjects, setBudgetWarningProjects] = useState<Project[]>([]);
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
@@ -74,10 +76,35 @@ export function ProjectsPage() {
     return () => clearInterval(interval);
   }, [setProjects, modalMode]);
 
+  // Warn once per newly over-budget project in the current browser session.
+  useEffect(() => {
+    const overBudget = projects.filter((p) => p.status !== 'archived' && p.spent > p.budget);
+    if (overBudget.length === 0) return;
+
+    const seenKey = 'maptech-overbudget-seen';
+    let seenIds = new Set<string>();
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem(seenKey) || '[]');
+      if (Array.isArray(parsed)) {
+        seenIds = new Set(parsed.map(String));
+      }
+    } catch {
+      seenIds = new Set<string>();
+    }
+
+    const unseen = overBudget.filter((p) => !seenIds.has(String(p.id)));
+    if (unseen.length > 0) {
+      setBudgetWarningProjects(unseen);
+      setShowBudgetWarning(true);
+    }
+  }, [projects]);
+
   const filtered = projects.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
-    const matchApproval = approvalFilter === 'all' || (p.approvalStatus || 'draft') === approvalFilter;
+    const matchApproval =
+      approvalFilter === 'all' ||
+      (p.approvalStatus || 'draft') === approvalFilter;
     return matchSearch && matchStatus && matchApproval;
   });
   const openCreate = () => {
@@ -321,12 +348,37 @@ export function ProjectsPage() {
       )
     );
   };
+  const dismissBudgetWarning = () => {
+    const seenKey = 'maptech-overbudget-seen';
+    let seenIds = new Set<string>();
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem(seenKey) || '[]');
+      if (Array.isArray(parsed)) {
+        seenIds = new Set(parsed.map(String));
+      }
+    } catch {
+      seenIds = new Set<string>();
+    }
+
+    budgetWarningProjects.forEach((p) => seenIds.add(String(p.id)));
+    sessionStorage.setItem(seenKey, JSON.stringify(Array.from(seenIds)));
+    setShowBudgetWarning(false);
+    setBudgetWarningProjects([]);
+  };
+  const openBudgetReportFromWarning = () => {
+    dismissBudgetWarning();
+    setCurrentPage('admin-budget-report');
+  };
   const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'PHP',
     maximumFractionDigits: 0
   }).format(n);
+  const budgetWarningTotalExceeded = budgetWarningProjects.reduce(
+    (sum, project) => sum + Math.max(project.spent - project.budget, 0),
+    0,
+  );
   const projectTasks = (projectId: string) =>
   tasks.filter((t) => t.projectId === projectId);
   return (
@@ -344,27 +396,11 @@ export function ProjectsPage() {
           </div>
           <Select
             options={[
-            {
-              value: 'all',
-              label: 'All Status'
-            },
-            {
-              value: 'active',
-              label: 'Active'
-            },
-            {
-              value: 'on-hold',
-              label: 'On Hold'
-            },
-            {
-              value: 'completed',
-              label: 'Completed'
-            },
-            {
-              value: 'archived',
-              label: 'Archived'
-            }]
-            }
+            { value: 'all', label: 'All Status' },
+            { value: 'active', label: 'Active' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'archived', label: 'Archived' },
+            ]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="w-36" />
@@ -372,17 +408,12 @@ export function ProjectsPage() {
           <Select
             options={[
             { value: 'all', label: 'All Approval' },
-            { value: 'draft', label: 'Draft' },
-            { value: 'technical_review', label: 'Tech Review' },
-            { value: 'accounting_review', label: 'Admin Review' },
+            { value: 'accounting_review', label: 'Supervisor Review' },
             { value: 'approved', label: 'Approved' },
-            { value: 'rejected', label: 'Rejected' },
-            { value: 'revision_requested', label: 'Revision Requested' },
             ]}
             value={approvalFilter}
             onChange={(e) => setApprovalFilter(e.target.value)}
             className="w-40" />
-
         </div>
         {isAdmin && (
           <Button
@@ -543,30 +574,12 @@ export function ProjectsPage() {
 
               {/* Approval actions */}
               {(() => {
-                const dept = currentUser?.department || '';
                 const as = project.approvalStatus || 'draft';
+                const isSupervisorCreator =
+                  isSupervisor(currentUser?.role) &&
+                  currentUser?.id === project.managerId;
                 const actions: { action: string; label: string; variant: string }[] = [];
-
-                if (dept === 'Admin') {
-                  if (as === 'draft') actions.push({ action: 'submit_for_review', label: 'Submit for Review', variant: 'primary' });
-                  if (as === 'revision_requested') actions.push({ action: 'resubmit', label: 'Resubmit', variant: 'primary' });
-                  if (as === 'technical_review') {
-                    actions.push({ action: 'approve_technical', label: 'Approve', variant: 'primary' });
-                    actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
-                    actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
-                  }
-                  if (as === 'accounting_review') {
-                    actions.push({ action: 'approve_final', label: 'Final Approve', variant: 'primary' });
-                    actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
-                    actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
-                  }
-                }
-                if (dept === 'Technical' && as === 'technical_review') {
-                  actions.push({ action: 'approve_technical', label: 'Approve', variant: 'primary' });
-                  actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
-                  actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
-                }
-                if (canFinalApprove && as === 'accounting_review') {
+                if (isSupervisorCreator && as === 'accounting_review') {
                   actions.push({ action: 'approve_final', label: 'Final Approve', variant: 'primary' });
                   actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
                   actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
@@ -603,7 +616,73 @@ export function ProjectsPage() {
         }
       </div>
 
-      {/* Edit Modal */}
+      {/* Budget warning modal */}
+      <Modal
+        isOpen={showBudgetWarning}
+        onClose={dismissBudgetWarning}
+        title="Budget Warning"
+        size="md"
+        footer={
+        <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={openBudgetReportFromWarning}>
+              Open Budget Report
+            </Button>
+            <Button variant="primary" onClick={dismissBudgetWarning}>
+              Got it
+            </Button>
+          </div>
+        }>
+
+        <div className="space-y-4">
+          <div className="rounded-xl border border-amber-500/35 bg-gradient-to-r from-amber-500/20 via-amber-400/10 to-transparent px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="relative inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/20">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400/35 animate-ping" />
+                <AlertTriangleIcon size={14} className="relative z-10 text-amber-300 animate-pulse" />
+              </span>
+              <p className="text-sm font-medium text-amber-200">
+                One or more projects have exceeded their budget
+              </p>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-lg dark:bg-dark-card2/70 bg-white/40 px-3 py-2">
+                <p className="text-[11px] dark:text-dark-subtle text-light-subtle">Affected Projects</p>
+                <p className="text-sm font-semibold dark:text-dark-text text-light-text">{budgetWarningProjects.length}</p>
+              </div>
+              <div className="rounded-lg dark:bg-dark-card2/70 bg-white/40 px-3 py-2">
+                <p className="text-[11px] dark:text-dark-subtle text-light-subtle">Total Overrun</p>
+                <p className="text-sm font-semibold text-red-400">{formatCurrency(budgetWarningTotalExceeded)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+            {budgetWarningProjects.map((p) => {
+              const exceededBy = Math.max(p.spent - p.budget, 0);
+              const utilization = p.budget > 0 ? Math.round((p.spent / p.budget) * 100) : 0;
+              return (
+                <div key={p.id} className="rounded-xl dark:bg-dark-card2 bg-light-card2 border dark:border-dark-border border-light-border px-3 py-2.5 transition-all duration-300 hover:border-amber-500/40 hover:shadow-[0_0_0_1px_rgba(245,158,11,0.12)]">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium dark:text-dark-text text-light-text truncate">{p.name}</p>
+                    <span className="text-[11px] font-semibold text-red-400 animate-pulse">+{formatCurrency(exceededBy)}</span>
+                  </div>
+                  <p className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
+                    {formatCurrency(p.spent)} of {formatCurrency(p.budget)} used
+                  </p>
+                  <div className="mt-2 h-1.5 w-full rounded-full dark:bg-dark-border bg-light-border overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-red-500 transition-all duration-700 animate-pulse"
+                      style={{ width: `${Math.min(utilization, 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-red-400 mt-1">{utilization}% utilized</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Modal>
+
       <Modal
         isOpen={modalMode === 'edit'}
         onClose={() => { if (!savingProject) { setModalMode(null); setSaveError(''); } }}

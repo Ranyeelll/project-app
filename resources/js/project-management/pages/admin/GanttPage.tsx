@@ -7,7 +7,6 @@ import {
   TrashIcon,
   ZoomInIcon,
   ZoomOutIcon,
-  EyeIcon,
   Maximize2Icon,
   CalendarIcon,
 } from 'lucide-react';
@@ -121,7 +120,6 @@ export function GanttPage() {
   const [zoom, setZoom] = useState<ZoomLevel>('month');
   const [zoomScale, setZoomScale] = useState(1);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
-  const [previewAs, setPreviewAs] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<GanttItem | null>(null);
   const [addParent, setAddParent] = useState<GanttItem | null>(null);
@@ -142,13 +140,13 @@ export function GanttPage() {
     }
   }, [projects, selectedProject]);
 
-  // Load gantt data when project changes or preview mode changes
+  // Load gantt data when project changes
   useEffect(() => {
     if (selectedProject) {
-      refreshGanttItems(selectedProject, previewAs || undefined);
+      refreshGanttItems(selectedProject);
       refreshGanttDependencies(selectedProject);
     }
-  }, [selectedProject, previewAs]);
+  }, [selectedProject]);
 
   // Sync scroll between tree and timeline
   const handleTreeScroll = useCallback(() => {
@@ -402,7 +400,7 @@ export function GanttPage() {
         throw new Error(message);
       }
 
-      await refreshGanttItems(selectedProject, previewAs || undefined);
+      await refreshGanttItems(selectedProject);
       setShowForm(false);
       setEditItem(null);
       setAddParent(null);
@@ -454,7 +452,7 @@ export function GanttPage() {
 
       if (!res.ok) throw new Error('Failed to update item state');
 
-      await refreshGanttItems(selectedProject, previewAs || undefined);
+      await refreshGanttItems(selectedProject);
     } catch (_e) {
       // Revert optimistic state on failure.
       setStateOverrides(prev => {
@@ -494,26 +492,6 @@ export function GanttPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Preview as (Admin only) */}
-          {isAdmin && (
-            <div className="flex items-center gap-1.5">
-              <span title="Preview gantt visibility as another department">
-                <EyeIcon size={13} className="dark:text-dark-muted text-light-muted" />
-              </span>
-              <select
-                value={previewAs}
-                onChange={e => setPreviewAs(e.target.value)}
-                className="pl-2 pr-6 py-1.5 text-xs rounded-lg dark:bg-dark-card dark:border-dark-border dark:text-dark-muted bg-white border border-light-border text-light-muted focus:outline-none dark:[color-scheme:dark]"
-                title="Preview what each department can see in this gantt chart"
-              >
-                <option value="" className="text-black bg-white">Preview: Admin</option>
-                <option value="Technical" className="text-black bg-white">Preview: Technical</option>
-                <option value="Accounting" className="text-black bg-white">Preview: Accounting</option>
-                <option value="Employee" className="text-black bg-white">Preview: Employee</option>
-              </select>
-            </div>
-          )}
-
           {/* Zoom level */}
           <div className="flex items-center dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg overflow-hidden">
             {(['week','month','quarter'] as ZoomLevel[]).map(z => (

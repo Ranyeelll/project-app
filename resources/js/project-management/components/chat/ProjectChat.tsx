@@ -446,6 +446,7 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
   const [isLive, setIsLive] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<number, string>>({});
   const [showMembers, setShowMembers] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -469,8 +470,19 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
   // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
     setMessages([]); lastIdRef.current = 0; setLoading(true);
-    fetch(`/api/projects/${project.id}/messages`, { credentials: 'same-origin' })
-      .then((r) => r.json())
+    fetch(`/api/projects/${project.id}/messages?limit=120`, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to load messages');
+        return r.json();
+      })
       .then((data: ChatMessage[]) => {
         const msgs = Array.isArray(data) ? data : [];
         setMessages(msgs);
@@ -480,12 +492,22 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
       .catch(() => setLoading(false));
   }, [project.id]);
 
-  // ── HTTP Polling every 3s ─────────────────────────────────────────────────
+  // ── HTTP Polling every 1s ─────────────────────────────────────────────────
   useEffect(() => {
     if (loading) return;
-    const poll = setInterval(async () => {
+
+    const tick = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
-        const res = await fetch(`/api/projects/${project.id}/messages?after=${lastIdRef.current}`, { credentials: 'same-origin' });
+        const res = await fetch(`/api/projects/${project.id}/messages?after=${lastIdRef.current}`, {
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
+        });
         if (!res.ok) return;
         const data: ChatMessage[] = await res.json();
         if (!Array.isArray(data) || !data.length) return;
@@ -498,7 +520,10 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
           return [...clean, ...incoming];
         });
       } catch (_) {}
-    }, 3000);
+    };
+
+    tick();
+    const poll = setInterval(tick, 1000);
     return () => clearInterval(poll);
   }, [project.id, loading]);
 
@@ -648,17 +673,28 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
   // ── Edit ──────────────────────────────────────────────────────────────────
   const handleEdit = async (msg: ChatMessage) => {
     if (!currentUser || !msg.message_text) return;
+    setActionError(null);
     try {
       const res = await fetch(`/api/messages/${msg.id}`, {
         method: 'PATCH', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'Accept': 'application/json',
+        },
         body: JSON.stringify({ user_id: Number(currentUser.id), message_text: msg.message_text }),
       });
       if (res.ok) {
         const updated: ChatMessage = await res.json();
         setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data?.message || 'Unable to edit message.');
       }
-    } catch (_) {}
+    } catch (_) {
+      setActionError('Unable to edit message.');
+    }
   };
 
   // ── Forward ───────────────────────────────────────────────────────────────
@@ -671,11 +707,25 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
   // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async (id: number) => {
     if (!currentUser) return;
-    await fetch(`/api/messages/${id}?user_id=${currentUser.id}&user_role=${currentUser.role}`, {
-      method: 'DELETE', credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    });
-    setMessages((prev) => prev.filter((m) => m.id !== id));
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/messages/${id}?user_id=${currentUser.id}&user_role=${currentUser.role}`, {
+        method: 'DELETE', credentials: 'same-origin',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'Accept': 'application/json',
+        },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data?.message || 'Unable to delete message.');
+        return;
+      }
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+    } catch (_) {
+      setActionError('Unable to delete message.');
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -835,6 +885,12 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
       {/* ── Input area ──────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 px-3 pt-2 pb-3 space-y-2 border-t border-gray-700/60"
         style={{ background: 'rgba(15,23,42,0.95)', backdropFilter: 'blur(12px)' }}>
+
+        {actionError && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            {actionError}
+          </div>
+        )}
 
         {/* Reply banner */}
         {replyTo && (

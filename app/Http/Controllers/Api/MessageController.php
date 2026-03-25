@@ -36,17 +36,29 @@ class MessageController extends Controller
      */
     public function index(Request $request, Project $project): JsonResponse
     {
-        $query = Message::with(['sender', 'replyTo.sender'])
-            ->where('project_id', $project->id)
-            ->orderBy('created_at', 'asc');
-
         if ($request->filled('after')) {
-            $query->where('id', '>', (int) $request->input('after'));
+            // Incremental update: fetch new messages
+            $messages = Message::with(['sender', 'replyTo.sender'])
+                ->where('project_id', $project->id)
+                ->where('id', '>', (int) $request->input('after'))
+                ->orderBy('created_at', 'asc')
+                ->get()
+                ->map(fn ($m) => $this->formatMessage($m));
+        } else {
+            // Initial load: fetch latest N messages
+            $limit = max(20, min((int) $request->query('limit', 50), 100));
+            $messages = Message::with(['sender', 'replyTo.sender'])
+                ->where('project_id', $project->id)
+                ->orderBy('id', 'desc')
+                ->limit($limit)
+                ->get()
+                ->reverse()
+                ->map(fn ($m) => $this->formatMessage($m));
         }
 
-        $messages = $query->get()->map(fn ($m) => $this->formatMessage($m));
-
-        return response()->json($messages);
+        return response()->json($messages)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache');
     }
 
     /**

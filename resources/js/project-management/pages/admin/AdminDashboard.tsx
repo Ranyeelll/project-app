@@ -78,37 +78,42 @@ export function AdminDashboard() {
   const { projects, tasks, users, budgetRequests, issues } = useData();
   const { setCurrentPage } = useNavigation();
   const today = new Date();
-  const activeProjects = projects.filter((p) => p.status === 'active').length;
-  const completedProjects = projects.filter(
-    (p) => p.status === 'completed'
-  ).length;
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === 'completed').length;
+  const nonArchivedProjects = projects.filter((p) => p.status !== 'archived');
+  const scopedProjectIds = new Set(nonArchivedProjects.map((p) => p.id));
+  const scopedTasks = tasks.filter((t) => scopedProjectIds.has(t.projectId));
+  const scopedIssues = issues.filter((i) => scopedProjectIds.has(i.projectId));
+  const scopedBudgetRequests = budgetRequests.filter((b) => scopedProjectIds.has(b.projectId));
+
+  const activeProjects = nonArchivedProjects.filter((p) => p.status === 'active').length;
+  const completedProjects = nonArchivedProjects.filter((p) => p.status === 'completed').length;
+  const totalTasks = scopedTasks.length;
+  const completedTasks = scopedTasks.filter((t) => t.status === 'completed').length;
   const activeEmployees = users.filter(
     (u) => u.role === 'employee' && u.status === 'active'
   ).length;
-  const pendingBudgets = budgetRequests.filter(
+  const pendingBudgets = scopedBudgetRequests.filter(
     (b) => b.status === 'pending'
   ).length;
-  const employeeCompletionSubmissions = projects.filter((p) => {
+  const employeeCompletionSubmissions = nonArchivedProjects.filter((p) => {
     if ((p.approvalStatus || 'draft') !== 'technical_review') return false;
     if (!p.submittedBy) return false;
     const submitter = users.find((u) => u.id === p.submittedBy);
     return submitter?.department === 'Employee';
   }).length;
-  const openIssues = issues.filter(
+  const openIssues = scopedIssues.filter(
     (i) => i.status === 'open' || i.status === 'in-progress'
   ).length;
-  const totalBudget = projects.reduce((s, p) => s + p.budget, 0);
-  const totalSpent = projects.reduce((s, p) => s + p.spent, 0);
-  const recentProjects = [...projects].
+  const totalBudget = nonArchivedProjects.reduce((s, p) => s + p.budget, 0);
+  const totalSpent = nonArchivedProjects.reduce((s, p) => s + p.spent, 0);
+  const budgetUtilization = totalBudget > 0 ? Math.round(totalSpent / totalBudget * 100) : 0;
+  const recentProjects = [...nonArchivedProjects].
   filter((p) => p.status !== 'archived').
   sort(
     (a, b) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   ).
   slice(0, 4);
-  const recentTasks = [...tasks].
+  const recentTasks = [...scopedTasks].
   filter((t) => t.status === 'in-progress').
   slice(0, 5);
   const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -123,11 +128,13 @@ export function AdminDashboard() {
   });
   const activityLineData = dayLabels.map((day) => {
     const completed = tasks.filter((t) => {
+      if (!scopedProjectIds.has(t.projectId)) return false;
       if (t.status !== 'completed') return false;
       const d = new Date(t.endDate);
       return !isNaN(d.getTime()) && dateKey(d) === day.key;
     }).length;
     const started = tasks.filter((t) => {
+      if (!scopedProjectIds.has(t.projectId)) return false;
       const d = new Date(t.startDate);
       return !isNaN(d.getTime()) && dateKey(d) === day.key;
     }).length;
@@ -137,23 +144,35 @@ export function AdminDashboard() {
       started
     };
   });
-  const workloadChannelData = dayLabels.map((day) => {
-    const dueToday = tasks.filter((t) => {
-      const d = new Date(t.endDate);
-      return !isNaN(d.getTime()) && dateKey(d) === day.key;
-    });
-    return {
-      day: day.label,
-      critical: dueToday.filter((t) => t.priority === 'critical').length,
-      high: dueToday.filter((t) => t.priority === 'high').length,
-      medium: dueToday.filter((t) => t.priority === 'medium').length,
-      low: dueToday.filter((t) => t.priority === 'low').length
-    };
-  });
+  const projectPriorityData = [
+    {
+      priority: 'Critical',
+      count: nonArchivedProjects.filter((p) => p.priority === 'critical').length,
+      color: '#ef4444',
+    },
+    {
+      priority: 'High',
+      count: nonArchivedProjects.filter((p) => p.priority === 'high').length,
+      color: '#f97316',
+    },
+    {
+      priority: 'Medium',
+      count: nonArchivedProjects.filter((p) => p.priority === 'medium').length,
+      color: '#f59e0b',
+    },
+    {
+      priority: 'Low',
+      count: nonArchivedProjects.filter((p) => p.priority === 'low').length,
+      color: '#3b82f6',
+    },
+  ];
   const teamLoadData = users
-  .filter((u) => u.role === 'employee' && u.status === 'active')
+  .filter((u) => {
+    if (u.status !== 'active') return false;
+    return scopedTasks.some((t) => String(t.assignedTo) === String(u.id));
+  })
   .map((u) => {
-    const assigned = tasks.filter((t) => t.assignedTo === u.id);
+    const assigned = scopedTasks.filter((t) => String(t.assignedTo) === String(u.id));
     const done = assigned.filter((t) => t.status === 'completed').length;
     return {
       name: u.name.split(' ')[0],
@@ -166,22 +185,22 @@ export function AdminDashboard() {
   const severityData = [
   {
     name: 'Critical',
-    value: issues.filter((i) => i.severity === 'critical' && (i.status === 'open' || i.status === 'in-progress')).length,
+    value: scopedIssues.filter((i) => i.severity === 'critical' && (i.status === 'open' || i.status === 'in-progress')).length,
     color: '#ef4444'
   },
   {
     name: 'High',
-    value: issues.filter((i) => i.severity === 'high' && (i.status === 'open' || i.status === 'in-progress')).length,
+    value: scopedIssues.filter((i) => i.severity === 'high' && (i.status === 'open' || i.status === 'in-progress')).length,
     color: '#f97316'
   },
   {
     name: 'Medium',
-    value: issues.filter((i) => i.severity === 'medium' && (i.status === 'open' || i.status === 'in-progress')).length,
+    value: scopedIssues.filter((i) => i.severity === 'medium' && (i.status === 'open' || i.status === 'in-progress')).length,
     color: '#f59e0b'
   },
   {
     name: 'Low',
-    value: issues.filter((i) => i.severity === 'low' && (i.status === 'open' || i.status === 'in-progress')).length,
+    value: scopedIssues.filter((i) => i.severity === 'low' && (i.status === 'open' || i.status === 'in-progress')).length,
     color: '#3b82f6'
   }
   ];
@@ -194,12 +213,13 @@ export function AdminDashboard() {
   });
   const completionTrendData = monthLabels.map((month) => {
     const completed = tasks.filter((t) => {
+      if (!scopedProjectIds.has(t.projectId)) return false;
       if (t.status !== 'completed') return false;
       const d = new Date(t.endDate);
       if (isNaN(d.getTime())) return false;
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === month.key;
     }).length;
-    const startedProjects = projects.filter((p) => {
+    const startedProjects = nonArchivedProjects.filter((p) => {
       const d = new Date(p.startDate);
       if (isNaN(d.getTime())) return false;
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === month.key;
@@ -212,8 +232,8 @@ export function AdminDashboard() {
   });
   const hasActivityData = activityLineData.some((d) => d.completed > 0 || d.started > 0);
   const completedTasksLast7Days = activityLineData.reduce((sum, day) => sum + day.completed, 0);
-  const hasWorkloadData = workloadChannelData.some((d) => d.critical > 0 || d.high > 0 || d.medium > 0 || d.low > 0);
-  const hasTeamLoadData = teamLoadData.length > 0 && teamLoadData.some((d) => d.assigned > 0 || d.done > 0);
+  const hasWorkloadData = projectPriorityData.some((d) => d.count > 0);
+  const hasTeamLoadData = teamLoadData.length > 0;
   const severityTotal = severityData.reduce((sum, item) => sum + item.value, 0);
   const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', {
@@ -248,7 +268,7 @@ export function AdminDashboard() {
 
         <StatCard
           label="Budget Utilization"
-          value={`${Math.round(totalSpent / totalBudget * 100)}%`}
+          value={`${budgetUtilization}%`}
           sub={`${formatCurrency(totalSpent)} of ${formatCurrency(totalBudget)}`}
           icon={<DollarSignIcon size={18} />}
           color="#0E8F79" />
@@ -341,7 +361,9 @@ export function AdminDashboard() {
           <div>
             <div className="text-lg font-bold dark:text-dark-text text-light-text">
               {Math.round(
-                projects.reduce((s, p) => s + p.progress, 0) / projects.length
+                nonArchivedProjects.length > 0
+                  ? nonArchivedProjects.reduce((s, p) => s + p.progress, 0) / nonArchivedProjects.length
+                  : 0
               )}
               %
             </div>
@@ -382,25 +404,34 @@ export function AdminDashboard() {
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-5">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold dark:text-dark-text text-light-text">
-              Due Workload by Priority
+              Projects by Priority
             </h2>
-            <span className="text-xs dark:text-dark-subtle text-light-subtle">Last 7 days</span>
+            <span className="text-xs dark:text-dark-subtle text-light-subtle">Based on project count</span>
           </div>
           <ResponsiveContainer width="100%" height={275}>
-            <BarChart data={workloadChannelData}>
+            <BarChart data={projectPriorityData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
-              <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="priority" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <ReBar dataKey="critical" name="Critical" stackId="work" fill="#ef4444" radius={[3, 3, 0, 0]} />
-              <ReBar dataKey="high" name="High" stackId="work" fill="#f97316" radius={[3, 3, 0, 0]} />
-              <ReBar dataKey="medium" name="Medium" stackId="work" fill="#f59e0b" radius={[3, 3, 0, 0]} />
-              <ReBar dataKey="low" name="Low" stackId="work" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+              <Tooltip
+                formatter={(value: number | undefined) => [value ?? 0, 'Projects']}
+                contentStyle={{
+                  backgroundColor: '#0f1115',
+                  border: '1px solid #2a303c',
+                  borderRadius: 8,
+                }}
+                labelStyle={{ color: '#cbd5e1' }}
+                itemStyle={{ color: '#cbd5e1' }}
+              />
+              <ReBar dataKey="count" name="Projects" radius={[6, 6, 0, 0]}>
+                {projectPriorityData.map((entry) => (
+                  <Cell key={entry.priority} fill={entry.color} />
+                ))}
+              </ReBar>
             </BarChart>
           </ResponsiveContainer>
           {!hasWorkloadData && (
-            <p className="mt-2 text-xs dark:text-dark-subtle text-light-subtle">No due-priority records found for this period.</p>
+            <p className="mt-2 text-xs dark:text-dark-subtle text-light-subtle">No project-priority records found.</p>
           )}
         </div>
       </div>

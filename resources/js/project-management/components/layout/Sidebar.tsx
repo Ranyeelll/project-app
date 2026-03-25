@@ -111,9 +111,6 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           src="/Maptech_Official_Logo_version2_(1).png"
           alt="Maptech Information Solutions Inc."
           className="h-14 w-auto object-contain brightness-100 dark:brightness-150 dark:contrast-110" />
-        <p className="mt-1.5 text-[10px] font-medium tracking-wide dark:text-dark-muted text-gray-500 text-center">
-          Maptech Information Solutions Inc.
-        </p>
       </div>
 
       {/* Navigation */}

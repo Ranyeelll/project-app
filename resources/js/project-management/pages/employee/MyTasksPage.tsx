@@ -187,9 +187,9 @@ export function MyTasksPage() {
       await refreshProjects();
       setNotifyFeedback({
         type: 'success',
-        text: action === 'resubmit'
-          ? 'Project resubmitted successfully. Admin review has been requested.'
-          : 'Project submitted successfully. Admin review has been requested.',
+           text: action === 'resubmit'
+             ? 'Project resubmitted successfully. Supervisor review has been requested.'
+             : 'Project submitted successfully. Supervisor review has been requested.',
       });
     } catch (e: any) {
       setNotifyFeedback({ type: 'error', text: e?.message || 'Failed to notify admin.' });

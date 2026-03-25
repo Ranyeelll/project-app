@@ -78,6 +78,39 @@ class UserController extends Controller
     }
 
     /**
+     * List users for direct-message search (authenticated users).
+     */
+    public function chatDirectory(Request $request): JsonResponse
+    {
+        $query = trim((string) $request->query('q', ''));
+        $currentUser = Auth::user();
+
+        $users = User::query()
+            ->select('id', 'name', 'department', 'position', 'status', 'profile_photo')
+            ->where('status', 'active')
+            ->when($currentUser, fn ($q) => $q->where('id', '!=', $currentUser->id))
+            ->when($query !== '', function ($q) use ($query) {
+                $q->where('name', 'ilike', '%' . $query . '%');
+            })
+            ->orderBy('name')
+            ->limit(100)
+            ->get()
+            ->map(function (User $u) {
+                return [
+                    'id'           => (string) $u->id,
+                    'name'         => $u->name,
+                    'department'   => $u->department instanceof Department ? $u->department->value : ($u->department ?? ''),
+                    'position'     => $u->position ?? '',
+                    'status'       => $u->status ?? 'active',
+                    'profilePhoto' => $this->profilePhotoUrl($u),
+                ];
+            })
+            ->values();
+
+        return response()->json($users);
+    }
+
+    /**
      * Create a new user.
      */
     public function store(Request $request): JsonResponse

@@ -137,7 +137,7 @@ export function StatusBadge({ status }: {status: string;}) {
     },
     accounting_review: {
       variant: 'warning',
-      label: 'Admin Review'
+      label: 'Supervisor Review'
     },
     submitted: {
       variant: 'info',

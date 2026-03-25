@@ -165,6 +165,9 @@ Route::prefix('api')->group(function () {
         // Profile photo upload (authenticated users)
         Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
 
+        // DM user directory (all authenticated users)
+        Route::get('/chat/users', [UserController::class, 'chatDirectory']);
+
         // View projects (filtered based on department in controller)
         Route::get('/projects', [ProjectController::class, 'index']);
 

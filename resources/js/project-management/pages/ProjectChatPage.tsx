@@ -49,7 +49,7 @@ function SmallAvatar({ name, photo }: { name: string; photo?: string | null }) {
 
 export function ProjectChatPage() {
   const { currentUser } = useAuth();
-  const { projects, users } = useData();
+  const { projects } = useData();
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
   const [tab, setTab] = useState<'project' | 'direct'>('project');
@@ -57,7 +57,9 @@ export function ProjectChatPage() {
   const [conversations, setConversations] = useState<DmConversation[]>([]);
   const [activeConv, setActiveConv] = useState<DmConversation | null>(null);
   const [userSearch, setUserSearch] = useState('');
+  const [chatUsers, setChatUsers] = useState<User[]>([]);
   const [dmLoading, setDmLoading] = useState(false);
+  const [dmError, setDmError] = useState<string | null>(null);
 
   const currentUserId = currentUser ? Number(currentUser.id) : 0;
 
@@ -70,7 +72,15 @@ export function ProjectChatPage() {
   const loadConversations = useCallback(async () => {
     if (!currentUser) return;
     try {
-      const res = await fetch(`/api/direct-conversations?user_id=${currentUserId}`);
+      const res = await fetch(`/api/direct-conversations?user_id=${currentUserId}`, {
+        cache: 'no-store',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+      });
       if (!res.ok) return;
       setConversations(await res.json());
     } catch (_) {}
@@ -78,27 +88,55 @@ export function ProjectChatPage() {
 
   useEffect(() => {
     loadConversations();
-    const iv = setInterval(loadConversations, 5000);
+    const iv = setInterval(loadConversations, 1000); // Reduced from 1500ms
     return () => clearInterval(iv);
   }, [loadConversations]);
 
+  useEffect(() => {
+    if (!currentUser) return;
+    fetch('/api/chat/users', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: User[]) => {
+        if (Array.isArray(data)) setChatUsers(data);
+      })
+      .catch(() => {});
+  }, [currentUser]);
+
   const searchResults = userSearch.trim()
-    ? users.filter((u) => u.id !== currentUser?.id && u.name.toLowerCase().includes(userSearch.toLowerCase()))
+    ? chatUsers.filter((u) => String(u.id) !== String(currentUser?.id) && u.name.toLowerCase().includes(userSearch.toLowerCase()))
     : [];
 
   const startDmWith = async (user: User) => {
+    if (String(user.id) === String(currentUser?.id)) {
+      setDmError('You cannot start a direct message with your own account.');
+      return;
+    }
+
     setDmLoading(true);
+    setDmError(null);
     try {
       const res = await fetch('/api/direct-conversations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({ user_id: currentUserId, other_user_id: Number(user.id) }),
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || 'Failed to start direct message.');
+      }
+
       const data = await res.json();
       setUserSearch('');
       await loadConversations();
       setActiveConv({ id: data.id, other_user: data.other_user, last_message: null, unread_count: 0, updated_at: new Date().toISOString() });
-    } catch (_) {} finally { setDmLoading(false); }
+    } catch (error: any) {
+      setDmError(error?.message || 'Failed to start direct message.');
+    } finally { setDmLoading(false); }
   };
 
   const totalDmUnread = conversations.reduce((s, c) => s + c.unread_count, 0);
@@ -165,11 +203,14 @@ export function ProjectChatPage() {
                 <input
                   type="text"
                   value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
+                  onChange={(e) => { setUserSearch(e.target.value); setDmError(null); }}
                   placeholder="Search people to message…"
                   className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg dark:bg-dark-bg dark:border-dark-border dark:text-dark-text dark:placeholder-dark-subtle bg-gray-50 border border-light-border text-light-text placeholder-light-subtle focus:outline-none focus:ring-1 focus:ring-green-primary/50"
                 />
               </div>
+              {dmError && (
+                <p className="mt-2 text-[11px] text-red-400">{dmError}</p>
+              )}
             </div>
 
             {/* Search results */}

@@ -120,9 +120,6 @@ export function LoginPage() {
             src="/Maptech_Official_Logo_version2_(1).png"
             alt="Maptech Information Solutions Inc."
             className="h-20 w-auto object-contain brightness-150 drop-shadow-lg" />
-          <p className="mt-2 text-sm font-medium tracking-wide text-white/80 text-center drop-shadow-md">
-            Maptech Information Solutions Inc.
-          </p>
         </div>
 
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-modal p-8 shadow-card-dark">

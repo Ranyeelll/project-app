@@ -419,9 +419,10 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
           </h1>
           <p className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5 hidden sm:block">
             {isSuperadmin(currentUser?.role)
-              ? 'Superadmin'
-              : (currentUser?.role === 'supervisor' ? 'Supervisor' : 'Employee')} ·{' '}
-            {currentUser?.department}
+              ? `Superadmin${currentUser?.department ? ` · ${currentUser.department}` : ''}`
+              : (currentUser?.role === 'supervisor'
+                ? 'Supervisor'
+                : `Employee${currentUser?.department ? ` · ${currentUser.department}` : ''}`)}
           </p>
         </div>
       </div>

@@ -68,15 +68,22 @@ export function MonitorControlPage() {
 
   // ── Computed analytics ──
   const analytics = useMemo(() => {
-    const activeProjects = projects.filter((p) => p.status === 'active');
     const nonArchivedProjects = projects.filter((p) => p.status !== 'archived');
+    const scopedProjectIds = new Set(nonArchivedProjects.map((p) => p.id));
+    const scopedTasks = tasks.filter((t) => scopedProjectIds.has(t.projectId));
+    const scopedIssues = issues.filter((i) => scopedProjectIds.has(i.projectId));
+    const scopedBudgetRequests = budgetRequests.filter((b) => scopedProjectIds.has(b.projectId));
+    const scopedTaskIds = new Set(scopedTasks.map((t) => t.id));
+    const scopedTimeLogs = timeLogs.filter((t) => scopedTaskIds.has(t.taskId));
+
+    const activeProjects = nonArchivedProjects.filter((p) => p.status === 'active');
 
     const totalProjects = nonArchivedProjects.length;
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter((t) => t.status === 'completed').length;
-    const inProgressTasks = tasks.filter((t) => t.status === 'in-progress').length;
-    const todoTasks = tasks.filter((t) => t.status === 'todo').length;
-    const reviewTasks = tasks.filter((t) => t.status === 'review').length;
+    const totalTasks = scopedTasks.length;
+    const completedTasks = scopedTasks.filter((t) => t.status === 'completed').length;
+    const inProgressTasks = scopedTasks.filter((t) => t.status === 'in-progress').length;
+    const todoTasks = scopedTasks.filter((t) => t.status === 'todo').length;
+    const reviewTasks = scopedTasks.filter((t) => t.status === 'review').length;
     const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     const totalBudget = nonArchivedProjects.reduce((s, p) => s + p.budget, 0);
@@ -84,44 +91,50 @@ export function MonitorControlPage() {
     const totalRemaining = totalBudget - totalSpent;
     const budgetUtilization = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
 
-    const pendingRequests = budgetRequests.filter((b) => b.status === 'pending').length;
-    const approvedRequests = budgetRequests.filter((b) => b.status === 'approved').length;
-    const totalRequestedAmount = budgetRequests.filter((b) => b.status === 'pending').reduce((s, b) => s + b.amount, 0);
+    const pendingRequests = scopedBudgetRequests.filter((b) => b.status === 'pending').length;
+    const approvedRequests = scopedBudgetRequests.filter((b) => b.status === 'approved').length;
+    const totalRequestedAmount = scopedBudgetRequests.filter((b) => b.status === 'pending').reduce((s, b) => s + b.amount, 0);
 
-    const totalHoursLogged = timeLogs.reduce((s, t) => s + t.hours, 0);
-    const totalEstimatedHours = tasks.reduce((s, t) => s + t.estimatedHours, 0);
+    const totalHoursLogged = scopedTimeLogs.reduce((s, t) => s + t.hours, 0);
+    const totalEstimatedHours = scopedTasks.reduce((s, t) => s + t.estimatedHours, 0);
 
-    const openIssues = issues.filter((i) => i.status === 'open' || i.status === 'in-progress').length;
-    const resolvedIssues = issues.filter((i) => i.status === 'resolved' || i.status === 'closed').length;
-    const criticalIssues = issues.filter((i) => i.severity === 'critical' && (i.status === 'open' || i.status === 'in-progress')).length;
+    const openIssues = scopedIssues.filter((i) => i.status === 'open' || i.status === 'in-progress').length;
+    const resolvedIssues = scopedIssues.filter((i) => i.status === 'resolved' || i.status === 'closed').length;
+    const criticalIssues = scopedIssues.filter((i) => i.severity === 'critical' && (i.status === 'open' || i.status === 'in-progress')).length;
+    const issueStatusDist = {
+      open: scopedIssues.filter((i) => i.status === 'open').length,
+      inProgress: scopedIssues.filter((i) => i.status === 'in-progress').length,
+      resolved: scopedIssues.filter((i) => i.status === 'resolved').length,
+      closed: scopedIssues.filter((i) => i.status === 'closed').length,
+    };
 
     const projectBreakdown = nonArchivedProjects.map((project) => {
-      const ptasks = tasks.filter((t) => t.projectId === project.id);
+      const ptasks = scopedTasks.filter((t) => t.projectId === project.id);
       const pCompleted = ptasks.filter((t) => t.status === 'completed').length;
       const pInProgress = ptasks.filter((t) => t.status === 'in-progress').length;
       const budgetPct = project.budget > 0 ? Math.round((project.spent / project.budget) * 100) : 0;
       const health =
         project.progress >= budgetPct - 10 ? 'on-track' :
         project.progress >= budgetPct - 25 ? 'at-risk' : 'critical';
-      const pIssues = issues.filter((i) => i.projectId === project.id && (i.status === 'open' || i.status === 'in-progress')).length;
+      const pIssues = scopedIssues.filter((i) => i.projectId === project.id && (i.status === 'open' || i.status === 'in-progress')).length;
       return { ...project, ptasks: ptasks.length, pCompleted, pInProgress, budgetPct, health, pIssues };
     });
 
     const teamMembers = users.filter((u) => u.role === 'employee' && u.status === 'active');
     const teamWorkload = teamMembers.map((member) => {
-      const memberTasks = tasks.filter((t) => t.assignedTo === member.id);
+      const memberTasks = scopedTasks.filter((t) => t.assignedTo === member.id);
       const memberCompleted = memberTasks.filter((t) => t.status === 'completed').length;
       const memberInProgress = memberTasks.filter((t) => t.status === 'in-progress').length;
-      const memberHours = timeLogs.filter((t) => t.userId === member.id).reduce((s, t) => s + t.hours, 0);
+      const memberHours = scopedTimeLogs.filter((t) => t.userId === member.id).reduce((s, t) => s + t.hours, 0);
       const memberProjects = [...new Set(memberTasks.map((t) => t.projectId))].length;
       return { ...member, totalTasks: memberTasks.length, completed: memberCompleted, inProgress: memberInProgress, hoursLogged: memberHours, projectCount: memberProjects };
     });
 
     const priorityDist = {
-      critical: tasks.filter((t) => t.priority === 'critical').length,
-      high: tasks.filter((t) => t.priority === 'high').length,
-      medium: tasks.filter((t) => t.priority === 'medium').length,
-      low: tasks.filter((t) => t.priority === 'low').length,
+      critical: scopedTasks.filter((t) => t.priority === 'critical').length,
+      high: scopedTasks.filter((t) => t.priority === 'high').length,
+      medium: scopedTasks.filter((t) => t.priority === 'medium').length,
+      low: scopedTasks.filter((t) => t.priority === 'low').length,
     };
 
     return {
@@ -130,6 +143,7 @@ export function MonitorControlPage() {
       pendingRequests, approvedRequests, totalRequestedAmount,
       totalHoursLogged, totalEstimatedHours,
       openIssues, resolvedIssues, criticalIssues,
+      issueStatusDist,
       projectBreakdown, teamWorkload, priorityDist, activeProjects
     };
   }, [projects, tasks, issues, budgetRequests, timeLogs, users]);
@@ -170,10 +184,10 @@ export function MonitorControlPage() {
   });
 
   const issueBarData = [
-    { name: 'Open', count: issues.filter((i) => i.status === 'open').length, fill: '#ef4444' },
-    { name: 'In Progress', count: issues.filter((i) => i.status === 'in-progress').length, fill: '#f59e0b' },
-    { name: 'Resolved', count: issues.filter((i) => i.status === 'resolved').length, fill: '#22c55e' },
-    { name: 'Closed', count: issues.filter((i) => i.status === 'closed').length, fill: '#94a3b8' },
+    { name: 'Open', count: analytics.issueStatusDist.open, fill: '#ef4444' },
+    { name: 'In Progress', count: analytics.issueStatusDist.inProgress, fill: '#f59e0b' },
+    { name: 'Resolved', count: analytics.issueStatusDist.resolved, fill: '#22c55e' },
+    { name: 'Closed', count: analytics.issueStatusDist.closed, fill: '#94a3b8' },
   ];
 
   const teamBarData = analytics.teamWorkload.map((m) => ({

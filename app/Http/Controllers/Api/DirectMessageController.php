@@ -75,7 +75,9 @@ class DirectMessageController extends Controller
             ->sortByDesc(fn ($c) => $c['last_message']['created_at'] ?? $c['updated_at'])
             ->values();
 
-        return response()->json($conversations);
+        return response()->json($conversations)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache');
     }
 
     /**
@@ -110,21 +112,36 @@ class DirectMessageController extends Controller
 
     /**
      * GET /api/direct-conversations/{conversation}/messages
-     * Load messages for a DM thread.
+     * Load messages for a DM thread. Optimized for speed with eager loading.
      */
     public function messages(Request $request, DirectConversation $conversation): JsonResponse
     {
-        $query = Message::with(['sender', 'replyTo.sender'])
-            ->where('conversation_id', $conversation->id)
-            ->orderBy('created_at', 'asc');
-
         if ($request->filled('after')) {
-            $query->where('id', '>', (int) $request->input('after'));
+            // Incremental update: fetch new messages after the given ID
+            $messages = Message::with(['sender', 'replyTo.sender'])
+                ->where('conversation_id', $conversation->id)
+                ->whereNull('deleted_at')
+                ->where('id', '>', (int) $request->input('after'))
+                ->orderBy('created_at', 'asc')
+                ->get()
+                ->map(fn ($m) => $this->formatMessage($m));
+        } else {
+            // Initial load: fetch latest N messages in ascending order for chat display
+            $limit = max(10, min((int) $request->query('limit', 30), 100));
+            $messages = Message::with(['sender', 'replyTo.sender'])
+                ->where('conversation_id', $conversation->id)
+                ->whereNull('deleted_at')
+                ->orderBy('id', 'desc')
+                ->limit($limit)
+                ->get()
+                ->reverse()
+                ->values()
+                ->map(fn ($m) => $this->formatMessage($m));
         }
 
-        $messages = $query->get()->map(fn ($m) => $this->formatMessage($m));
-
-        return response()->json($messages);
+        return response()->json($messages)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache');
     }
 
     /**

@@ -13,8 +13,6 @@
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
         <!-- Poster handled via embedded base64 background; no separate preload needed -->
-        <!-- Then preload the tiny preview video so it plays the moment the page opens -->
-        <link rel="preload" href="/login-embed2-preview.mp4" as="video" type="video/mp4">
         <link rel="preload" href="/Maptech_Official_Logo_version2_(1).png" as="image" type="image/png">
 
         <!-- Embedded base64 thumbnail — zero network request, paints instantly before any JS/React loads -->
