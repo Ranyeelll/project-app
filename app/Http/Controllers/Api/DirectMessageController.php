@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Events\DirectMessageSent;
 use App\Http\Controllers\Controller;
 use App\Models\ChatMutedUser;
 use App\Models\ChatNotification;
@@ -12,6 +11,7 @@ use App\Models\User;
 use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -150,6 +150,8 @@ class DirectMessageController extends Controller
      */
     public function sendMessage(Request $request, DirectConversation $conversation): JsonResponse
     {
+        $startedAt = microtime(true);
+
         $data = $request->validate([
             'sender_id'     => 'required|integer|exists:users,id',
             'message_text'  => 'nullable|string|max:5000',
@@ -204,23 +206,14 @@ class DirectMessageController extends Controller
 
         $message->loadMissing(['sender', 'replyTo.sender']);
 
-        // Audit
-        AuditService::logMessageSent($message->id, null, $conversation->id, $sender->id);
-
-        // In-app notification for recipient
-        ChatNotification::create([
-            'user_id'         => $recipientId,
-            'type'            => 'direct_message',
-            'message_id'      => $message->id,
-            'conversation_id' => $conversation->id,
-            'sender_name'     => $sender->name,
-            'preview'         => mb_substr($data['message_text'] ?? '', 0, 80),
-        ]);
-
-        // Broadcast
-        try {
-            broadcast(new DirectMessageSent($message, $recipientId));
-        } catch (\Throwable $e) {}
+        $durationMs = (int) ((microtime(true) - $startedAt) * 1000);
+        if ($durationMs > 3000) {
+            Log::warning('Slow direct chat send request', [
+                'conversation_id' => $conversation->id,
+                'sender_id' => $sender->id,
+                'duration_ms' => $durationMs,
+            ]);
+        }
 
         return response()->json($this->formatMessage($message), 201);
     }
@@ -259,15 +252,6 @@ class DirectMessageController extends Controller
             ->update(['is_read' => true]);
 
         return response()->json(['marked' => $updated]);
-    }
-
-    /**
-     * POST /api/direct-conversations/{conversation}/typing
-     */
-    public function typing(Request $request, DirectConversation $conversation): JsonResponse
-    {
-        // No broadcast — typing indicators for DMs use simple polling or future private channels
-        return response()->json(['ok' => true]);
     }
 
     /**

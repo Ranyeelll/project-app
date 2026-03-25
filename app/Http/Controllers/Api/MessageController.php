@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Events\MessagesRead;
-use App\Events\MessageSent;
 use App\Events\MessageDeleted;
 use App\Events\UserTyping;
 use App\Http\Controllers\Controller;
@@ -15,6 +14,7 @@ use App\Models\User;
 use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -67,6 +67,8 @@ class MessageController extends Controller
      */
     public function store(Request $request, Project $project): JsonResponse
     {
+        $startedAt = microtime(true);
+
         $data = $request->validate([
             'sender_id'     => 'required|integer|exists:users,id',
             'message_text'  => 'nullable|string|max:5000',
@@ -121,31 +123,13 @@ class MessageController extends Controller
 
         $message->loadMissing(['sender', 'replyTo.sender']);
 
-        // Audit: message sent
-        AuditService::logMessageSent($message->id, $project->id, null, $sender->id);
-
-        // Notify mentioned users
-        if (!empty($data['mentions'])) {
-            $preview = mb_substr($data['message_text'] ?? '', 0, 80);
-            foreach ($data['mentions'] as $mentionedId) {
-                if ((int) $mentionedId !== $sender->id) {
-                    ChatNotification::create([
-                        'user_id'     => $mentionedId,
-                        'type'        => 'mention',
-                        'message_id'  => $message->id,
-                        'project_id'  => $project->id,
-                        'sender_name' => $sender->name,
-                        'preview'     => $preview,
-                    ]);
-                }
-            }
-        }
-
-        // Broadcast if Reverb is running — silently skip if it isn't
-        try {
-            broadcast(new MessageSent($message));
-        } catch (\Throwable $e) {
-            // Chat still works via HTTP polling
+        $durationMs = (int) ((microtime(true) - $startedAt) * 1000);
+        if ($durationMs > 3000) {
+            Log::warning('Slow project chat send request', [
+                'project_id' => $project->id,
+                'sender_id' => $sender->id,
+                'duration_ms' => $durationMs,
+            ]);
         }
 
         return response()->json($this->formatMessage($message), 201);

@@ -13,8 +13,10 @@ return new class extends Migration
     public function up(): void
     {
         // First, drop the existing enum constraint and recreate with new value
-        DB::statement("ALTER TABLE budget_requests DROP CONSTRAINT IF EXISTS budget_requests_status_check");
-        DB::statement("ALTER TABLE budget_requests ADD CONSTRAINT budget_requests_status_check CHECK (status IN ('pending', 'approved', 'rejected', 'revision_requested'))");
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE budget_requests DROP CONSTRAINT IF EXISTS budget_requests_status_check");
+            DB::statement("ALTER TABLE budget_requests ADD CONSTRAINT budget_requests_status_check CHECK (status IN ('pending', 'approved', 'rejected', 'revision_requested'))");
+        }
 
         Schema::table('budget_requests', function (Blueprint $table) {
             $table->text('admin_remarks')->nullable()->after('review_comment');
@@ -32,7 +34,9 @@ return new class extends Migration
             $table->dropColumn(['admin_remarks', 'original_amount', 'revision_count']);
         });
 
-        DB::statement("ALTER TABLE budget_requests DROP CONSTRAINT IF EXISTS budget_requests_status_check");
-        DB::statement("ALTER TABLE budget_requests ADD CONSTRAINT budget_requests_status_check CHECK (status IN ('pending', 'approved', 'rejected'))");
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE budget_requests DROP CONSTRAINT IF EXISTS budget_requests_status_check");
+            DB::statement("ALTER TABLE budget_requests ADD CONSTRAINT budget_requests_status_check CHECK (status IN ('pending', 'approved', 'rejected'))");
+        }
     }
 };

@@ -146,7 +146,18 @@ export function GanttPage() {
       refreshGanttItems(selectedProject);
       refreshGanttDependencies(selectedProject);
     }
-  }, [selectedProject]);
+  }, [selectedProject, refreshGanttItems, refreshGanttDependencies]);
+
+  useEffect(() => {
+    if (!selectedProject) return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      refreshGanttItems(selectedProject);
+      refreshGanttDependencies(selectedProject);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [selectedProject, refreshGanttItems, refreshGanttDependencies]);
 
   // Sync scroll between tree and timeline
   const handleTreeScroll = useCallback(() => {
@@ -182,8 +193,29 @@ export function GanttPage() {
   }, []);
 
   const project = projects.find(p => p.id === selectedProject);
-  const projectItems = ganttItems.filter(i => i.projectId === selectedProject);
-  const projectDeps = ganttDependencies.filter(d => d.projectId === selectedProject);
+  const projectItems = useMemo(() => ganttItems.filter(i => i.projectId === selectedProject), [ganttItems, selectedProject]);
+  const projectDeps = useMemo(() => ganttDependencies.filter(d => d.projectId === selectedProject), [ganttDependencies, selectedProject]);
+
+  const projectItemById = useMemo(() => {
+    const map = new Map<string, GanttItem>();
+    projectItems.forEach((item) => map.set(item.id, item));
+    return map;
+  }, [projectItems]);
+
+  const childrenByParentId = useMemo(() => {
+    const map = new Map<string, number>();
+    projectItems.forEach((item) => {
+      if (!item.parentId) return;
+      map.set(item.parentId, (map.get(item.parentId) ?? 0) + 1);
+    });
+    return map;
+  }, [projectItems]);
+
+  const usersById = useMemo(() => {
+    const map = new Map<string, User>();
+    users.forEach((u) => map.set(u.id, u));
+    return map;
+  }, [users]);
 
   // Build flat visible list from context (server already computed treeIndex + depth)
   const visibleItems = useMemo(() => {
@@ -193,12 +225,12 @@ export function GanttPage() {
       let pid: string | null = item.parentId;
       while (pid) {
         if (collapsedIds.has(pid)) return false;
-        const parent = projectItems.find(i => i.id === pid);
+        const parent = projectItemById.get(pid);
         pid = parent?.parentId ?? null;
       }
       return true;
     });
-  }, [projectItems, collapsedIds]);
+  }, [projectItems, collapsedIds, projectItemById]);
 
   // Timeline range
   const timelineRange = useMemo(() => {
@@ -350,7 +382,7 @@ export function GanttPage() {
   }, [visibleItems, barLeft, barWidth, effectiveDatesById, timelineRange.start, project?.startDate]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-  const hasChildren = (itemId: string) => projectItems.some(i => i.parentId === itemId);
+  const hasChildren = useCallback((itemId: string) => (childrenByParentId.get(itemId) ?? 0) > 0, [childrenByParentId]);
   const toggleCollapse = (id: string) => {
     setCollapsedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
@@ -566,7 +598,9 @@ export function GanttPage() {
               const range = getEffectiveDates(item);
               const canExpand = hasChildren(item.id);
               const isCollapsed = collapsedIds.has(item.id);
-              const assignees = users.filter(u => (item.assigneeIds || []).includes(u.id));
+              const assignees = (item.assigneeIds || [])
+                .map((id) => usersById.get(id))
+                .filter((u): u is User => Boolean(u));
               const durationDays = Math.max(daysBetween(parseDate(range.start), parseDate(range.end)) + 1, 1);
               const durationLabel = `${durationDays} day${durationDays === 1 ? '' : 's'}`;
               const currentState = stateOverrides[item.id] || progressToState(item.progress);

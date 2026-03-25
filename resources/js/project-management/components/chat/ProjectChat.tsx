@@ -453,6 +453,11 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const lastIdRef = useRef<number>(0);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingPingAtRef = useRef<number>(0);
+  const fastSyncUntilRef = useRef<number>(0);
+  const initialLoadAbortRef = useRef<AbortController | null>(null);
+  const pollInFlightRef = useRef<boolean>(false);
+  const pausePollingUntilRef = useRef<number>(0);
 
   const isAdmin = isSuperadmin(currentUser?.role);
 
@@ -467,39 +472,72 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
     return users.filter((u) => ids.has(u.id));
   }, [users, project]);
 
-  // ── Initial load ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    setMessages([]); lastIdRef.current = 0; setLoading(true);
-    fetch(`/api/projects/${project.id}/messages?limit=120`, {
-      credentials: 'same-origin',
-      cache: 'no-store',
-      headers: {
-        'Accept': 'application/json',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-      },
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error('Failed to load messages');
-        return r.json();
-      })
-      .then((data: ChatMessage[]) => {
-        const msgs = Array.isArray(data) ? data : [];
-        setMessages(msgs);
-        if (msgs.length > 0) lastIdRef.current = msgs[msgs.length - 1].id;
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+  const loadInitialMessages = useCallback(async () => {
+    setMessages([]);
+    lastIdRef.current = 0;
+    setLoading(true);
+
+    initialLoadAbortRef.current?.abort();
+    const controller = new AbortController();
+    initialLoadAbortRef.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
+    try {
+      const res = await fetch(`/api/projects/${project.id}/messages?limit=60&_ts=${Date.now()}`, {
+        signal: controller.signal,
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/json',
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      });
+
+      if (!res.ok) throw new Error('Failed to load messages');
+      const data: ChatMessage[] = await res.json();
+      const msgs = Array.isArray(data) ? data : [];
+      setMessages(msgs);
+      if (msgs.length > 0) {
+        lastIdRef.current = msgs[msgs.length - 1].id;
+      }
+    } catch (_) {
+      // Keep UI usable; polling fallback below will retry automatically.
+      setMessages([]);
+    } finally {
+      clearTimeout(timeout);
+      setLoading(false);
+    }
   }, [project.id]);
 
-  // ── HTTP Polling every 1s ─────────────────────────────────────────────────
+  // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (loading) return;
+    loadInitialMessages();
+    return () => {
+      initialLoadAbortRef.current?.abort();
+    };
+  }, [loadInitialMessages]);
+
+  // ── HTTP Polling (adaptive fast sync after activity) ─────────────────────
+  useEffect(() => {
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     const tick = async () => {
       if (document.visibilityState === 'hidden') return;
+      if (pollInFlightRef.current) return;
+      if (sending) return;
+      if (Date.now() < pausePollingUntilRef.current) return;
+      pollInFlightRef.current = true;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2500);
       try {
-        const res = await fetch(`/api/projects/${project.id}/messages?after=${lastIdRef.current}`, {
+        const url = lastIdRef.current > 0
+          ? `/api/projects/${project.id}/messages?after=${lastIdRef.current}&_ts=${Date.now()}`
+          : `/api/projects/${project.id}/messages?limit=60&_ts=${Date.now()}`;
+
+        const res = await fetch(url, {
+          signal: controller.signal,
           credentials: 'same-origin',
           cache: 'no-store',
           headers: {
@@ -519,13 +557,28 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
           const clean = prev.filter((m) => !m._optimistic || !incoming.some((n) => n.sender_id === m.sender_id));
           return [...clean, ...incoming];
         });
-      } catch (_) {}
+      } catch (_) {
+      } finally {
+        clearTimeout(timeout);
+        pollInFlightRef.current = false;
+      }
+    };
+
+    const schedule = () => {
+      const fastMode = Date.now() < fastSyncUntilRef.current;
+      const delay = fastMode ? 1200 : 2500;
+      timer = setTimeout(async () => {
+        await tick();
+        schedule();
+      }, delay);
     };
 
     tick();
-    const poll = setInterval(tick, 1000);
-    return () => clearInterval(poll);
-  }, [project.id, loading]);
+    schedule();
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [project.id, sending]);
 
   // ── Echo WebSocket (optional) ─────────────────────────────────────────────
   useEffect(() => {
@@ -581,6 +634,9 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
   // ── Typing ────────────────────────────────────────────────────────────────
   const sendTyping = useCallback((isTyping: boolean) => {
     if (!currentUser || !isLive) return;
+    const now = Date.now();
+    if (isTyping && now - lastTypingPingAtRef.current < 1200) return;
+    if (isTyping) lastTypingPingAtRef.current = now;
     fetch(`/api/projects/${project.id}/messages/typing`, {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -599,7 +655,7 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
     else { setShowMention(false); }
     sendTyping(true);
     if (typingTimer.current) clearTimeout(typingTimer.current);
-    typingTimer.current = setTimeout(() => sendTyping(false), 2000);
+    typingTimer.current = setTimeout(() => sendTyping(false), 1200);
   };
 
   const insertMention = (user: User) => {
@@ -639,32 +695,70 @@ export function ProjectChat({ project, onClose }: ProjectChatProps) {
     const sentForward = forwardOf;
     const sentFiles = [...files];
     setText(''); setFiles([]); setReplyTo(null); setForwardOf(null); sendTyping(false);
+    fastSyncUntilRef.current = Date.now() + 3000;
+    pausePollingUntilRef.current = Date.now() + 3000;
 
     try {
-      const fd = new FormData();
-      fd.append('sender_id', String(currentUser.id));
-      if (sentText) fd.append('message_text', sentText);
-      if (sentReply) fd.append('reply_to_id', String(sentReply.id));
-      if (sentForward) fd.append('metadata[forwarded_from][id]', String(sentForward.id));
-      if (sentForward) fd.append('metadata[forwarded_from][sender_name]', sentForward.sender?.name ?? '');
-      if (sentForward) fd.append('metadata[forwarded_from][text]', sentForward.message_text ?? '');
-      sentFiles.forEach((f) => fd.append('attachments[]', f));
+      const sendController = new AbortController();
+      const sendTimeout = setTimeout(() => sendController.abort(), 45000);
+      let res: Response;
+      if (sentFiles.length > 0) {
+        const fd = new FormData();
+        fd.append('sender_id', String(currentUser.id));
+        if (sentText) fd.append('message_text', sentText);
+        if (sentReply) fd.append('reply_to_id', String(sentReply.id));
+        if (sentForward) fd.append('metadata[forwarded_from][id]', String(sentForward.id));
+        if (sentForward) fd.append('metadata[forwarded_from][sender_name]', sentForward.sender?.name ?? '');
+        if (sentForward) fd.append('metadata[forwarded_from][text]', sentForward.message_text ?? '');
+        sentFiles.forEach((f) => fd.append('attachments[]', f));
 
-      const res = await fetch(`/api/projects/${project.id}/messages`, {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        body: fd,
-      });
+        res = await fetch(`/api/projects/${project.id}/messages`, {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          signal: sendController.signal,
+          body: fd,
+        });
+      } else {
+        res = await fetch(`/api/projects/${project.id}/messages`, {
+          method: 'POST', credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+          },
+          signal: sendController.signal,
+          body: JSON.stringify({
+            sender_id: Number(currentUser.id),
+            message_text: sentText || null,
+            reply_to_id: sentReply ? sentReply.id : null,
+            metadata: sentForward
+              ? {
+                  forwarded_from: {
+                    id: sentForward.id,
+                    sender_name: sentForward.sender?.name ?? '',
+                    text: sentForward.message_text ?? '',
+                  },
+                }
+              : undefined,
+          }),
+        });
+      }
+
+      clearTimeout(sendTimeout);
 
       if (res.ok) {
         const saved: ChatMessage = await res.json();
         setMessages((prev) => prev.map((m) => (m.id === tempId ? saved : m)));
         lastIdRef.current = Math.max(lastIdRef.current, saved.id);
+        fastSyncUntilRef.current = Date.now() + 3000;
       } else {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
-    } catch (_) {
+    } catch (error: any) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      if (error?.name === 'AbortError') {
+        setActionError('Message send timed out. Please try again.');
+      }
     } finally {
       setSending(false);
     }

@@ -123,7 +123,6 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
   const [replyTo, setReplyTo] = useState<DmMessage | null>(null);
   const [forwardOf, setForwardOf] = useState<DmMessage | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [isEchoConnected, setIsEchoConnected] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -131,10 +130,10 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastIdRef = useRef<number>(0);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const loadingRef = useRef<boolean>(false);
+  const fastSyncUntilRef = useRef<number>(0);
+  const pausePollingUntilRef = useRef<number>(0);
 
   const currentUserId = currentUser ? Number(currentUser.id) : 0;
 
@@ -142,19 +141,20 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
   const loadMessages = useCallback(async (after?: number) => {
     if (loadingRef.current) return;
     loadingRef.current = true;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
 
     try {
       setLoadError(null);
-      // Cancel any pending request
-      abortControllerRef.current?.abort();
-      abortControllerRef.current = new AbortController();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      timeout = setTimeout(() => controller.abort(), 6000);
 
       const url = after
-        ? `/api/direct-conversations/${conversationId}/messages?after=${after}`
-        : `/api/direct-conversations/${conversationId}/messages?limit=30`;
+        ? `/api/direct-conversations/${conversationId}/messages?after=${after}&_ts=${Date.now()}`
+        : `/api/direct-conversations/${conversationId}/messages?limit=30&_ts=${Date.now()}`;
       
       const res = await fetch(url, {
-        signal: abortControllerRef.current.signal,
+        signal: controller.signal,
         cache: 'no-store',
         credentials: 'include',
         headers: {
@@ -191,6 +191,7 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
         setLoadError('Failed to load messages. Retrying...');
       }
     } finally {
+      if (timeout) clearTimeout(timeout);
       loadingRef.current = false;
     }
   }, [conversationId]);
@@ -257,10 +258,14 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
 
   // Polling fallback
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
     // Keep polling active even when Echo exists, because broadcast can be
     // disabled or intermittently unavailable in some deployments.
     const tick = () => {
       if (document.visibilityState === 'hidden') return;
+      if (sending) return;
+      if (Date.now() < pausePollingUntilRef.current) return;
       if (lastIdRef.current > 0 && messages.length > 0) {
         loadMessages(lastIdRef.current);
       } else {
@@ -268,13 +273,22 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
       }
     };
 
+    const schedule = () => {
+      const fastMode = Date.now() < fastSyncUntilRef.current;
+      const delay = fastMode ? 1200 : 2500;
+      timer = setTimeout(() => {
+        tick();
+        schedule();
+      }, delay);
+    };
+
     // Run an immediate sync so newly opened chats update without waiting.
     tick();
-    pollRef.current = setInterval(tick, 500); // Reduced from 1000ms for faster updates
+    schedule();
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (timer) clearTimeout(timer);
     };
-  }, [loadMessages, messages.length]);
+  }, [loadMessages, messages.length, sending]);
 
   // Auto-scroll
   useEffect(() => {
@@ -310,29 +324,67 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
     setText('');
     setReplyTo(null);
     setForwardOf(null);
+    fastSyncUntilRef.current = Date.now() + 3000;
+    pausePollingUntilRef.current = Date.now() + 3000;
 
     try {
-      const formData = new FormData();
-      formData.append('sender_id', String(currentUserId));
-      if (sentText.trim()) formData.append('message_text', sentText.trim());
-      if (sentReply) formData.append('reply_to_id', String(sentReply.id));
-      if (sentForward) {
-        formData.append('metadata[forwarded_from][id]', String(sentForward.id));
-        formData.append('metadata[forwarded_from][sender_name]', sentForward.sender?.name ?? '');
-        formData.append('metadata[forwarded_from][text]', sentForward.message_text ?? '');
-      }
-      attachments.forEach((f) => formData.append('attachments[]', f));
-      setAttachments([]);
+      const sendController = new AbortController();
+      const sendTimeout = setTimeout(() => sendController.abort(), 45000);
+      const hasAttachments = attachments.length > 0;
+      let res: Response;
 
-      const res = await fetch(`/api/direct-conversations/${conversationId}/messages`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'X-CSRF-TOKEN': csrfToken,
-          'Accept': 'application/json',
-        },
-        body: formData,
-      });
+      if (hasAttachments) {
+        const formData = new FormData();
+        formData.append('sender_id', String(currentUserId));
+        if (sentText.trim()) formData.append('message_text', sentText.trim());
+        if (sentReply) formData.append('reply_to_id', String(sentReply.id));
+        if (sentForward) {
+          formData.append('metadata[forwarded_from][id]', String(sentForward.id));
+          formData.append('metadata[forwarded_from][sender_name]', sentForward.sender?.name ?? '');
+          formData.append('metadata[forwarded_from][text]', sentForward.message_text ?? '');
+        }
+        attachments.forEach((f) => formData.append('attachments[]', f));
+        setAttachments([]);
+
+        res = await fetch(`/api/direct-conversations/${conversationId}/messages`, {
+          method: 'POST',
+          credentials: 'include',
+          signal: sendController.signal,
+          headers: {
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+          },
+          body: formData,
+        });
+      } else {
+        res = await fetch(`/api/direct-conversations/${conversationId}/messages`, {
+          method: 'POST',
+          credentials: 'include',
+          signal: sendController.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            sender_id: currentUserId,
+            message_text: sentText.trim() || null,
+            reply_to_id: sentReply ? sentReply.id : null,
+            metadata: sentForward
+              ? {
+                  forwarded_from: {
+                    id: sentForward.id,
+                    sender_name: sentForward.sender?.name ?? '',
+                    text: sentForward.message_text ?? '',
+                  },
+                }
+              : undefined,
+          }),
+        });
+      }
+
+      clearTimeout(sendTimeout);
+
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.message || 'Unable to send message.');
@@ -340,9 +392,11 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
       const saved: DmMessage = await res.json();
       setMessages((prev) => [...prev.filter((m) => m.id !== optimisticId), saved]);
       lastIdRef.current = Math.max(lastIdRef.current, saved.id);
+      fastSyncUntilRef.current = Date.now() + 3000;
+      loadMessages();
     } catch (error: any) {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-      setActionError(error?.message || 'Unable to send message.');
+      setActionError(error?.name === 'AbortError' ? 'Message send timed out. Please try again.' : (error?.message || 'Unable to send message.'));
     } finally {
       setSending(false);
     }
@@ -352,6 +406,21 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
   const handleEdit = async (msg: DmMessage) => {
     if (!editText.trim()) return;
     setActionError(null);
+    const nextText = editText.trim();
+    const previous = { message_text: msg.message_text, metadata: msg.metadata };
+    setMessages((prev) => prev.map((m) => (
+      m.id === msg.id
+        ? {
+            ...m,
+            message_text: nextText,
+            metadata: {
+              ...(m.metadata || {}),
+              edited: true,
+              edited_at: new Date().toISOString(),
+            },
+          }
+        : m
+    )));
     try {
       const res = await fetch(`/api/messages/${msg.id}`, {
         method: 'PATCH',
@@ -365,12 +434,14 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...previous } : m)));
         setActionError(data?.message || 'Unable to edit message.');
         return;
       }
       const updated = await res.json();
       setMessages((prev) => prev.map((m) => (m.id === msg.id ? updated : m)));
     } catch (_) {
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...previous } : m)));
       setActionError('Unable to edit message.');
     }
     setEditingId(null);
@@ -380,6 +451,8 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
   // ── Delete message ──────────────────────────────────────────────
   const handleDelete = async (msg: DmMessage) => {
     setActionError(null);
+    const snapshot = msg;
+    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
     try {
       const res = await fetch(`/api/messages/${msg.id}?user_id=${currentUserId}&user_role=${currentUser?.role || ''}`, {
         method: 'DELETE',
@@ -391,32 +464,14 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        setMessages((prev) => [...prev, snapshot].sort((a, b) => a.id - b.id));
         setActionError(data?.message || 'Unable to delete message.');
         return;
       }
-      setMessages((prev) => prev.filter((m) => m.id !== msg.id));
     } catch (_) {
+      setMessages((prev) => [...prev, snapshot].sort((a, b) => a.id - b.id));
       setActionError('Unable to delete message.');
     }
-  };
-
-  // ── Typing indicator ────────────────────────────────────────────
-  const handleTyping = () => {
-    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    fetch(`/api/direct-conversations/${conversationId}/typing`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-      body: JSON.stringify({ user_id: currentUserId, user_name: currentUser?.name, is_typing: true }),
-    }).catch(() => {});
-    typingTimerRef.current = setTimeout(() => {
-      fetch(`/api/direct-conversations/${conversationId}/typing`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-        body: JSON.stringify({ user_id: currentUserId, user_name: currentUser?.name, is_typing: false }),
-      }).catch(() => {});
-    }, 3000);
   };
 
   if (!currentUser) return null;
@@ -604,16 +659,6 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
             );
           })
         )}
-        {typingUsers.length > 0 && (
-          <div className="flex items-center gap-2 text-xs dark:text-dark-subtle text-light-subtle">
-            <span className="flex gap-0.5">
-              <span className="w-1.5 h-1.5 rounded-full dark:bg-dark-muted bg-light-muted animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1.5 h-1.5 rounded-full dark:bg-dark-muted bg-light-muted animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1.5 h-1.5 rounded-full dark:bg-dark-muted bg-light-muted animate-bounce" style={{ animationDelay: '300ms' }} />
-            </span>
-            {otherUser.name} is typing…
-          </div>
-        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -689,7 +734,7 @@ export function DirectChat({ conversationId, otherUser, onClose }: DirectChatPro
           className="flex-1 px-3 py-2 text-sm rounded-xl dark:bg-dark-card dark:border-dark-border dark:text-dark-text dark:placeholder-dark-subtle bg-white border border-light-border text-light-text placeholder-light-subtle focus:outline-none focus:ring-1 focus:ring-green-primary/50 resize-none max-h-32"
           rows={1}
           value={text}
-          onChange={(e) => { setText(e.target.value); handleTyping(); }}
+          onChange={(e) => { setText(e.target.value); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
           }}

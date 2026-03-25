@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   FolderKanbanIcon,
   UserIcon,
@@ -60,6 +60,7 @@ export function ProjectChatPage() {
   const [chatUsers, setChatUsers] = useState<User[]>([]);
   const [dmLoading, setDmLoading] = useState(false);
   const [dmError, setDmError] = useState<string | null>(null);
+  const loadingConversationsRef = useRef(false);
 
   const currentUserId = currentUser ? Number(currentUser.id) : 0;
 
@@ -70,9 +71,13 @@ export function ProjectChatPage() {
   });
 
   const loadConversations = useCallback(async () => {
-    if (!currentUser) return;
+    if (!currentUser || loadingConversationsRef.current) return;
+    loadingConversationsRef.current = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
     try {
-      const res = await fetch(`/api/direct-conversations?user_id=${currentUserId}`, {
+      const res = await fetch(`/api/direct-conversations?user_id=${currentUserId}&_ts=${Date.now()}`, {
+        signal: controller.signal,
         cache: 'no-store',
         credentials: 'include',
         headers: {
@@ -84,13 +89,18 @@ export function ProjectChatPage() {
       if (!res.ok) return;
       setConversations(await res.json());
     } catch (_) {}
+    finally {
+      clearTimeout(timeout);
+      loadingConversationsRef.current = false;
+    }
   }, [currentUser, currentUserId]);
 
   useEffect(() => {
+    if (tab !== 'direct') return;
     loadConversations();
-    const iv = setInterval(loadConversations, 1000); // Reduced from 1500ms
+    const iv = setInterval(loadConversations, 5000);
     return () => clearInterval(iv);
-  }, [loadConversations]);
+  }, [loadConversations, tab]);
 
   useEffect(() => {
     if (!currentUser) return;

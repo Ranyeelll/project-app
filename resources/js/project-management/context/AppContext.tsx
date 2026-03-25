@@ -194,6 +194,13 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   }, [currentUser]);
 
+  // Clear potentially stale cross-account caches when account changes.
+  useEffect(() => {
+    if (!currentUser) return;
+    localStorage.removeItem('maptech-users');
+    localStorage.removeItem('maptech-projects');
+  }, [currentUser?.id]);
+
   const login = useCallback(
     async (
       email: string,
@@ -365,16 +372,16 @@ export function AppProvider({ children }: AppProviderProps) {
   }
 
   // Data (persisted in localStorage so edits survive page refresh)
-  const [users, setUsers] = useState<User[]>(() => loadState('maptech-users', MOCK_USERS));
-  const [projects, setProjects] = useState<Project[]>(() => loadState('maptech-projects', MOCK_PROJECTS));
+  const [users, setUsers] = useState<User[]>(() => loadState('maptech-users', []));
+  const [projects, setProjects] = useState<Project[]>(() => loadState('maptech-projects', []));
   const [tasks, setTasks] = useState<Task[]>(() => loadState('maptech-tasks', MOCK_TASKS));
   const [budgetRequests, setBudgetRequests] =
     useState<BudgetRequest[]>(() => loadState('maptech-budgetRequests', MOCK_BUDGET_REQUESTS));
   const [issues, setIssues] = useState<Issue[]>(() => loadState('maptech-issues', MOCK_ISSUES));
   const [media, setMedia] = useState<MediaUpload[]>(() => loadState('maptech-media', MOCK_MEDIA));
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>(() => loadState('maptech-timeLogs', MOCK_TIME_LOGS));
-  const [ganttItems, setGanttItems] = useState<GanttItem[]>([]);
-  const [ganttDependencies, setGanttDependencies] = useState<GanttDependency[]>([]);
+  const [ganttItems, setGanttItems] = useState<GanttItem[]>(() => loadState('maptech-ganttItems', []));
+  const [ganttDependencies, setGanttDependencies] = useState<GanttDependency[]>(() => loadState('maptech-ganttDependencies', []));
   const [formSubmissions, setFormSubmissions] = useState<ProjectFormSubmission[]>([]);
 
   // Persist every data slice to localStorage whenever it changes
@@ -385,17 +392,26 @@ export function AppProvider({ children }: AppProviderProps) {
   useEffect(() => { localStorage.setItem('maptech-issues', JSON.stringify(issues)); }, [issues]);
   useEffect(() => { localStorage.setItem('maptech-media', JSON.stringify(media)); }, [media]);
   useEffect(() => { localStorage.setItem('maptech-timeLogs', JSON.stringify(timeLogs)); }, [timeLogs]);
+  useEffect(() => { localStorage.setItem('maptech-ganttItems', JSON.stringify(ganttItems)); }, [ganttItems]);
+  useEffect(() => { localStorage.setItem('maptech-ganttDependencies', JSON.stringify(ganttDependencies)); }, [ganttDependencies]);
 
   // ─── Load users from the database on mount ───────────────────────────────
   useEffect(() => {
-    if (!currentUser || String(currentUser.role).toLowerCase() !== 'superadmin') {
+    if (!currentUser) {
       return;
     }
 
-    fetch('/api/users')
+    const role = String(currentUser.role).toLowerCase();
+    const usersEndpoint = role === 'superadmin' ? '/api/users' : '/api/chat/users';
+
+    fetch(usersEndpoint, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
       .then((res) => res.json())
       .then((data: User[]) => {
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setUsers(data);
         }
       })
@@ -423,18 +439,35 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // ─── Refresh helpers (can be called from any page) ────────────────────────
   const refreshUsers = useCallback(() => {
-    if (!currentUser || String(currentUser.role).toLowerCase() !== 'superadmin') {
+    if (!currentUser) {
       return;
     }
 
-    fetch('/api/users')
+    const role = String(currentUser.role).toLowerCase();
+    const usersEndpoint = role === 'superadmin' ? '/api/users' : '/api/chat/users';
+
+    fetch(usersEndpoint, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
       .then((res) => res.json())
-      .then((data: User[]) => { if (Array.isArray(data) && data.length > 0) setUsers(data); })
+      .then((data: User[]) => { if (Array.isArray(data)) setUsers(data); })
       .catch(() => {});
   }, [currentUser]);
   const refreshProjects = useCallback(() => {
-    fetch('/api/projects')
-      .then((res) => res.json())
+    fetch('/api/projects', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          setProjects([]);
+          return [] as Project[];
+        }
+        return (await res.json()) as Project[];
+      })
       .then((data: Project[]) => { if (Array.isArray(data)) setProjects(data); })
       .catch(() => {});
   }, []);
@@ -472,15 +505,35 @@ export function AppProvider({ children }: AppProviderProps) {
     const url = previewAs
       ? `/api/projects/${projectId}/gantt-items?preview_as=${previewAs}`
       : `/api/projects/${projectId}/gantt-items`;
-    fetch(url)
-      .then((res) => res.json())
-      .then((data: GanttItem[]) => { if (Array.isArray(data)) setGanttItems(data); })
+    fetch(url, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: GanttItem[]) => {
+        if (!Array.isArray(data)) return;
+        setGanttItems((prev) => {
+          const untouched = prev.filter((item) => item.projectId !== projectId);
+          return [...untouched, ...data];
+        });
+      })
       .catch(() => {});
   }, []);
   const refreshGanttDependencies = useCallback((projectId: string) => {
-    fetch(`/api/projects/${projectId}/gantt-dependencies`)
-      .then((res) => res.json())
-      .then((data: GanttDependency[]) => { if (Array.isArray(data)) setGanttDependencies(data); })
+    fetch(`/api/projects/${projectId}/gantt-dependencies`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: GanttDependency[]) => {
+        if (!Array.isArray(data)) return;
+        setGanttDependencies((prev) => {
+          const untouched = prev.filter((dep) => dep.projectId !== projectId);
+          return [...untouched, ...data];
+        });
+      })
       .catch(() => {});
   }, []);
   const refreshFormSubmissions = useCallback((projectId: string, formType?: string) => {
@@ -505,9 +558,12 @@ export function AppProvider({ children }: AppProviderProps) {
   // ─── Load all data from the database on mount ────────────────────────────
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
-  // ─── Auto-refresh every 5 seconds ───────────────────────────────────────
+  // ─── Auto-refresh every 15 seconds (skip while tab is hidden) ──────────
   useEffect(() => {
-    const interval = setInterval(refreshAll, 5000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      refreshAll();
+    }, 15000);
     return () => clearInterval(interval);
   }, [refreshAll]);
 

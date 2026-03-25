@@ -243,7 +243,6 @@ Route::prefix('api')->group(function () {
         Route::get('/direct-conversations/{conversation}/messages', [DirectMessageController::class, 'messages']);
         Route::post('/direct-conversations/{conversation}/messages', [DirectMessageController::class, 'sendMessage']);
         Route::post('/direct-conversations/{conversation}/messages/read', [DirectMessageController::class, 'markRead']);
-        Route::post('/direct-conversations/{conversation}/typing', [DirectMessageController::class, 'typing']);
 
         // ─── Chat Notifications (all departments) ─────────────────
         Route::get('/notifications', [DirectMessageController::class, 'notifications']);

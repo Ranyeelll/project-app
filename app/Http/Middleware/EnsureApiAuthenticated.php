@@ -34,6 +34,12 @@ class EnsureApiAuthenticated
             ], 403);
         }
 
+        // Release session lock for API calls so rapid polling does not block
+        // concurrent POST requests like chat send.
+        if (function_exists('session_status') && session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
         return $next($request);
     }
 }

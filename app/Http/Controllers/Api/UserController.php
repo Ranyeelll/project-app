@@ -79,6 +79,7 @@ class UserController extends Controller
 
     /**
      * List users for direct-message search (authenticated users).
+     * Includes current user so they can be included in team member counts.
      */
     public function chatDirectory(Request $request): JsonResponse
     {
@@ -88,7 +89,6 @@ class UserController extends Controller
         $users = User::query()
             ->select('id', 'name', 'department', 'position', 'status', 'profile_photo')
             ->where('status', 'active')
-            ->when($currentUser, fn ($q) => $q->where('id', '!=', $currentUser->id))
             ->when($query !== '', function ($q) use ($query) {
                 $q->where('name', 'ilike', '%' . $query . '%');
             })
