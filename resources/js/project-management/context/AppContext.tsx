@@ -91,7 +91,7 @@ interface DataContextType {
   refreshTimeLogs: () => void;
   refreshBudgetRequests: () => void;
   refreshIssues: () => void;
-  refreshGanttItems: (projectId: string, previewAs?: string) => void;
+  refreshGanttItems: (projectId: string, previewAs?: string) => Promise<void>;
   refreshGanttDependencies: (projectId: string) => void;
   refreshFormSubmissions: (projectId: string, formType?: string) => void;
   refreshAll: () => void;
@@ -120,7 +120,7 @@ const DataContext = createContext<DataContextType>({
   refreshTimeLogs: () => {},
   refreshBudgetRequests: () => {},
   refreshIssues: () => {},
-  refreshGanttItems: () => {},
+  refreshGanttItems: () => Promise.resolve(),
   refreshGanttDependencies: () => {},
   refreshFormSubmissions: () => {},
   refreshAll: () => {}
@@ -501,11 +501,11 @@ export function AppProvider({ children }: AppProviderProps) {
       .then((data: Issue[]) => { if (Array.isArray(data)) setIssues(data); })
       .catch(() => {});
   }, []);
-  const refreshGanttItems = useCallback((projectId: string, previewAs?: string) => {
+  const refreshGanttItems = useCallback((projectId: string, previewAs?: string): Promise<void> => {
     const url = previewAs
       ? `/api/projects/${projectId}/gantt-items?preview_as=${previewAs}`
       : `/api/projects/${projectId}/gantt-items`;
-    fetch(url, {
+    return fetch(url, {
       credentials: 'include',
       headers: { Accept: 'application/json' },
       cache: 'no-store',
