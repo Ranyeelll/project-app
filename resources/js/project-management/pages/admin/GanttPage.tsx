@@ -296,7 +296,7 @@ export function GanttPage() {
     return cols;
   }, [timelineRange, zoom]);
 
-  const DAY_BASE = zoom === 'week' ? 34 : zoom === 'month' ? 10 : 6;
+  const DAY_BASE = zoom === 'week' ? 34 : zoom === 'month' ? 10 : 14;
   const DAY_W = Math.max(4, Math.round(DAY_BASE * zoomScale));
   const colWidth = (col: Column) => (daysBetween(col.startDate, col.endDate) + 1) * DAY_W;
   const totalW = columns.reduce((sum, col) => sum + colWidth(col), 0);
@@ -485,6 +485,13 @@ export function GanttPage() {
       if (!res.ok) throw new Error('Failed to update item state');
 
       await refreshGanttItems(selectedProject);
+      // Server data is now fresh — drop the optimistic override so the UI
+      // reflects the persisted progress value returned by the server.
+      setStateOverrides(prev => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
     } catch (_e) {
       // Revert optimistic state on failure.
       setStateOverrides(prev => {
