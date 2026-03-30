@@ -21,11 +21,13 @@ const BAR_H = 16;
 const TREE_W = 720;
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+// Pastel palette (Gelato Days) provided by design
+// #FFCBE1 pink, #D6E5BD green, #F9E1A8 yellow, #BCD8EC blue, #DCCCEC purple, #FFDAB4 peach
 const GANTT_STATUS_COLOR = {
-  done: '#63D44A',
-  working: '#f59e0b',
-  stuck: '#ef4444',
-  milestone: '#1FAF8E',
+  done: '#D6E5BD',      // pastel green
+  working: '#F9E1A8',   // pastel yellow
+  stuck: '#FFCBE1',     // pastel pink
+  milestone: '#BCD8EC', // pastel blue
 } as const;
 
 function getItemColor(item: GanttItem): string {
