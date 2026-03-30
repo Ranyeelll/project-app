@@ -294,9 +294,15 @@ export function ViewGanttPage() {
     if (rights.length === 0) return;
     const rightmost = Math.max(...rights);
     // If rightmost bar is outside visible area, scroll so it's visible with a small margin
-    if (rightmost > el.clientWidth + el.scrollLeft - 40) {
-      el.scrollLeft = Math.max(0, rightmost - el.clientWidth + 40);
-    }
+    requestAnimationFrame(() => {
+      const target = Math.max(0, rightmost - el.clientWidth + 40);
+      const max = Math.max(0, el.scrollWidth - el.clientWidth);
+      if (target > el.scrollLeft && target <= max) {
+        el.scrollLeft = Math.min(max, target);
+      } else if (target > max) {
+        el.scrollLeft = max;
+      }
+    });
   }, [barPositions, DAY_W, zoom, zoomScale, totalW]);
 
   const visualDeps = useMemo<VisualDependency[]>(() => {
