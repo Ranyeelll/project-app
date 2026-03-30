@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DirectConversation extends Model
 {
@@ -26,6 +27,20 @@ class DirectConversation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(Message::class, 'conversation_id');
+    }
+
+    /**
+     * Eager-loadable relationship for the single latest non-deleted message
+     * in this conversation. Uses ofMany() so it resolves in one query for
+     * all conversations rather than one query per conversation.
+     */
+    public function latestMessage(): HasOne
+    {
+        return $this->hasOne(Message::class, 'conversation_id')
+            ->ofMany(
+                ['id' => 'max'],
+                fn ($query) => $query->whereNull('deleted_at')
+            );
     }
 
     /**
