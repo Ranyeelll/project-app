@@ -796,6 +796,25 @@ class GanttController extends Controller
 
         $this->assertWithinProjectDateRange($project, $data['start_date'] ?? null, $data['end_date'] ?? null);
 
+        // If visibility wasn't explicitly set, default to project members
+        $visibleRoles = $data['visible_to_roles'] ?? [];
+        $visibleUsers = $data['visible_to_users'] ?? [];
+        if (empty($visibleRoles) && empty($visibleUsers)) {
+            $defaultUsers = [];
+            // include team members
+            foreach (($project->team_ids ?? []) as $t) {
+                $defaultUsers[] = (string) $t;
+            }
+            // include manager and project leader if present
+            if (!empty($project->manager_id)) {
+                $defaultUsers[] = (string) $project->manager_id;
+            }
+            if (!empty($project->project_leader_id)) {
+                $defaultUsers[] = (string) $project->project_leader_id;
+            }
+            $data['visible_to_users'] = array_values(array_unique(array_filter($defaultUsers)));
+        }
+
         $item = GanttItem::create(array_merge($data, [
             'project_id' => $project->id,
             'progress'   => $data['progress'] ?? 0,

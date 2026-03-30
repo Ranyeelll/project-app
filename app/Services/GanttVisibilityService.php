@@ -20,25 +20,56 @@ class GanttVisibilityService
      */
     public function isVisible(GanttItem $item, User $user): bool
     {
-        // Admin always sees everything (unless impersonating via preview_as)
-        if ($user->department === Department::Admin) {
+        // Superadmin/admin and supervisors always see the Gantt
+        if ($user->isAdmin() || $user->isSupervisor()) {
+            return true;
+        }
+
+        // Technical department always has access
+        if ($user->department === Department::Technical) {
             return true;
         }
 
         $roles = $item->visible_to_roles ?? [];
         $users = $item->visible_to_users ?? [];
 
-        // No restriction set → visible to all
-        if (empty($roles) && empty($users)) {
+        // If explicit visibility restrictions are set, honor them first
+        if (!empty($roles) || !empty($users)) {
+            // Department match (roles may contain department names)
+            $deptMatch = !empty($roles) && in_array($user->department->value, $roles, true);
+            // Role match (roles may contain role strings like 'supervisor')
+            $roleMatch = !empty($roles) && in_array(strtolower((string) $user->role), array_map('strtolower', $roles), true);
+            // User ID match
+            $userMatch = !empty($users) && in_array((string) $user->id, $users, true);
+
+            if ($deptMatch || $roleMatch || $userMatch) {
+                return true;
+            }
+            // Explicit restrictions present but no match — fallthrough to project-level checks
+        }
+
+        // Employee involvement: check project membership (manager, team members, project leader)
+        $project = $item->project;
+        if ($project) {
+            $teamIds = array_map('intval', $project->team_ids ?? []);
+            if (in_array($user->id, $teamIds, true)) {
+                return true;
+            }
+            if (!empty($project->manager_id) && (int) $project->manager_id === (int) $user->id) {
+                return true;
+            }
+            if (!empty($project->project_leader_id) && (int) $project->project_leader_id === (int) $user->id) {
+                return true;
+            }
+        }
+
+        // Also allow assignees on the gantt item itself
+        $assignees = $item->assignee_ids ?? [];
+        if (!empty($assignees) && in_array((int) $user->id, array_map('intval', $assignees), true)) {
             return true;
         }
 
-        // Check department match
-        $deptMatch = !empty($roles) && in_array($user->department->value, $roles);
-
-        // Check user ID match
-        $userMatch = !empty($users) && in_array((string) $user->id, $users);
-
-        return $deptMatch || $userMatch;
+        // Deny by default — only the checks above grant access
+        return false;
     }
 }
