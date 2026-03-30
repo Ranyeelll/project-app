@@ -31,7 +31,7 @@ class AuthController extends Controller
             'department'      => $user->department ?? '',
             'position'        => $user->position ?? '',
             'status'          => $user->status ?? 'active',
-            'joinDate'        => $user->created_at?->toDateString() ?? '',
+            'joinDate'        => $user->created_at?->toIso8601String() ?? '',
             'profilePhoto'    => $user->profile_photo
                                     ? '/api/users/' . $user->id . '/photo'
                                     : null,

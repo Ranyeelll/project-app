@@ -88,7 +88,7 @@ class TimeLogController extends Controller
             'userId'      => (string) $l->user_id,
             'hours'       => (float) $l->hours,
             'description' => $l->description ?? '',
-            'date'        => $l->date?->toDateString() ?? '',
+            'date'        => $l->date?->toIso8601String() ?? '',
         ];
     }
 }

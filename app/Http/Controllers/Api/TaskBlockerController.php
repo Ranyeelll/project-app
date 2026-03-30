@@ -181,7 +181,7 @@ class TaskBlockerController extends Controller
             'issueTitle' => $b->issue_title,
             'description' => $b->description,
             'priority' => $b->priority,
-            'dateReported' => $b->date_reported?->toDateString(),
+            'dateReported' => $b->date_reported?->toIso8601String(),
             'attachmentPath' => $b->attachment_path ?? '',
             'reportedByUserId' => (string) ($b->reported_by_user_id ?? ''),
             'reportedByName' => $b->reportedBy?->name ?? null,

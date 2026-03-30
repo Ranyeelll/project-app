@@ -62,7 +62,7 @@ class UserController extends Controller
             'department'   => $department,
             'position'     => $u->position ?? '',
             'status'       => $u->status ?? 'active',
-            'joinDate'     => $u->created_at?->toDateString() ?? '',
+            'joinDate'     => $u->created_at?->toIso8601String() ?? '',
             'profilePhoto' => $this->profilePhotoUrl($u),
         ];
     }

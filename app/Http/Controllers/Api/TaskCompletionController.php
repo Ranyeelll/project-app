@@ -140,7 +140,7 @@ class TaskCompletionController extends Controller
             'taskId' => (string) $c->task_id,
             'userId' => (string) ($c->user_id ?? ''),
             'userName' => $c->user?->name ?? null,
-            'completionDate' => $c->completion_date?->toDateString(),
+            'completionDate' => $c->completion_date?->toIso8601String(),
             'deliverablePath' => $c->deliverable_path ?? '',
             'summary' => $c->summary ?? '',
             'issuesEncountered' => $c->issues_encountered ?? '',

@@ -97,8 +97,8 @@ class IssueController extends Controller
             'status'      => $i->status,
             'reportedBy'  => (string) $i->reported_by,
             'assignedTo'  => $i->assigned_to ? (string) $i->assigned_to : '',
-            'createdAt'   => $i->created_at?->toDateString() ?? '',
-            'updatedAt'   => $i->updated_at?->toDateString() ?? '',
+            'createdAt'   => $i->created_at?->toIso8601String() ?? '',
+            'updatedAt'   => $i->updated_at?->toIso8601String() ?? '',
         ];
     }
 }

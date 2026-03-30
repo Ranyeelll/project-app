@@ -146,7 +146,7 @@ class MediaController extends Controller
             'originalFilename' => $m->original_filename,
             'fileSize'         => $m->file_size,
             'visibleTo'        => $m->visible_to ?? [],
-            'createdAt'        => $m->created_at?->toDateString() ?? '',
+            'createdAt'        => $m->created_at?->toIso8601String() ?? '',
         ];
     }
 

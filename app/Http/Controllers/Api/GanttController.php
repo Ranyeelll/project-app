@@ -837,10 +837,10 @@ class GanttController extends Controller
 
         $nextStart = array_key_exists('start_date', $data)
             ? ($data['start_date'] ?: null)
-            : ($item->start_date?->toDateString());
+            : ($item->start_date?->toIso8601String());
         $nextEnd = array_key_exists('end_date', $data)
             ? ($data['end_date'] ?: null)
-            : ($item->end_date?->toDateString());
+            : ($item->end_date?->toIso8601String());
 
         $this->assertWithinProjectDateRange($project, $nextStart, $nextEnd);
 

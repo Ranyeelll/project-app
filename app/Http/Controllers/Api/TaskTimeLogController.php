@@ -197,7 +197,7 @@ class TaskTimeLogController extends Controller
             'taskId' => (string) $log->task_id,
             'userId' => (string) $log->user_id,
             'userName' => $log->user?->name ?? null,
-            'dateWorked' => $log->date_worked?->toDateString(),
+            'dateWorked' => $log->date_worked?->toIso8601String(),
             'hoursWorked' => (float) $log->hours_worked,
             'workDescription' => $log->work_description ?? '',
             'createdAt' => $log->created_at?->toIso8601String(),
