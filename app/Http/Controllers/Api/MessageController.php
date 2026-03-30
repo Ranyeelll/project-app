@@ -155,6 +155,14 @@ class MessageController extends Controller
             Log::warning('Failed to create chat notifications', ['error' => (string) $e->getMessage()]);
         }
 
+        // Update project's last_message_at to help clients poll efficiently
+        try {
+            $project->last_message_at = $message->created_at ?? now();
+            $project->save();
+        } catch (\Throwable $e) {
+            Log::warning('Failed to update project last_message_at', ['project_id' => $project->id, 'error' => (string) $e->getMessage()]);
+        }
+
         // Warn if broadcasting is not configured — helps diagnose production issues
         try {
             $defaultBroadcaster = config('broadcasting.default');
