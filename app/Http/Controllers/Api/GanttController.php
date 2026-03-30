@@ -492,6 +492,7 @@ class GanttController extends Controller
         $userMap = User::whereIn('id', collect($orderedItems)->flatMap(fn ($row) => $row['item']->assignee_ids ?? [])->unique()->values()->all())->get()->keyBy('id');
         $deps = GanttDependency::whereIn('predecessor_id', $itemIds)
             ->whereIn('successor_id', $itemIds)
+            ->select(['predecessor_id', 'successor_id'])
             ->get();
         $depCountByItem = [];
         foreach ($deps as $dep) {
@@ -915,6 +916,11 @@ class GanttController extends Controller
     public function indexDependencies(Project $project): JsonResponse
     {
         $dependencies = GanttDependency::where('project_id', $project->id)
+            ->select(['id', 'project_id', 'predecessor_id', 'successor_id', 'type'])
+            ->with([
+                'predecessor:id,name',
+                'successor:id,name',
+            ])
             ->get()
             ->map(fn ($d) => $this->formatDependency($d));
 
@@ -983,6 +989,7 @@ class GanttController extends Controller
     {
         // Load all existing dependencies for this project
         $deps = GanttDependency::where('project_id', $projectId)
+            ->select(['predecessor_id', 'successor_id'])
             ->get()
             ->groupBy('predecessor_id');
 
