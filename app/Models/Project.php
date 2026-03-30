@@ -26,6 +26,7 @@ class Project extends Model
         'submitted_by',
         'reviewed_by',
         'last_reviewed_at',
+        'last_message_at',
     ];
 
     protected $casts = [
@@ -35,6 +36,7 @@ class Project extends Model
         'start_date'       => 'date',
         'end_date'         => 'date',
         'last_reviewed_at' => 'datetime',
+        'last_message_at'  => 'datetime',
     ];
 
     public function manager(): BelongsTo

@@ -124,10 +124,73 @@ class MessageController extends Controller
 
         $message->loadMissing(['sender', 'replyTo.sender']);
 
+        // Create chat notifications for project members (fallback for when broadcasting is down)
+        try {
+            $projectMembers = [];
+            if (!empty($project->team_ids) && is_array($project->team_ids)) {
+                foreach ($project->team_ids as $pid) {
+                    $projectMembers[] = (int) $pid;
+                }
+            }
+            if (!empty($project->manager_id)) $projectMembers[] = (int) $project->manager_id;
+            if (!empty($project->project_leader_id)) $projectMembers[] = (int) $project->project_leader_id;
+            $projectMembers = array_values(array_unique(array_filter($projectMembers, fn($x) => $x > 0)));
+
+            $preview = $message->message_text ? mb_substr($message->message_text, 0, 120) : '[attachment]';
+
+            foreach ($projectMembers as $uid) {
+                if ($uid === (int) $message->sender_id) continue;
+                ChatNotification::create([
+                    'user_id' => $uid,
+                    'type' => 'project_message',
+                    'message_id' => $message->id,
+                    'project_id' => $project->id,
+                    'sender_name' => $message->sender?->name ?? '',
+                    'preview' => $preview,
+                    'is_read' => false,
+                    'created_at' => now(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Failed to create chat notifications', ['error' => (string) $e->getMessage()]);
+        }
+
+        // Warn if broadcasting is not configured — helps diagnose production issues
+        try {
+            $defaultBroadcaster = config('broadcasting.default');
+            if (!$defaultBroadcaster || $defaultBroadcaster === 'null') {
+                Log::warning('Broadcasting not configured or set to null; live message delivery will not work.', [
+                    'project_id' => $project->id,
+                    'message_id' => $message->id,
+                    'broadcasting_default' => $defaultBroadcaster,
+                ]);
+            }
+        } catch (\Throwable $_) {
+            // ignore config read errors
+        }
+
         // Broadcast to live listeners so online users see the message immediately
         try {
             broadcast(new MessageSent($message));
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            // Log the failure so we can diagnose production broadcasting issues
+            Log::error('MessageSent broadcast failed', [
+                'project_id' => $project->id,
+                'message_id' => $message->id,
+                'error' => (string) $e->getMessage(),
+            ]);
+            // Fallback: dispatch the event via the normal event dispatcher which
+            // will also attempt to broadcast for ShouldBroadcast events.
+            try {
+                event(new MessageSent($message));
+            } catch (\Throwable $e2) {
+                Log::error('MessageSent fallback dispatch failed', [
+                    'project_id' => $project->id,
+                    'message_id' => $message->id,
+                    'error' => (string) $e2->getMessage(),
+                ]);
+            }
+        }
 
         $durationMs = (int) ((microtime(true) - $startedAt) * 1000);
         if ($durationMs > 3000) {
