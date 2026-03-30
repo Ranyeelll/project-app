@@ -16,36 +16,7 @@
             line-height: 1.4;
         }
 
-        /* Header */
-        .header {
-            padding: 16px 0 14px;
-            border-bottom: 2px solid #154734;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        .header-logo-wrap {
-            margin-bottom: 8px;
-        }
-        .header-logo-wrap img {
-            max-width: 280px;
-            max-height: 70px;
-        }
-        .header h1 {
-            font-size: 20px;
-            color: #154734;
-            margin-bottom: 3px;
-            letter-spacing: 0.4px;
-        }
-        .header .subtitle {
-            font-size: 12px;
-            color: #374151;
-            font-weight: 600;
-        }
-        .header .period {
-            font-size: 10px;
-            color: #6b7280;
-            margin-top: 3px;
-        }
+        /* Header styles are moved to a shared partial so headers repeat per page */
 
         /* Summary Cards */
         .summary-grid {
@@ -233,36 +204,7 @@
 </head>
 <body>
 
-    <!-- Header -->
-    @php
-        // Only embed the PNG when the GD extension is available (required by DomPDF to decode images).
-        $logoSrc = null;
-        if (function_exists('gd_info')) {
-            $b64File = public_path('logo.b64');
-            $pngFile = public_path('Maptech_Official_Logo_version2_(1).png');
-            if (file_exists($b64File)) {
-                $logoSrc = 'data:image/png;base64,' . trim(file_get_contents($b64File));
-            } elseif (file_exists($pngFile)) {
-                $logoSrc = 'data:image/png;base64,' . base64_encode(file_get_contents($pngFile));
-            }
-        }
-    @endphp
-    <div class="header">
-        <div class="header-logo-wrap">
-            @if($logoSrc)
-                <img src="{{ $logoSrc }}" alt="Maptech Logo" />
-            @else
-                {{-- Pure HTML fallback — no GD needed --}}
-                <div style="display:inline-block; background:#154734; padding:8px 18px; border-radius:6px;">
-                    <div style="font-size:18px; font-weight:900; color:#ffffff; letter-spacing:3px; line-height:1.1;">MAPTECH</div>
-                    <div style="font-size:8px; font-weight:400; color:#a7f3d0; letter-spacing:1.5px;">INFORMATION SOLUTIONS INC.</div>
-                </div>
-            @endif
-        </div>
-        <h1>Budget Report</h1>
-        <div class="subtitle">{{ $periodLabel }}</div>
-        <div class="period">{{ $dateRange }} &mdash; Generated on {{ $generatedAt }}</div>
-    </div>
+    @include('pdf.partials.header', ['title' => 'Budget Report', 'subtitle' => $periodLabel, 'dateRange' => $dateRange, 'generatedAt' => $generatedAt])
 
     <!-- Portfolio Summary -->
     <table>
