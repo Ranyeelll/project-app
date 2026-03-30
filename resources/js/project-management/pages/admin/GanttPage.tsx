@@ -391,6 +391,18 @@ export function GanttPage() {
     setCollapsedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
 
+  // Auto-scroll timeline to show rightmost bar when items/zoom change
+  useEffect(() => {
+    const el = timelineScrollRef.current;
+    if (!el) return;
+    const rights = Array.from(barPositions.values()).map(v => v.rightX);
+    if (rights.length === 0) return;
+    const rightmost = Math.max(...rights);
+    if (rightmost > el.clientWidth + el.scrollLeft - 40) {
+      el.scrollLeft = Math.max(0, rightmost - el.clientWidth + 40);
+    }
+  }, [barPositions, DAY_W, zoom, zoomScale, totalW]);
+
   const projectTeam = useMemo(() => {
     if (!project) return [];
     const ids = new Set([project.managerId, ...(project.teamIds || [])]);

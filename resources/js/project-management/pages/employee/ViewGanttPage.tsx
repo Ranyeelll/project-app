@@ -286,6 +286,19 @@ export function ViewGanttPage() {
     return map;
   }, [visibleItems]);
 
+  // Auto-scroll timeline to show rightmost bar when items/zoom change
+  useEffect(() => {
+    const el = timelineScrollRef.current;
+    if (!el) return;
+    const rights = Array.from(barPositions.values()).map(v => v.rightX);
+    if (rights.length === 0) return;
+    const rightmost = Math.max(...rights);
+    // If rightmost bar is outside visible area, scroll so it's visible with a small margin
+    if (rightmost > el.clientWidth + el.scrollLeft - 40) {
+      el.scrollLeft = Math.max(0, rightmost - el.clientWidth + 40);
+    }
+  }, [barPositions, DAY_W, zoom, zoomScale, totalW]);
+
   const visualDeps = useMemo<VisualDependency[]>(() => {
     if (projectDeps.length > 0) {
       return projectDeps.map((dep) => ({
