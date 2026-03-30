@@ -44,7 +44,7 @@ class DirectMessageController extends Controller
         $unreadSubquery = Message::selectRaw('COUNT(*)')
             ->whereColumn('conversation_id', 'direct_conversations.id')
             ->whereNull('deleted_at')
-            ->whereRaw('NOT JSON_CONTAINS(COALESCE(read_by, \'[]\'), CAST(? AS JSON), \'$\')', [$userId]);
+            ->whereRaw('NOT (COALESCE(read_by, \'[]\'::jsonb) @> ?::jsonb)', [json_encode([$userId])]);
 
         $conversations = DirectConversation::where('participant1_id', $userId)
             ->orWhere('participant2_id', $userId)
