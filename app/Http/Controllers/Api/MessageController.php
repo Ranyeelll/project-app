@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use App\Events\MessageSent;
 
 class MessageController extends Controller
 {
@@ -122,6 +123,11 @@ class MessageController extends Controller
         ]);
 
         $message->loadMissing(['sender', 'replyTo.sender']);
+
+        // Broadcast to live listeners so online users see the message immediately
+        try {
+            broadcast(new MessageSent($message));
+        } catch (\Throwable $e) {}
 
         $durationMs = (int) ((microtime(true) - $startedAt) * 1000);
         if ($durationMs > 3000) {
