@@ -4,6 +4,7 @@ import React, {
   useLayoutEffect,
   useMemo,
   useState,
+  useRef,
   createContext,
   useContext } from
 'react';
@@ -310,12 +311,24 @@ export function AppProvider({ children }: AppProviderProps) {
   }, []);
 
   // Once auth state changes, set the right default page and push URL
+  const initialNavDoneRef = useRef(false);
   useEffect(() => {
-    if (currentUser) {
-      const target = isElevatedRole(currentUser.role) ? 'admin-dashboard' : 'employee-dashboard';
-      navigate(target);
+    if (!currentUser) return;
+
+    const target = isElevatedRole(currentUser.role) ? 'admin-dashboard' : 'employee-dashboard';
+
+    // Run once on initial auth resolution. After that, only auto-navigate
+    // when the app is still on the login page (prevents overwriting user
+    // navigation on background user refreshes).
+    if (initialNavDoneRef.current) {
+      if (currentPage === 'login') {
+        navigate(target);
+      }
+      return;
     }
-  }, [currentUser]);
+    initialNavDoneRef.current = true;
+    navigate(target);
+  }, [currentUser, currentPage, navigate]);
 
   // Sync navigation on back/forward and on initial load
   // SECURITY: only allow protected pages if user is authenticated

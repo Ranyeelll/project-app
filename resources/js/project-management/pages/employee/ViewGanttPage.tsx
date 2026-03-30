@@ -43,8 +43,15 @@ function getStateMeta(item: GanttItem): { label: 'planned' | 'in process' | 'com
 
 function daysBetween(a: Date, b: Date) { return Math.floor((b.getTime() - a.getTime()) / 86400000); }
 function parseDate(s: string): Date {
+  // Accept ISO timestamps from API (with time / timezone). If the string
+  // is date-only (YYYY-MM-DD) construct a local Date at midnight to avoid
+  // implicit UTC parsing that shifts days in some browsers.
+  if (!s) return new Date(NaN);
+  if (s.includes('T') || /[zZ]|[+-]\d{2}:?\d{2}/.test(s)) {
+    return new Date(s);
+  }
   const [y, m, d] = s.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
+  return new Date(y, m - 1, d);
 }
 function toYmd(d: Date): string { return d.toISOString().slice(0, 10); }
 function addDays(s: string, days: number): string {
@@ -74,11 +81,12 @@ function dependencyPath(from: { y: number; rightX: number }, to: { y: number; le
   return `M ${x1} ${y1} H ${detourX} V ${y2} H ${x2}`;
 }
 function dateShort(s: string) {
-  const d = parseDate(s); return `${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  const d = parseDate(s);
+  return `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}`;
 }
 function dateLong(s: string) {
   const d = parseDate(s);
-  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
+  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
 }
 function getWeekNumber(d: Date) {
   const onejan = new Date(d.getFullYear(), 0, 1);
@@ -86,7 +94,7 @@ function getWeekNumber(d: Date) {
 }
 function dayLabel(d: Date): string {
   const labels = ['S', 'M', 'T', 'W', 'Th', 'F', 'S'];
-  return labels[d.getUTCDay()];
+  return labels[d.getDay()];
 }
 
 export function ViewGanttPage() {
@@ -171,8 +179,8 @@ export function ViewGanttPage() {
     if (project?.endDate) dates.push(parseDate(project.endDate));
     if (dates.length === 0) {
       const now = new Date();
-      const start = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
-      const end = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 3, 0));
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
       return { start, end, totalDays: daysBetween(start, end) + 1 };
     }
     const min = new Date(Math.min(...dates.map(d => d.getTime())));
@@ -190,25 +198,25 @@ export function ViewGanttPage() {
       while (cur <= end) {
         cols.push({
           label: dayLabel(cur),
-          subLabel: String(cur.getUTCDate()),
+          subLabel: String(cur.getDate()),
           startDate: new Date(cur),
           endDate: new Date(cur),
         });
-        cur.setUTCDate(cur.getUTCDate() + 1);
+        cur.setDate(cur.getDate() + 1);
       }
     } else if (zoom === 'month') {
-      const cur = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+      const cur = new Date(start.getFullYear(), start.getMonth(), 1);
       while (cur <= end) {
-        const me = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 0));
-        cols.push({ label: MONTHS_SHORT[cur.getUTCMonth()], subLabel: String(cur.getUTCFullYear()), startDate: new Date(cur), endDate: me > end ? new Date(end) : me });
-        cur.setUTCMonth(cur.getUTCMonth() + 1);
+        const me = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
+        cols.push({ label: MONTHS_SHORT[cur.getMonth()], subLabel: String(cur.getFullYear()), startDate: new Date(cur), endDate: me > end ? new Date(end) : me });
+        cur.setMonth(cur.getMonth() + 1);
       }
     } else {
-      const cur = new Date(Date.UTC(start.getUTCFullYear(), Math.floor(start.getUTCMonth() / 3) * 3, 1));
+      const cur = new Date(start.getFullYear(), Math.floor(start.getMonth() / 3) * 3, 1);
       while (cur <= end) {
-        const qe = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 3, 0));
-        cols.push({ label: `Q${Math.floor(cur.getUTCMonth() / 3) + 1}`, subLabel: String(cur.getUTCFullYear()), startDate: new Date(cur), endDate: qe > end ? new Date(end) : qe });
-        cur.setUTCMonth(cur.getUTCMonth() + 3);
+        const qe = new Date(cur.getFullYear(), cur.getMonth() + 3, 0);
+        cols.push({ label: `Q${Math.floor(cur.getMonth() / 3) + 1}`, subLabel: String(cur.getFullYear()), startDate: new Date(cur), endDate: qe > end ? new Date(end) : qe });
+        cur.setMonth(cur.getMonth() + 3);
       }
     }
     return cols;

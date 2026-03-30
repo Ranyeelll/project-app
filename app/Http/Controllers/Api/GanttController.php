@@ -1058,8 +1058,11 @@ class GanttController extends Controller
             'type'           => $item->type,
             'name'           => $item->name,
             'description'    => $item->description,
-            'startDate'      => $item->start_date?->toDateString(),
-            'endDate'        => $item->end_date?->toDateString(),
+            // Return ISO timestamps (with timezone) for consistent client parsing
+            // Frontend parsing of "YYYY-MM-DD" can be interpreted as UTC by some
+            // browsers which causes off-by-one-day shifts in certain timezones.
+            'startDate'      => $item->start_date?->toIso8601String(),
+            'endDate'        => $item->end_date?->toIso8601String(),
             'progress'       => (int) $item->progress,
             'position'       => (int) $item->position,
             'assigneeIds'    => $item->assignee_ids ?? [],
