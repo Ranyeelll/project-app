@@ -428,7 +428,7 @@ export function GanttPage() {
     if (rights.length === 0) return;
     const rightmost = Math.max(...rights);
     requestAnimationFrame(() => {
-      const target = Math.max(0, rightmost - el.clientWidth + 40);
+      const target = Math.max(0, rightmost - el.clientWidth + 80);
       const max = Math.max(0, el.scrollWidth - el.clientWidth);
       if (target > el.scrollLeft && target <= max) {
         el.scrollLeft = Math.min(max, target);
@@ -622,7 +622,7 @@ export function GanttPage() {
 
           {/* Timeline header */}
           <div className="flex-1 overflow-hidden">
-            <div className="flex" style={{ width: totalW }}>
+            <div className="flex" style={{ width: totalW + 80 }}>
               {columns.map((col, i) => {
                 const isCur = today >= col.startDate && today <= col.endDate;
                 return (
@@ -776,7 +776,7 @@ export function GanttPage() {
             onScroll={handleTimelineScroll}
             className="flex-1 overflow-auto relative"
           >
-            <div style={{ width: totalW, position: 'relative' }}>
+            <div style={{ width: totalW + 80, position: 'relative' }}>
               {/* Grid rows */}
               {visibleItems.map((item) => (
                 <div
@@ -850,7 +850,7 @@ export function GanttPage() {
               {visualDeps.length > 0 && (
                 <svg
                   className="absolute top-0 left-0 pointer-events-none z-[5]"
-                  style={{ width: totalW, height: visibleItems.length * ROW_HEIGHT }}
+                  style={{ width: totalW + 80, height: visibleItems.length * ROW_HEIGHT }}
                 >
                   <defs>
                     <marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">

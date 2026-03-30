@@ -324,7 +324,7 @@ export function ViewGanttPage() {
     const rightmost = Math.max(...rights);
     // If rightmost bar is outside visible area, scroll so it's visible with a small margin
     requestAnimationFrame(() => {
-      const target = Math.max(0, rightmost - el.clientWidth + 40);
+      const target = Math.max(0, rightmost - el.clientWidth + 80);
       const max = Math.max(0, el.scrollWidth - el.clientWidth);
       if (target > el.scrollLeft && target <= max) {
         el.scrollLeft = Math.min(max, target);
@@ -405,7 +405,7 @@ export function ViewGanttPage() {
             <div className="w-36 px-1 py-2 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-muted text-light-muted text-center">State</div>
           </div>
           <div className="flex-1 overflow-hidden">
-            <div className="flex" style={{ width: totalW }}>
+            <div className="flex" style={{ width: totalW + 80 }}>
               {columns.map((col, i) => {
                 const isCur = today >= col.startDate && today <= col.endDate;
                 return (
@@ -496,7 +496,7 @@ export function ViewGanttPage() {
 
           {/* Timeline */}
           <div ref={timelineScrollRef} onScroll={handleTimelineScroll} className="flex-1 overflow-auto relative">
-            <div style={{ width: totalW, position: 'relative' }}>
+            <div style={{ width: totalW + 80, position: 'relative' }}>
               {visibleItems.map((item) => (
                 <div key={item.id} className="dark:border-dark-border border-b border-light-border relative" style={{ height: ROW_HEIGHT }}>
                   <div className="absolute inset-0 flex pointer-events-none">
@@ -534,7 +534,7 @@ export function ViewGanttPage() {
               ))}
 
               {visualDeps.length > 0 && (
-                <svg className="absolute top-0 left-0 pointer-events-none z-[5]" style={{ width: totalW, height: visibleItems.length * ROW_HEIGHT }}>
+                <svg className="absolute top-0 left-0 pointer-events-none z-[5]" style={{ width: totalW + 80, height: visibleItems.length * ROW_HEIGHT }}>
                   <defs>
                     <marker id="arrow-emp" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
                       <path d="M0,0 L0,7 L7,3.5 z" fill="#6b7280" />
