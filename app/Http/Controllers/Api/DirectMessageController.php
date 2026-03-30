@@ -29,30 +29,36 @@ class DirectMessageController extends Controller
     /**
      * GET /api/direct-conversations
      * List all DM conversations for the current user (identified by user_id query param).
+     *
+     * Optimized to O(1) queries regardless of conversation count:
+     *   1. One query for conversations + participants (eager loaded).
+     *   2. One query for the latest message per conversation (ofMany subquery).
+     *   3. One query for unread counts per conversation (selectSub subquery).
      */
     public function index(Request $request): JsonResponse
     {
         $userId = (int) $request->query('user_id');
 
+        // Subquery: count unread messages per conversation for this user.
+        // A message is unread when the user's ID is absent from the read_by JSON array.
+        $unreadSubquery = Message::selectRaw('COUNT(*)')
+            ->whereColumn('conversation_id', 'direct_conversations.id')
+            ->whereNull('deleted_at')
+            ->whereRaw('NOT JSON_CONTAINS(COALESCE(read_by, \'[]\'), CAST(? AS JSON), \'$\')', [$userId]);
+
         $conversations = DirectConversation::where('participant1_id', $userId)
             ->orWhere('participant2_id', $userId)
-            ->with(['participant1', 'participant2'])
+            ->with(['participant1', 'participant2', 'latestMessage'])
+            ->selectSub($unreadSubquery, 'unread_count')
+            ->addSelect('direct_conversations.*')
             ->get()
             ->map(function (DirectConversation $conv) use ($userId) {
-                $other = $conv->otherParticipantId($userId);
-                $otherUser = $conv->participant1_id === $other ? $conv->participant1 : $conv->participant2;
+                $otherId   = $conv->otherParticipantId($userId);
+                $otherUser = $conv->participant1_id === $otherId
+                    ? $conv->participant1
+                    : $conv->participant2;
 
-                // Latest message
-                $latest = Message::where('conversation_id', $conv->id)
-                    ->whereNull('deleted_at')
-                    ->latest()
-                    ->first();
-
-                // Unread count
-                $unread = Message::where('conversation_id', $conv->id)
-                    ->whereNull('deleted_at')
-                    ->whereJsonDoesntContain('read_by', $userId)
-                    ->count();
+                $latest = $conv->latestMessage;
 
                 return [
                     'id'           => $conv->id,
@@ -68,7 +74,7 @@ class DirectMessageController extends Controller
                         'created_at'   => $latest->created_at->toISOString(),
                         'sender_id'    => $latest->sender_id,
                     ] : null,
-                    'unread_count' => $unread,
+                    'unread_count' => (int) $conv->unread_count,
                     'updated_at'   => $conv->updated_at->toISOString(),
                 ];
             })
