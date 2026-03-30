@@ -286,6 +286,35 @@ export function ViewGanttPage() {
     return map;
   }, [visibleItems]);
 
+  // Slider state for horizontal navigation
+  const [scrollMax, setScrollMax] = useState(0);
+  const [scrollPos, setScrollPos] = useState(0);
+
+  useEffect(() => {
+    const el = timelineScrollRef.current;
+    if (!el) return;
+    const update = () => {
+      setScrollMax(Math.max(0, el.scrollWidth - el.clientWidth));
+      setScrollPos(el.scrollLeft);
+    };
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(el);
+    el.addEventListener('scroll', update);
+    return () => {
+      obs.disconnect();
+      el.removeEventListener('scroll', update);
+    };
+  }, [totalW, columns.length]);
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const el = timelineScrollRef.current;
+    if (!el) return;
+    const v = Number(e.target.value);
+    el.scrollLeft = v;
+    setScrollPos(v);
+  };
+
   // Auto-scroll timeline to show rightmost bar when items/zoom change
   useEffect(() => {
     const el = timelineScrollRef.current;
@@ -534,6 +563,19 @@ export function ViewGanttPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Timeline slider (horizontal) */}
+      <div className="px-4 mt-2">
+        <input
+          aria-label="Timeline horizontal scroll"
+          type="range"
+          min={0}
+          max={scrollMax}
+          value={scrollPos}
+          onChange={handleSliderChange}
+          className="w-full"
+        />
       </div>
 
       {/* Legend */}

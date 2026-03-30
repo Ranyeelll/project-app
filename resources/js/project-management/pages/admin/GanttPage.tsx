@@ -353,6 +353,35 @@ export function GanttPage() {
     return map;
   }, [visibleItems]);
 
+  // Slider state for horizontal navigation
+  const [scrollMax, setScrollMax] = useState(0);
+  const [scrollPos, setScrollPos] = useState(0);
+
+  useEffect(() => {
+    const el = timelineScrollRef.current;
+    if (!el) return;
+    const update = () => {
+      setScrollMax(Math.max(0, el.scrollWidth - el.clientWidth));
+      setScrollPos(el.scrollLeft);
+    };
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(el);
+    el.addEventListener('scroll', update);
+    return () => {
+      obs.disconnect();
+      el.removeEventListener('scroll', update);
+    };
+  }, [totalW, columns.length]);
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const el = timelineScrollRef.current;
+    if (!el) return;
+    const v = Number(e.target.value);
+    el.scrollLeft = v;
+    setScrollPos(v);
+  };
+
   const visualDeps = useMemo<VisualDependency[]>(() => {
     if (projectDeps.length > 0) {
       return projectDeps.map((dep) => ({
@@ -864,7 +893,20 @@ export function GanttPage() {
         </div>
       </div>
 
-      {/* ── Legend ──────────────────────────────────────────────────────── */}
+          {/* Timeline slider (horizontal) */}
+          <div className="px-4 mt-2">
+            <input
+              aria-label="Timeline horizontal scroll"
+              type="range"
+              min={0}
+              max={scrollMax}
+              value={scrollPos}
+              onChange={handleSliderChange}
+              className="w-full"
+            />
+          </div>
+
+          {/* ── Legend ──────────────────────────────────────────────────────── */}
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card px-5 py-3">
         <div className="flex items-center gap-5 flex-wrap">
           <div className="flex items-center gap-1.5">
