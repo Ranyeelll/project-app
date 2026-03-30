@@ -49,6 +49,12 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
+  const cachedProfilePhoto = useMemo(() => {
+    if (!currentUser?.profilePhoto) return null;
+    // Only regenerate the cache-busting token when the photo URL changes.
+    return `${currentUser.profilePhoto}?t=${Date.now()}`;
+  }, [currentUser?.profilePhoto]);
+
   // Close dropdowns on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -553,7 +559,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
             {/* Avatar / Photo */}
             {currentUser?.profilePhoto ? (
               <img
-                src={`${currentUser.profilePhoto}?t=${Date.now()}`}
+                src={cachedProfilePhoto!}
                 alt={currentUser.name}
                 className="w-8 h-8 rounded-full object-cover flex-shrink-0 ring-2 ring-green-primary/30"
               />
@@ -586,7 +592,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                   <div className="relative group cursor-pointer" onClick={() => setShowProfilePhotoModal(true)}>
                     {currentUser?.profilePhoto ? (
                       <img
-                        src={`${currentUser.profilePhoto}?t=${Date.now()}`}
+                        src={cachedProfilePhoto!}
                         alt={currentUser?.name}
                         className="w-12 h-12 rounded-full object-cover ring-2 ring-green-primary/30"
                       />

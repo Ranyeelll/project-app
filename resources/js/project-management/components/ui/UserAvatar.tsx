@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 interface UserAvatarProps {
   name: string;
@@ -35,7 +35,7 @@ export function UserAvatar({
   title,
 }: UserAvatarProps) {
   const initials = getInitials(name, avatarText);
-  const cachedPhoto = getPhotoUrlWithCache(profilePhoto);
+  const cachedPhoto = useMemo(() => getPhotoUrlWithCache(profilePhoto), [profilePhoto]);
 
   if (cachedPhoto) {
     return (
