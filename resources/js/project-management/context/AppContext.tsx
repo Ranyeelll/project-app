@@ -414,8 +414,8 @@ export function AppProvider({ children }: AppProviderProps) {
       return;
     }
 
-    const role = String(currentUser.role).toLowerCase();
-    const usersEndpoint = role === 'superadmin' ? '/api/users' : '/api/chat/users';
+    // Chat removed -> always use users listing endpoint
+    const usersEndpoint = '/api/users';
 
     fetch(usersEndpoint, {
       credentials: 'include',
@@ -456,8 +456,8 @@ export function AppProvider({ children }: AppProviderProps) {
       return;
     }
 
-    const role = String(currentUser.role).toLowerCase();
-    const usersEndpoint = role === 'superadmin' ? '/api/users' : '/api/chat/users';
+    // Chat removed -> always use users listing endpoint
+    const usersEndpoint = '/api/users';
 
     fetch(usersEndpoint, {
       credentials: 'include',
@@ -485,32 +485,67 @@ export function AppProvider({ children }: AppProviderProps) {
       .catch(() => {});
   }, []);
   const refreshTasks = useCallback(() => {
-    fetch('/api/tasks')
-      .then((res) => res.json())
+    fetch('/api/tasks', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) return [] as Task[];
+        return res.json();
+      })
       .then((data: Task[]) => { if (Array.isArray(data)) setTasks(data); })
       .catch(() => {});
   }, []);
   const refreshMedia = useCallback(() => {
-    fetch('/api/media')
-      .then((res) => res.json())
+    fetch('/api/media', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) return [] as MediaUpload[];
+        return res.json();
+      })
       .then((data: MediaUpload[]) => { if (Array.isArray(data)) setMedia(data); })
       .catch(() => {});
   }, []);
   const refreshTimeLogs = useCallback(() => {
-    fetch('/api/time-logs')
-      .then((res) => res.json())
+    fetch('/api/time-logs', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) return [] as TimeLog[];
+        return res.json();
+      })
       .then((data: TimeLog[]) => { if (Array.isArray(data)) setTimeLogs(data); })
       .catch(() => {});
   }, []);
   const refreshBudgetRequests = useCallback(() => {
-    fetch('/api/budget-requests')
-      .then((res) => res.json())
+    fetch('/api/budget-requests', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) return [] as BudgetRequest[];
+        return res.json();
+      })
       .then((data: BudgetRequest[]) => { if (Array.isArray(data)) setBudgetRequests(data); })
       .catch(() => {});
   }, []);
   const refreshIssues = useCallback(() => {
-    fetch('/api/issues')
-      .then((res) => res.json())
+    fetch('/api/issues', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) return [] as Issue[];
+        return res.json();
+      })
       .then((data: Issue[]) => { if (Array.isArray(data)) setIssues(data); })
       .catch(() => {});
   }, []);
@@ -553,8 +588,15 @@ export function AppProvider({ children }: AppProviderProps) {
     const url = formType
       ? `/api/projects/${projectId}/form-submissions?form_type=${formType}`
       : `/api/projects/${projectId}/form-submissions`;
-    fetch(url)
-      .then((res) => res.json())
+    fetch(url, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) return [] as ProjectFormSubmission[];
+        return res.json();
+      })
       .then((data: ProjectFormSubmission[]) => { if (Array.isArray(data)) setFormSubmissions(data); })
       .catch(() => {});
   }, []);
@@ -568,17 +610,21 @@ export function AppProvider({ children }: AppProviderProps) {
     refreshIssues();
   }, [refreshUsers, refreshProjects, refreshTasks, refreshMedia, refreshTimeLogs, refreshBudgetRequests, refreshIssues]);
 
-  // ─── Load all data from the database on mount ────────────────────────────
-  useEffect(() => { refreshAll(); }, [refreshAll]);
+  // ─── Load all data from the database on mount (only when authenticated)
+  useEffect(() => {
+    if (!currentUser) return;
+    refreshAll();
+  }, [refreshAll, currentUser]);
 
-  // ─── Auto-refresh every 15 seconds (skip while tab is hidden) ──────────
+  // ─── Auto-refresh every 15 seconds (skip while tab is hidden or not authed)
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === 'hidden') return;
+      if (!currentUser) return;
       refreshAll();
     }, 15000);
     return () => clearInterval(interval);
-  }, [refreshAll]);
+  }, [refreshAll, currentUser]);
 
   const themeContextValue = useMemo(() => ({
     isDark,

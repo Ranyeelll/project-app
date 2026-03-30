@@ -2,16 +2,14 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BudgetRequestController;
-use App\Http\Controllers\Api\ChatModerationController;
-use App\Http\Controllers\Api\DirectMessageController;
+// chat controllers removed
 use App\Http\Controllers\Api\IssueController;
 use App\Http\Controllers\Api\MediaController;
-use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TaskController;
-use App\Http\Controllers\Api\TaskActivityController;
-use App\Http\Controllers\Api\TaskProgressLogController;
-use App\Http\Controllers\Api\TaskTimeLogController;
+// use App\Http\Controllers\Api\ChatModerationController;
+// use App\Http\Controllers\Api\DirectMessageController;
+// use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\TaskCompletionController;
 use App\Http\Controllers\Api\TaskReviewController;
 use App\Http\Controllers\Api\TaskBlockerController;
@@ -85,14 +83,7 @@ Route::prefix('api')->group(function () {
             Route::delete('/users/{user}', [UserController::class, 'destroy']);
             Route::post('/users/{user}/regenerate-recovery', [UserController::class, 'regenerateRecovery']);
 
-            // ─── Chat Moderation (Superadmin only) ─────────────────
-            Route::delete('/admin/chat/messages/{message}', [ChatModerationController::class, 'deleteMessage']);
-            Route::post('/admin/chat/messages/{message}/flag', [ChatModerationController::class, 'flagMessage']);
-            Route::delete('/admin/chat/messages/{message}/flag', [ChatModerationController::class, 'unflagMessage']);
-            Route::get('/admin/chat/flagged', [ChatModerationController::class, 'flagged']);
-            Route::post('/admin/chat/mute', [ChatModerationController::class, 'muteUser']);
-            Route::delete('/admin/chat/mute/{user}', [ChatModerationController::class, 'unmuteUser']);
-            Route::get('/admin/chat/muted', [ChatModerationController::class, 'mutedUsers']);
+            // Chat moderation endpoints removed (chat feature disabled)
 
             // Audit logs (superadmin only)
             Route::get('/audit-logs', [AuditLogController::class, 'index']);
@@ -165,8 +156,7 @@ Route::prefix('api')->group(function () {
         // Profile photo upload (authenticated users)
         Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
 
-        // DM user directory (all authenticated users)
-        Route::get('/chat/users', [UserController::class, 'chatDirectory']);
+        // DM user directory removed with chat feature (use /api/users)
 
         // View projects (filtered based on department in controller)
         Route::get('/projects', [ProjectController::class, 'index']);
@@ -228,25 +218,7 @@ Route::prefix('api')->group(function () {
         Route::post('/issues', [IssueController::class, 'store']);
         Route::put('/issues/{issue}', [IssueController::class, 'update']);
 
-        // Chat (all departments)
-        Route::get('/projects/{project}/messages', [MessageController::class, 'index']);
-        Route::post('/projects/{project}/messages', [MessageController::class, 'store']);
-        Route::post('/projects/{project}/messages/read', [MessageController::class, 'markRead']);
-        Route::post('/projects/{project}/messages/typing', [MessageController::class, 'typing']);
-        Route::patch('/messages/{message}', [MessageController::class, 'update']);
-        Route::delete('/messages/{message}', [MessageController::class, 'destroy']);
-        Route::get('/chat-attachments/{message}/{index}', [MessageController::class, 'serveAttachment']);
-
-        // ─── Direct Messages (all departments) ────────────────────
-        Route::get('/direct-conversations', [DirectMessageController::class, 'index']);
-        Route::post('/direct-conversations', [DirectMessageController::class, 'store']);
-        Route::get('/direct-conversations/{conversation}/messages', [DirectMessageController::class, 'messages']);
-        Route::post('/direct-conversations/{conversation}/messages', [DirectMessageController::class, 'sendMessage']);
-        Route::post('/direct-conversations/{conversation}/messages/read', [DirectMessageController::class, 'markRead']);
-
-        // ─── Chat Notifications (all departments) ─────────────────
-        Route::get('/notifications', [DirectMessageController::class, 'notifications']);
-        Route::post('/notifications/read', [DirectMessageController::class, 'markNotificationsRead']);
+        // Chat and direct message endpoints removed (feature disabled)
     });
 });
 

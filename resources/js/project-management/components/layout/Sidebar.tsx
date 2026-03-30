@@ -42,7 +42,6 @@ const DEPARTMENT_NAV: Record<string, NavItem[]> = {
     { id: 'admin-reviews', label: 'Task Reviews', icon: <ClipboardCheckIcon size={16} /> },
     { id: 'admin-audit-logs', label: 'Audit Logs', icon: <ShieldIcon size={16} /> },
     { id: 'admin-archive', label: 'Archive', icon: <ArchiveIcon size={16} /> },
-    { id: 'admin-chat-moderation', label: 'Chat Moderation', icon: <ShieldAlertIcon size={16} /> },
   ],
   Accounting: [
     { id: 'accounting-dashboard', label: 'Dashboard', icon: <LayoutDashboardIcon size={16} /> },

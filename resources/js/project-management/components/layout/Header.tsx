@@ -33,6 +33,7 @@ interface Notification {
   time: string;
   navigateTo?: string;
   read: boolean;
+  meta?: any;
 }
 
 export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
@@ -365,6 +366,8 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       read: dismissedIds.has(n.id),
     }));
   }, [currentUser, tasks, projects, budgetRequests, issues, users, todayStr, dismissedIds]);
+
+  // No DB chat notifications — chat feature removed
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

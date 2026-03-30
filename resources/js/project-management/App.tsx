@@ -22,8 +22,7 @@ import { TaskReviewsPage } from './pages/admin/TaskReviewsPage';
 import { ArchivePage } from './pages/admin/ArchivePage';
 import { AuditLogPage } from './pages/admin/AuditLogPage';
 import { CreateProjectPage } from './pages/admin/CreateProjectPage';
-import { ChatModerationPage } from './pages/admin/ChatModerationPage';
-import { ProjectChatPage } from './pages/ProjectChatPage';
+// Chat feature removed: chat pages omitted
 import { EmployeeDashboard } from './pages/employee/EmployeeDashboard';
 import { MyTasksPage } from './pages/employee/MyTasksPage';
 import { ViewGanttPage } from './pages/employee/ViewGanttPage';
@@ -100,8 +99,6 @@ function AppContent() {
           return <MonitorControlPage />;
         case 'admin-reviews':
           return <TaskReviewsPage />;
-        case 'admin-chat':
-          return <ProjectChatPage />;
         default:
           return <AdminDashboard />;
       }
@@ -134,10 +131,9 @@ function AppContent() {
           return <AuditLogPage />;
         case 'admin-archive':
           return <ArchivePage />;
+        // chat removed -> fall back to dashboard
         case 'admin-chat':
-          return <ProjectChatPage />;
-        case 'admin-chat-moderation':
-          return <ChatModerationPage />;
+          return <AdminDashboard />;
         default:
           return <AdminDashboard />;
       }
@@ -154,8 +150,9 @@ function AppContent() {
           return <BudgetReportPage />;
         case 'accounting-review':
           return <TaskReviewsPage />;
+        // chat removed -> fall back to dashboard
         case 'admin-chat':
-          return <ProjectChatPage />;
+          return <AdminDashboard />;
         default:
           return <AdminDashboard />;
       }
@@ -174,8 +171,9 @@ function AppContent() {
           return <MyTasksPage />;
         case 'technical-review':
           return <TaskReviewsPage />;
+        // chat removed -> fall back to dashboard
         case 'admin-chat':
-          return <ProjectChatPage />;
+          return <AdminDashboard />;
         default:
           return <AdminDashboard />;
       }
@@ -199,8 +197,9 @@ function AppContent() {
           return <ReportIssuePage />;
         case 'employee-resources':
           return <ResourcesPage />;
+        // chat removed -> fall back to employee dashboard
         case 'employee-chat':
-          return <ProjectChatPage />;
+          return <EmployeeDashboard />;
         default:
           return <EmployeeDashboard />;
       }
@@ -229,8 +228,9 @@ function AppContent() {
           return <TaskReviewsPage />;
         case 'admin-archive':
           return <ArchivePage />;
+        // chat removed -> fall back to dashboard
         case 'admin-chat':
-          return <ProjectChatPage />;
+          return <AdminDashboard />;
         default:
           return <AdminDashboard />;
       }
