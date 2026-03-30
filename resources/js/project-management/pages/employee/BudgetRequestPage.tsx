@@ -20,7 +20,7 @@ export function BudgetRequestPage() {
     purpose: ''
   });
   const myRequests = budgetRequests.filter(
-    (b) => b.requestedBy === currentUser?.id
+    (b) => String(b.requestedBy) === String(currentUser?.id)
   );
   const handleCreate = async () => {
     try {

@@ -182,7 +182,7 @@ export function ReportsMediaPage() {
           const project = projects.find((p) => p.id === item.projectId);
           const uploader = users.find((u) => u.id === item.uploadedBy);
           const canDelete =
-          isSuperadmin(currentUser?.role) || item.uploadedBy === currentUser?.id;
+          isSuperadmin(currentUser?.role) || String(item.uploadedBy) === String(currentUser?.id);
           return (
             <div
               key={item.id}

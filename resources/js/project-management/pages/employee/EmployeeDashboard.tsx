@@ -32,15 +32,15 @@ export function EmployeeDashboard() {
   const { currentUser } = useAuth();
   const { setCurrentPage } = useNavigation();
   const today = new Date();
-  const myProjects = projects.filter((p) => p.teamIds?.includes(currentUser?.id || ''));
+  const myProjects = projects.filter((p) => (p.teamIds || []).map(String).includes(String(currentUser?.id)));
   const myProjectIds = myProjects.map((p) => p.id);
   // Show only tasks assigned to the current user
-  const myTasks = tasks.filter((t) => t.assignedTo === currentUser?.id);
+  const myTasks = tasks.filter((t) => String(t.assignedTo) === String(currentUser?.id));
   const myTimeLogs = timeLogs.filter((t) =>
   myTasks.some((mt) => mt.id === t.taskId)
   );
   const myBudgets = budgetRequests.filter(
-    (b) => b.requestedBy === currentUser?.id
+    (b) => String(b.requestedBy) === String(currentUser?.id)
   );
   const completedTasks = myTasks.filter((t) => t.status === 'completed').length;
   const inProgressTasks = myTasks.filter(

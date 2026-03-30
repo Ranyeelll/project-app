@@ -577,7 +577,7 @@ export function ProjectsPage() {
                 const as = project.approvalStatus || 'draft';
                 const isSupervisorCreator =
                   isSupervisor(currentUser?.role) &&
-                  currentUser?.id === project.managerId;
+                  String(project.managerId) === String(currentUser?.id);
                 const actions: { action: string; label: string; variant: string }[] = [];
                 if (isSupervisorCreator && as === 'accounting_review') {
                   actions.push({ action: 'approve_final', label: 'Final Approve', variant: 'primary' });

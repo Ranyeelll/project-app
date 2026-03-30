@@ -43,17 +43,17 @@ export function MyTasksPage() {
   const [teamModal, setTeamModal] = useState<string | null>(null); // project id
   const [submittingProjectId, setSubmittingProjectId] = useState<string | null>(null);
   const [notifyFeedback, setNotifyFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const myProjects = projects.filter((p) => p.teamIds?.includes(currentUser?.id || ''));
+  const myProjects = projects.filter((p) => (p.teamIds || []).map(String).includes(String(currentUser?.id)));
   const myProjectIds = myProjects.map((p) => p.id);
 
   const isLeaderForProject = (projectId: string) => {
     const project = projects.find((p) => p.id === projectId);
     if (!project || !currentUser?.id) return false;
-    return (project.teamIds?.length || 0) >= 2 && project.leaderId === currentUser.id;
+    return (project.teamIds?.length || 0) >= 2 && String(project.leaderId) === String(currentUser?.id);
   };
 
   // Leaders in multi-member projects can manage progress for all project tasks.
-  const myTasks = tasks.filter((t) => t.assignedTo === currentUser?.id || isLeaderForProject(t.projectId));
+  const myTasks = tasks.filter((t) => String(t.assignedTo) === String(currentUser?.id) || isLeaderForProject(t.projectId));
   const filtered = myTasks.filter((t) => {
     const matchSearch = t.title.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || t.status === statusFilter;
@@ -500,7 +500,7 @@ export function MyTasksPage() {
                 {(() => {
                   const teamSize = project?.teamIds?.length || 0;
                   const hasLeaderRule = teamSize >= 2 && !!project?.leaderId;
-                  const canUpdateProgress = !hasLeaderRule || project?.leaderId === currentUser?.id;
+                  const canUpdateProgress = !hasLeaderRule || String(project?.leaderId) === String(currentUser?.id);
 
                   return (
                     <>
@@ -856,7 +856,7 @@ export function MyTasksPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium dark:text-dark-text text-light-text truncate">
                       {member.name}
-                      {member.id === currentUser?.id && (
+                      {String(member.id) === String(currentUser?.id) && (
                         <span className="text-[10px] text-green-primary ml-1.5">(You)</span>
                       )}
                     </p>

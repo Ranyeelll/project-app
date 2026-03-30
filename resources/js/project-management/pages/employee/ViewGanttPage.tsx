@@ -102,7 +102,7 @@ export function ViewGanttPage() {
   const { currentUser } = useAuth();
 
   const myProjects = projects.filter(
-    p => p.status !== 'archived' && (p.managerId === currentUser?.id || (p.teamIds || []).includes(currentUser?.id || ''))
+    p => p.status !== 'archived' && (String(p.managerId) === String(currentUser?.id) || (p.teamIds || []).map(String).includes(String(currentUser?.id)))
   );
 
   const [selectedProject, setSelectedProject] = useState('');

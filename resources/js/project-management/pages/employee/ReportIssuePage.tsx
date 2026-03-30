@@ -18,7 +18,7 @@ export function ReportIssuePage() {
     type: 'issue',
     severity: 'medium'
   });
-  const myIssues = issues.filter((i) => i.reportedBy === currentUser?.id);
+  const myIssues = issues.filter((i) => String(i.reportedBy) === String(currentUser?.id));
   const handleCreate = async () => {
     try {
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';

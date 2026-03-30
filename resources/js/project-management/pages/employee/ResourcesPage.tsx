@@ -31,7 +31,7 @@ export function ResourcesPage() {
     // If visibleTo is empty/null, visible to all employees
     if (!m.visibleTo || m.visibleTo.length === 0) return true;
     // Otherwise, only show if current user is in the list
-    return m.visibleTo.includes(currentUser?.id || '');
+    return (m.visibleTo || []).map(String).includes(String(currentUser?.id));
   });
 
   const filtered = adminMedia.filter((m) => {

@@ -15,9 +15,9 @@ export function LogTimePage() {
     description: '',
     date: new Date().toISOString().split('T')[0]
   });
-  const myProjectIds = projects.filter((p) => p.teamIds?.includes(currentUser?.id || '')).map((p) => p.id);
-  const myTasks = tasks.filter((t) => t.assignedTo === currentUser?.id);
-  const myLogs = timeLogs.filter((l) => l.userId === currentUser?.id);
+  const myProjectIds = projects.filter((p) => (p.teamIds || []).map(String).includes(String(currentUser?.id))).map((p) => p.id);
+  const myTasks = tasks.filter((t) => String(t.assignedTo) === String(currentUser?.id));
+  const myLogs = timeLogs.filter((l) => String(l.userId) === String(currentUser?.id));
   const totalHours = myLogs.reduce((s, l) => s + l.hours, 0);
   const thisWeekLogs = myLogs.filter((l) => {
     const logDate = new Date(l.date);
