@@ -59,11 +59,13 @@
             </div>
         @endif
     </div>
-    <h1>{{ $title }}</h1>
-    @if($subtitle)
-        <div class="subtitle">{{ $subtitle }}</div>
-    @endif
-    @if($dateRange || $generatedAt)
-        <div class="period">{{ $dateRange }} &mdash; Generated on {{ $generatedAt }}</div>
-    @endif
+    <div class="header-content">
+        <h1>{{ $title }}</h1>
+        @if($subtitle)
+            <div class="subtitle">{{ $subtitle }}</div>
+        @endif
+        @if($dateRange || $generatedAt)
+            <div class="period">{{ $dateRange }} &mdash; Generated on {{ $generatedAt }}</div>
+        @endif
+    </div>
 </header>

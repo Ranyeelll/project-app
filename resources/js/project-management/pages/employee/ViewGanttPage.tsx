@@ -310,10 +310,9 @@ export function ViewGanttPage() {
   }, [totalW, columns.length]);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const el = timelineScrollRef.current;
-    if (!el) return;
     const v = Number(e.target.value);
-    el.scrollLeft = v;
+    const el = timelineScrollRef.current;
+    if (el) el.scrollLeft = v;
     setScrollPos(v);
   };
 
