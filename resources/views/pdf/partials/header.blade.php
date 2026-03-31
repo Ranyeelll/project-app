@@ -15,26 +15,26 @@
     $generatedAt = $generatedAt ?? '';
 @endphp
 <style>
-    /* Force consistent page margins so header/footer repeat. Increased top margin
-       and header height to prevent clipping when rendered by DomPDF. */
-    @page { margin: 140px 25px; }
+    /* Force consistent page margins so header/footer repeat. Reduced top margin
+       and header height so header sits lower on the page and doesn't push content down. */
+    @page { margin: 100px 25px; }
     header.pdf-header {
         position: fixed;
-        top: -130px;
+        top: -95px;
         left: 0;
         right: 0;
-        height: 130px;
+        height: 100px;
         text-align: center;
-        padding: 14px 0 10px;
+        padding: 10px 0 8px;
         border-bottom: 2px solid #154734;
         overflow: visible;
     }
-    header.pdf-header .header-logo-wrap img { max-width: 320px; max-height: 80px; display:block; margin:0 auto; }
-    header.pdf-header h1 { font-size: 20px; color: #154734; margin: 6px 0 2px; letter-spacing: 0.4px; line-height:1.05 }
+    header.pdf-header .header-logo-wrap img { max-width: 300px; max-height: 64px; display:block; margin:0 auto; }
+    header.pdf-header h1 { font-size: 20px; color: #154734; margin: 4px 0 2px; letter-spacing: 0.4px; line-height:1.05 }
     header.pdf-header .subtitle { font-size: 12px; color: #374151; font-weight: 600; }
     header.pdf-header .period { font-size: 10px; color: #6b7280; margin-top: 3px; }
     /* Ensure body content doesn't overlap header */
-    body { margin-top: 130px; }
+    body { margin-top: 105px; }
 </style>
 
 <header class="pdf-header">
