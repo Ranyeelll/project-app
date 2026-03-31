@@ -15,26 +15,27 @@
     $generatedAt = $generatedAt ?? '';
 @endphp
 <style>
-    /* Force consistent page margins so header/footer repeat. Reduced top margin
-       and header height so header sits lower on the page and doesn't push content down. */
-    @page { margin: 100px 25px; }
+    /* Force consistent page margins so header/footer repeat. Adjusted top margin
+       and header positioning so header sits lower on the page and doesn't push content down. */
+    @page { margin: 80px 25px; }
     header.pdf-header {
         position: fixed;
-        top: -95px;
+        top: -80px;
         left: 0;
         right: 0;
-        height: 100px;
+        height: 120px;
         text-align: center;
-        padding: 10px 0 8px;
+        padding: 8px 0 6px;
         border-bottom: 2px solid #154734;
         overflow: visible;
+        background: #ffffff;
     }
-    header.pdf-header .header-logo-wrap img { max-width: 300px; max-height: 64px; display:block; margin:0 auto; }
-    header.pdf-header h1 { font-size: 20px; color: #154734; margin: 4px 0 2px; letter-spacing: 0.4px; line-height:1.05 }
+    header.pdf-header .header-logo-wrap img { max-width: 360px; max-height: 96px; display:block; margin:0 auto 8px; }
+    header.pdf-header h1 { font-size: 22px; color: #154734; margin: 2px 0 4px; letter-spacing: 0.4px; line-height:1.05; font-weight:700 }
     header.pdf-header .subtitle { font-size: 12px; color: #374151; font-weight: 600; }
     header.pdf-header .period { font-size: 10px; color: #6b7280; margin-top: 3px; }
     /* Ensure body content doesn't overlap header */
-    body { margin-top: 105px; }
+    body { margin-top: 95px; }
 </style>
 
 <header class="pdf-header">
