@@ -46,6 +46,8 @@ export type ApprovalStatus =
   | 'draft'
   | 'technical_review'
   | 'accounting_review'
+  | 'supervisor_review'
+  | 'superadmin_review'
   | 'approved'
   | 'rejected'
   | 'revision_requested';

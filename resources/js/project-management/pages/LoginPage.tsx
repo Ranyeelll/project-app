@@ -19,14 +19,25 @@ export function LoginPage() {
   const { setCurrentPage } = useNavigation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // playful evasive button offsets when user clicks empty submit
+  const [btnOffset, setBtnOffset] = useState({ x: 0, y: 0 });
+  const [btnShaking, setBtnShaking] = useState(false);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError('Please enter your email and password.');
+      // trigger evasive movement
+      const max = 140; // px
+      const rx = Math.floor((Math.random() - 0.5) * 2 * max);
+      const ry = Math.floor((Math.random() - 0.5) * 2 * 20);
+      setBtnOffset({ x: rx, y: ry });
+      setBtnShaking(true);
+      setTimeout(() => {
+        setBtnShaking(false);
+      }, 800);
       return;
     }
     setError('');
@@ -147,7 +158,12 @@ export function LoginPage() {
               type="email"
               placeholder="you@maptech.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                // return button to original position while user types
+                setBtnOffset({ x: 0, y: 0 });
+                setError('');
+              }}
               icon={<MailIcon size={15} />}
               autoComplete="email"
               required />
@@ -166,7 +182,12 @@ export function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    // return button to original position while user types
+                    setBtnOffset({ x: 0, y: 0 });
+                    setError('');
+                  }}
                   autoComplete="current-password"
                   className="w-full rounded-btn text-sm dark:bg-dark-card2 dark:border-dark-border dark:text-dark-text dark:placeholder-dark-subtle bg-white border-light-border text-light-text placeholder-light-subtle border px-3 py-2.5 pl-10 pr-10 focus:outline-none focus:ring-2 focus:ring-green-primary/50 focus:border-green-primary transition-colors" />
 
@@ -185,38 +206,36 @@ export function LoginPage() {
               </div>
             </div>
 
-            {/* Remember me + Forgot */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border dark:border-dark-border border-light-border accent-green-primary" />
-
-                <span className="text-sm dark:text-dark-muted text-light-muted">
-                  Remember me
-                </span>
-              </label>
+            {/* Forgot password link */}
+            <div className="flex items-center justify-end">
               <button
                 type="button"
                 onClick={() => setCurrentPage('forgot-password')}
                 className="text-sm text-green-interactive hover:text-green-primary transition-colors">
-
                 Forgot password?
               </button>
             </div>
 
             {/* Submit */}
-            <Button
-              type="submit"
-              variant="primary"
-              fullWidth
-              size="lg"
-              loading={loading}>
-
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
+            <div className="relative">
+              <div
+                style={{
+                  transform: `translate(${btnOffset.x}px, ${btnOffset.y}px)`,
+                  transition: btnShaking ? 'transform 0.12s ease' : 'transform 0.36s cubic-bezier(.2,.9,.2,1)'
+                }}
+                className="w-full"
+              >
+                <Button
+                  type="submit"
+                  variant="primary"
+                  fullWidth
+                  size="lg"
+                  loading={loading}
+                >
+                  {loading ? 'Signing in...' : 'Sign In'}
+                </Button>
+              </div>
+            </div>
           </form>
 
           {}

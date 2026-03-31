@@ -8,6 +8,8 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
+use App\Notifications\ProjectApprovalUpdate;
 use InvalidArgumentException;
 
 /**
@@ -26,13 +28,16 @@ class ProjectApprovalService
         $current = $project->approval_status ?? 'draft';
 
         return match ($action) {
-            'submit_for_review' => $this->submitForReview($project, $actor, $current),
-            'approve_technical' => $this->approveTechnical($project, $actor, $current),
-            'approve_final'     => $this->approveFinal($project, $actor, $current, $notes),
-            'request_revision'  => $this->requestRevision($project, $actor, $current, $notes),
-            'reject'            => $this->reject($project, $actor, $current, $notes),
-            'resubmit'          => $this->resubmit($project, $actor, $current),
-            default             => throw new InvalidArgumentException("Unknown approval action: {$action}"),
+            'submit_for_review'   => $this->submitForReview($project, $actor, $current),
+            'approve_technical'   => $this->approveTechnical($project, $actor, $current),
+            'approve_accounting'  => $this->approveAccounting($project, $actor, $current),
+            'approve_supervisor'  => $this->approveSupervisor($project, $actor, $current),
+            'approve_superadmin'  => $this->approveSuperadmin($project, $actor, $current, $notes),
+            'approve_final'       => $this->approveSuperadmin($project, $actor, $current, $notes), // backwards compat
+            'request_revision'    => $this->requestRevision($project, $actor, $current, $notes),
+            'reject'              => $this->reject($project, $actor, $current, $notes),
+            'resubmit'            => $this->resubmit($project, $actor, $current),
+            default               => throw new InvalidArgumentException("Unknown approval action: {$action}"),
         };
     }
 
@@ -71,6 +76,56 @@ class ProjectApprovalService
         return $project->fresh();
     }
 
+    private function approveAccounting(Project $project, User $actor, string $current): Project
+    {
+        $this->requireStatus($current, ['accounting_review'], 'approve_accounting');
+        $this->requireDepartment($actor, [Department::Accounting, Department::Admin], 'approve_accounting');
+
+        $project->update([
+            'approval_status'  => 'supervisor_review',
+            'reviewed_by'      => $actor->id,
+            'last_reviewed_at' => now(),
+        ]);
+
+        return $project->fresh();
+    }
+
+    private function approveSupervisor(Project $project, User $actor, string $current): Project
+    {
+        $this->requireStatus($current, ['supervisor_review'], 'approve_supervisor');
+        if (!$actor->isSupervisor() && !$actor->isAdmin()) {
+            throw new InvalidArgumentException("Action 'approve_supervisor' is only allowed for supervisor or admin.");
+        }
+
+        $project->update([
+            'approval_status'  => 'superadmin_review',
+            'reviewed_by'      => $actor->id,
+            'last_reviewed_at' => now(),
+        ]);
+
+        return $project->fresh();
+    }
+
+    private function approveSuperadmin(Project $project, User $actor, string $current, ?string $notes): Project
+    {
+        $this->requireStatus($current, ['superadmin_review', 'accounting_review', 'supervisor_review'], 'approve_superadmin');
+        if (!$actor->isAdmin()) {
+            throw new InvalidArgumentException("Action 'approve_superadmin' is only allowed for superadmin/admin.");
+        }
+
+        DB::transaction(function () use ($project, $actor, $notes) {
+            $project->update([
+                'approval_status'  => 'approved',
+                'reviewed_by'      => $actor->id,
+                'last_reviewed_at' => now(),
+                'approval_notes'   => $notes,
+            ]);
+            $this->recalcProjectSpent($project);
+        });
+
+        return $project->fresh();
+    }
+
     private function approveFinal(Project $project, User $actor, string $current, ?string $notes): Project
     {
         $this->requireStatus($current, ['accounting_review'], 'approve_final');
@@ -91,7 +146,7 @@ class ProjectApprovalService
 
     private function requestRevision(Project $project, User $actor, string $current, ?string $notes): Project
     {
-        $this->requireStatus($current, ['technical_review', 'accounting_review'], 'request_revision');
+        $this->requireStatus($current, ['technical_review', 'accounting_review', 'supervisor_review', 'superadmin_review'], 'request_revision');
 
         if ($current === 'technical_review') {
             $this->requireDepartment($actor, [Department::Technical, Department::Admin], 'request_revision');
@@ -106,12 +161,18 @@ class ProjectApprovalService
             'last_reviewed_at' => now(),
         ]);
 
+        // If this revision request comes after accounting approved, notify accounting and submitter
+        if (in_array($current, ['supervisor_review', 'superadmin_review'], true)) {
+            $msg = "A higher-level reviewer requested revisions after accounting approval.";
+            $this->notifyAccountingAndSubmitter($project, $msg, 'Revision requested on project');
+        }
+
         return $project->fresh();
     }
 
     private function reject(Project $project, User $actor, string $current, ?string $notes): Project
     {
-        $this->requireStatus($current, ['technical_review', 'accounting_review'], 'reject');
+        $this->requireStatus($current, ['technical_review', 'accounting_review', 'supervisor_review', 'superadmin_review'], 'reject');
 
         if ($current === 'technical_review') {
             $this->requireDepartment($actor, [Department::Technical, Department::Admin], 'reject');
@@ -125,6 +186,12 @@ class ProjectApprovalService
             'reviewed_by'      => $actor->id,
             'last_reviewed_at' => now(),
         ]);
+
+        // If rejection occurs after accounting approved, notify accounting and submitter
+        if (in_array($current, ['supervisor_review', 'superadmin_review'], true)) {
+            $msg = "A higher-level reviewer rejected the project after accounting approval.";
+            $this->notifyAccountingAndSubmitter($project, $msg, 'Project rejected by reviewer');
+        }
 
         return $project->fresh();
     }
@@ -166,6 +233,35 @@ class ProjectApprovalService
             ->sum('report_cost');
 
         $project->update(['spent' => (float) ($approvedSpent + $reportCosts)]);
+    }
+
+    /**
+     * Notify accounting department users and the submitting employee about an approval event.
+     */
+    private function notifyAccountingAndSubmitter(Project $project, string $message, string $subject = 'Project approval update'): void
+    {
+        try {
+            $accountingUsers = User::where('department', Department::Accounting->value)->get();
+            $payload = [
+                'project_id' => $project->id,
+                'message'    => $message,
+                'subject'    => $subject,
+                'url'        => url('/projects/'.$project->id),
+            ];
+
+            foreach ($accountingUsers as $u) {
+                Notification::send($u, new ProjectApprovalUpdate($payload));
+            }
+
+            if ($project->submitted_by) {
+                $submitter = User::find($project->submitted_by);
+                if ($submitter) {
+                    Notification::send($submitter, new ProjectApprovalUpdate($payload));
+                }
+            }
+        } catch (\Throwable $e) {
+            // swallow notification errors to avoid blocking approval flow; auditing will capture events
+        }
     }
 
     // ─── Guards ───────────────────────────────────────────────────────────────

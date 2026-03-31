@@ -14,6 +14,9 @@ interface ApprovalActionModalProps {
 const ACTION_LABELS: Record<string, { title: string; color: string; requiresNotes: boolean }> = {
   submit_for_review:  { title: 'Submit for Review',        color: 'primary', requiresNotes: false },
   approve_technical:  { title: 'Approve (Technical)',       color: 'primary', requiresNotes: false },
+  approve_accounting: { title: 'Approve (Accounting)',      color: 'primary', requiresNotes: false },
+  approve_supervisor: { title: 'Approve (Supervisor)',      color: 'primary', requiresNotes: false },
+  approve_superadmin: { title: 'Approve (Superadmin)',      color: 'primary', requiresNotes: false },
   approve_final:      { title: 'Final Approval',            color: 'primary', requiresNotes: false },
   request_revision:   { title: 'Request Revision',          color: 'danger',  requiresNotes: true  },
   reject:             { title: 'Reject Project',            color: 'danger',  requiresNotes: true  },

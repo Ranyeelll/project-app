@@ -575,12 +575,25 @@ export function ProjectsPage() {
               {/* Approval actions */}
               {(() => {
                 const as = project.approvalStatus || 'draft';
-                const isSupervisorCreator =
-                  isSupervisor(currentUser?.role) &&
-                  String(project.managerId) === String(currentUser?.id);
                 const actions: { action: string; label: string; variant: string }[] = [];
-                if (isSupervisorCreator && as === 'accounting_review') {
-                  actions.push({ action: 'approve_final', label: 'Final Approve', variant: 'primary' });
+
+                // Accounting step: accounting users (or admins) can approve/reject/request revision
+                if (as === 'accounting_review' && (currentUser?.department === 'Accounting' || isAdmin)) {
+                  actions.push({ action: 'approve_accounting', label: 'Approve (Accounting)', variant: 'primary' });
+                  actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
+                  actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
+                }
+
+                // Supervisor step: supervisors (or admins) can approve/reject/request revision
+                if (as === 'supervisor_review' && (isSupervisor(currentUser?.role) || isAdmin)) {
+                  actions.push({ action: 'approve_supervisor', label: 'Approve (Supervisor)', variant: 'primary' });
+                  actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
+                  actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
+                }
+
+                // Superadmin step: admins can give final approval
+                if (as === 'superadmin_review' && isAdmin) {
+                  actions.push({ action: 'approve_superadmin', label: 'Approve (Superadmin)', variant: 'primary' });
                   actions.push({ action: 'request_revision', label: 'Request Revision', variant: 'secondary' });
                   actions.push({ action: 'reject', label: 'Reject', variant: 'danger' });
                 }

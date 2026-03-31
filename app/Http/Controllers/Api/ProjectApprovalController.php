@@ -28,7 +28,7 @@ class ProjectApprovalController extends Controller
     public function transition(Request $request, Project $project): JsonResponse
     {
         $data = $request->validate([
-            'action' => 'required|string|in:submit_for_review,approve_technical,approve_final,request_revision,reject,resubmit',
+            'action' => 'required|string|in:submit_for_review,approve_technical,approve_accounting,approve_supervisor,approve_superadmin,approve_final,request_revision,reject,resubmit',
             'notes'  => 'nullable|string|max:2000',
         ]);
 
