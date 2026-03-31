@@ -17,24 +17,20 @@ export function Modal({
   size = 'md',
   footer
 }: ModalProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
     return () => {
-      document.body.style.overflow = '';
+      document.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = prevOverflow;
     };
-  }, [isOpen]);
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
   }, [isOpen, onClose]);
+  useEffect(() => {
+    return; // no-op — removed debug logging
+  }, [isOpen, title]);
   if (!isOpen) return null;
   const sizes = {
     sm: 'max-w-sm',
@@ -43,25 +39,17 @@ export function Modal({
     xl: 'max-w-4xl'
   };
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop"
-      style={{
-        backgroundColor: 'rgba(0,0,0,0.7)'
-      }}
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
-      }}>
-
+    <div className="fixed inset-0 z-90 flex items-center justify-center p-4 pointer-events-none">
       <div
-        className={`w-full ${sizes[size]} dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-modal shadow-modal flex flex-col max-h-[90vh]`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="modal-title">
+        aria-labelledby="modal-title"
+        className={`w-full ${sizes[size]} bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-modal shadow-modal flex flex-col max-h-[90vh] pointer-events-auto`}
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 dark:border-dark-border border-b border-light-border flex-shrink-0">
-          <h2
+            <h2
             id="modal-title"
             className="text-base font-semibold dark:text-dark-text text-light-text">
 
@@ -69,10 +57,9 @@ export function Modal({
           </h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors"
+            className="p-1.5 rounded-lg dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors focus:outline-none"
             aria-label="Close modal">
-
-            <XIcon size={16} />
+            <XIcon size={16} className="dark:text-dark-muted text-light-muted" />
           </button>
         </div>
 

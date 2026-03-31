@@ -172,20 +172,35 @@ export function CreateProjectPage() {
 
   return (
     <div className="w-full pb-8">
-      {/* Header */}
-      <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleCancel}
-              className="p-1.5 rounded-lg hover:dark:bg-dark-card2 hover:bg-gray-100 transition-colors"
-              title="Back to projects"
-            >
-              <ArrowLeftIcon size={20} className="dark:text-dark-muted text-light-muted" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold dark:text-dark-text text-light-text">Create New Project</h1>
-              <p className="text-sm dark:text-dark-subtle text-light-subtle mt-0.5">Use this form to add a project that aligns with your current project workflow.</p>
+      {/* Hero Header (inspired by service ticket layout) */}
+      <div className="bg-gray-50 dark:bg-dark-bg border-b border-light-border">
+        <div className="max-w-6xl mx-auto px-6 py-6 text-center">
+
+          <h1 className="text-2xl sm:text-3xl font-extrabold dark:text-dark-text text-gray-900 tracking-tight">Project Form</h1>
+          <p className="text-sm text-green-600 mt-1">Maptech Information Solutions Inc.</p>
+
+          <div className="mt-4 flex justify-center">
+            <div className="bg-white dark:bg-dark-card border border-light-border rounded-full px-3 py-1.5 flex items-center gap-3 shadow-sm">
+              <button
+                onClick={handleCancel}
+                className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-dark-card2 transition-colors"
+                title="Back to projects"
+              >
+                <ArrowLeftIcon size={14} className="dark:text-dark-muted text-light-muted" />
+              </button>
+
+              <div className="flex items-center gap-2 text-sm text-light-subtle">
+                <CalendarIcon size={14} className="text-green-500" />
+                <span className="text-xs text-gray-600">Date:</span>
+                <span className="font-medium text-sm">{new Date().toLocaleDateString()}</span>
+              </div>
+
+              <div className="h-6 w-px bg-gray-200 mx-2" />
+
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-xs text-gray-600">Project No.:</span>
+                <span className="font-mono text-sm font-semibold text-green-700">{serialPreview}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -202,13 +217,7 @@ export function CreateProjectPage() {
         <div className="space-y-6">
           {/* Project Details Section */}
           <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg p-6">
-            <div className="mb-6 flex justify-center">
-              <div className="inline-flex items-center rounded-lg bg-green-500/10 border border-green-500/20 px-4 py-2">
-                <p className="text-center font-mono text-lg font-semibold tracking-[0.06em] dark:text-green-primary text-green-600 sm:text-xl">
-                  {serialPreview}
-                </p>
-              </div>
-            </div>
+            {/* Serial preview removed here — shown in header */}
 
             <div className="mb-6">
               <h2 className="text-lg font-semibold dark:text-dark-text text-light-text mb-1">Project Information</h2>

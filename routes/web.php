@@ -89,6 +89,9 @@ Route::prefix('api')->group(function () {
             Route::get('/audit-logs', [AuditLogController::class, 'index']);
             Route::get('/audit-logs/export-pdf', [AuditLogController::class, 'exportPdf']);
             Route::get('/audit-logs/export-sheet', [AuditLogController::class, 'exportSheet']);
+            // System settings (superadmin)
+            Route::get('/settings/audit-log-retention', [\App\Http\Controllers\Api\SystemSettingsController::class, 'getAuditLogRetention']);
+            Route::put('/settings/audit-log-retention', [\App\Http\Controllers\Api\SystemSettingsController::class, 'updateAuditLogRetention']);
 
             // Task delete (superadmin only)
             Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);

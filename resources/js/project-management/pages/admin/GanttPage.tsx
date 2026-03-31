@@ -707,26 +707,26 @@ export function GanttPage() {
                       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity ml-1">
                         <button
                           onClick={() => { setEditItem(item); setAddParent(null); setShowForm(true); }}
-                          className="p-0.5 rounded dark:text-dark-muted dark:hover:text-blue-400 text-light-muted hover:text-blue-500 transition-colors"
+                          className="p-0.5 rounded dark:text-dark-muted dark:hover:text-blue-400 text-light-muted hover:text-blue-500 transition-colors focus:outline-none"
                           title="Edit"
                         >
-                          <PencilIcon size={12} />
+                          <PencilIcon size={12} className="dark:text-dark-muted text-light-muted" />
                         </button>
                         {isAdmin && (
                           <>
                             <button
                               onClick={() => { setAddParent(item); setEditItem(null); setShowForm(true); }}
-                              className="p-0.5 rounded dark:text-dark-muted dark:hover:text-green-400 text-light-muted hover:text-green-500 transition-colors"
+                              className="p-0.5 rounded dark:text-dark-muted dark:hover:text-green-400 text-light-muted hover:text-green-500 transition-colors focus:outline-none"
                               title="Add child"
                             >
-                              <PlusIcon size={12} />
+                              <PlusIcon size={12} className="dark:text-dark-muted text-light-muted" />
                             </button>
                             <button
                               onClick={() => handleDelete(item)}
-                              className="p-0.5 rounded dark:text-dark-muted dark:hover:text-red-400 text-light-muted hover:text-red-500 transition-colors"
+                              className="p-0.5 rounded dark:text-dark-muted dark:hover:text-red-400 text-light-muted hover:text-red-500 transition-colors focus:outline-none"
                               title="Delete"
                             >
-                              <TrashIcon size={12} />
+                              <TrashIcon size={12} className="dark:text-dark-muted text-light-muted" />
                             </button>
                           </>
                         )}
@@ -894,6 +894,14 @@ export function GanttPage() {
 
           {/* Timeline slider (horizontal) */}
           <div className="px-4 mt-2">
+            <style>{`
+              .timeline-range { -webkit-appearance:none; appearance:none; height:10px; background:#f3f4f6; border-radius:999px; outline:none; }
+              .timeline-range:focus { box-shadow: none; }
+              .timeline-range::-webkit-slider-runnable-track { height:10px; background:transparent; }
+              .timeline-range::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:#9ca3af; margin-top:-1px; box-shadow: 0 1px 0 rgba(0,0,0,0.08); }
+              .timeline-range::-moz-range-track { height:10px; background:transparent; }
+              .timeline-range::-moz-range-thumb { width:12px; height:12px; border-radius:50%; background:#9ca3af; border:none; }
+            `}</style>
             <input
               aria-label="Timeline horizontal scroll"
               type="range"
@@ -901,7 +909,7 @@ export function GanttPage() {
               max={scrollMax}
               value={scrollPos}
               onChange={handleSliderChange}
-              className="w-full"
+              className="timeline-range w-full"
             />
           </div>
 
@@ -935,18 +943,23 @@ export function GanttPage() {
         </div>
       </div>
 
-      {/* ── GanttItemForm Modal ──────────────────────────────────────────── */}
-      <GanttItemForm
-        isOpen={showForm}
-        onClose={() => { setShowForm(false); setEditItem(null); setAddParent(null); }}
-        onSave={handleSave}
-        editItem={editItem}
-        parentItem={addParent}
-        projectTeam={projectTeam}
-        isAdmin={isAdmin}
-        projectStartDate={project?.startDate}
-        projectEndDate={project?.endDate}
-      />
+      {/* ── GanttItemForm (inline while debugging) ──────────────────────────── */}
+      {showForm && (
+        <div className="p-4 bg-transparent">
+          <GanttItemForm
+            isOpen={true}
+            inline={true}
+            onClose={() => { setShowForm(false); setEditItem(null); setAddParent(null); }}
+            onSave={handleSave}
+            editItem={editItem}
+            parentItem={addParent}
+            projectTeam={projectTeam}
+            isAdmin={isAdmin}
+            projectStartDate={project?.startDate}
+            projectEndDate={project?.endDate}
+          />
+        </div>
+      )}
     </div>
   );
 }

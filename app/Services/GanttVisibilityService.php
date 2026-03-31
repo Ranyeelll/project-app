@@ -30,46 +30,14 @@ class GanttVisibilityService
             return true;
         }
 
-        $roles = $item->visible_to_roles ?? [];
-        $users = $item->visible_to_users ?? [];
-
-        // If explicit visibility restrictions are set, honor them first
-        if (!empty($roles) || !empty($users)) {
-            // Department match (roles may contain department names)
-            $deptMatch = !empty($roles) && in_array($user->department->value, $roles, true);
-            // Role match (roles may contain role strings like 'supervisor')
-            $roleMatch = !empty($roles) && in_array(strtolower((string) $user->role), array_map('strtolower', $roles), true);
-            // User ID match
-            $userMatch = !empty($users) && in_array((string) $user->id, $users, true);
-
-            if ($deptMatch || $roleMatch || $userMatch) {
-                return true;
-            }
-            // Explicit restrictions present but no match — fallthrough to project-level checks
-        }
-
-        // Employee involvement: check project membership (manager, team members, project leader)
-        $project = $item->project;
-        if ($project) {
-            $teamIds = array_map('intval', $project->team_ids ?? []);
-            if (in_array($user->id, $teamIds, true)) {
-                return true;
-            }
-            if (!empty($project->manager_id) && (int) $project->manager_id === (int) $user->id) {
-                return true;
-            }
-            if (!empty($project->project_leader_id) && (int) $project->project_leader_id === (int) $user->id) {
-                return true;
-            }
-        }
-
-        // Also allow assignees on the gantt item itself
+        // Enforce simplified visibility policy:
+        // Only assignees on the gantt item (and the elevated roles above) can view.
         $assignees = $item->assignee_ids ?? [];
         if (!empty($assignees) && in_array((int) $user->id, array_map('intval', $assignees), true)) {
             return true;
         }
 
-        // Deny by default — only the checks above grant access
+        // Deny by default
         return false;
     }
 }

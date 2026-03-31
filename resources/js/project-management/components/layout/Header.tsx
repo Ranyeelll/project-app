@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { ChangePasswordModal } from '../ui/ChangePasswordModal';
 import { ProfilePhotoModal } from '../ui/ProfilePhotoModal';
+import RetentionModal from '../ui/RetentionModal';
 import { useTheme, useAuth, useNavigation, useData } from '../../context/AppContext';
 import { isElevatedRole, isSuperadmin } from '../../utils/roles';
 
@@ -46,6 +47,10 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showProfilePhotoModal, setShowProfilePhotoModal] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showRetentionModal, setShowRetentionModal] = useState(false);
+  const [retentionValue, setRetentionValue] = useState<number | null>(null);
+  const [savingRetention, setSavingRetention] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const dropdownRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -540,6 +545,12 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                   </button>
                 </div>
               )}
+              {/* Toast */}
+              {toastMessage && (
+                <div className="absolute left-1/2 transform -translate-x-1/2 bottom-4 z-50">
+                  <div className="bg-black text-white px-3 py-1.5 rounded shadow-md text-sm">{toastMessage}</div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -650,6 +661,32 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                   <KeyIcon size={14} />
                   Change Password
                 </button>
+              {/* Edit Retention (superadmin only) */}
+              {String(currentUser?.role).toLowerCase() === 'superadmin' && (
+                <div className="px-2 py-2 dark:border-dark-border border-b border-light-border">
+                  <button
+                    onClick={async () => {
+                      // load current value then open modal
+                      try {
+                        const res = await fetch('/api/settings/audit-log-retention', { credentials: 'include' });
+                        if (res.ok) {
+                          const data = await res.json();
+                          setRetentionValue(data.audit_log_retention_days ?? 365);
+                        } else {
+                          setRetentionValue(365);
+                        }
+                      } catch {
+                        setRetentionValue(365);
+                      }
+                      setShowRetentionModal(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors bg-white"
+                  >
+                    <ClipboardCheckIcon size={14} />
+                    Edit Retention Policy
+                  </button>
+                </div>
+              )}
               </div>
 
               {/* Logout */}
@@ -680,6 +717,18 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
           onPhotoUpdated={updateCurrentUser}
         />
       )}
+
+      {/* Retention Modal */}
+      <RetentionModal
+        isOpen={showRetentionModal}
+        initialDays={retentionValue}
+        onClose={() => setShowRetentionModal(false)}
+        onSaved={(days: number) => {
+          setToastMessage('Retention policy saved');
+          setTimeout(() => setToastMessage(null), 3000);
+          setRetentionValue(days);
+        }}
+      />
 
       {/* Change Password Modal */}
       <ChangePasswordModal

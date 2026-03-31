@@ -568,15 +568,23 @@ export function ViewGanttPage() {
 
       {/* Timeline slider (horizontal) */}
       <div className="px-4 mt-2">
-        <input
-          aria-label="Timeline horizontal scroll"
-          type="range"
-          min={0}
-          max={scrollMax}
-          value={scrollPos}
-          onChange={handleSliderChange}
-          className="w-full"
-        />
+          <style>{`
+            .timeline-range { -webkit-appearance:none; appearance:none; height:10px; background:#f3f4f6; border-radius:999px; outline:none; }
+            .timeline-range:focus { box-shadow: none; }
+            .timeline-range::-webkit-slider-runnable-track { height:10px; background:transparent; }
+            .timeline-range::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:#9ca3af; margin-top:-1px; box-shadow: 0 1px 0 rgba(0,0,0,0.08); }
+            .timeline-range::-moz-range-track { height:10px; background:transparent; }
+            .timeline-range::-moz-range-thumb { width:12px; height:12px; border-radius:50%; background:#9ca3af; border:none; }
+          `}</style>
+          <input
+              aria-label="Timeline horizontal scroll"
+              type="range"
+              min={0}
+              max={scrollMax}
+              value={scrollPos}
+              onChange={handleSliderChange}
+              className="timeline-range w-full"
+            />
       </div>
 
       {/* Legend */}

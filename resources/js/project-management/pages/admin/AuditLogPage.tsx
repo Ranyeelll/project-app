@@ -76,7 +76,22 @@ const RESOURCE_LABELS: Record<string, string> = {
 export function AuditLogPage() {
   const { projects, users } = useData();
   const { currentUser } = useAuth();
-  const isAdmin = currentUser?.department === 'Admin';
+  // Show admin UI for Admin department or explicit superadmin role
+  const isAdmin = currentUser?.department === 'Admin' || String(currentUser?.role).toLowerCase() === 'superadmin';
+
+  // Fallback: also allow role detection from localStorage (helps during SPA bootstraps)
+  const canEditRetention = (() => {
+    if (isAdmin) return true;
+    try {
+      const raw = localStorage.getItem('maptech-current-user');
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      const role = String(parsed?.role || '').toLowerCase();
+      const dept = parsed?.department || '';
+      if (role === 'superadmin' || String(dept) === 'Admin') return true;
+    } catch (e) { /* ignore */ }
+    return false;
+  })();
 
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -90,6 +105,8 @@ export function AuditLogPage() {
   const [exportFormat, setExportFormat] = useState<'pdf' | 'sheet'>('pdf');
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [retentionDays, setRetentionDays] = useState<number | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const pageSize = 15;
 
   const fetchLogs = async () => {
@@ -129,6 +146,22 @@ export function AuditLogPage() {
       fetchLogs();
     }
   }, [selectedProject, search, filterAction, filterResourceType]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/settings/audit-log-retention', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setRetentionDays(data.audit_log_retention_days ?? 365);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    load();
+  }, [isAdmin]);
 
   const userName = (userId: string | null) => {
     if (!userId) return 'System';
@@ -267,11 +300,20 @@ export function AuditLogPage() {
         <h1 className="text-3xl font-bold dark:text-dark-text text-light-text">Audit Logs</h1>
         <p className="text-sm dark:text-dark-subtle text-light-subtle mt-1">Track all system activities and changes across the platform</p>
       </div>
+      {toastMessage && (
+        <div className="fixed right-4 bottom-4 z-50">
+          <div className="bg-black text-white px-3 py-1.5 rounded shadow-md text-sm">{toastMessage}</div>
+        </div>
+      )}
 
       {/* Retention Policy Warning */}
-      <div className="flex gap-3 p-3.5 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-700/30 dark:text-yellow-300 bg-yellow-50 border border-yellow-200 text-yellow-800">
+      <div className="flex items-start gap-3 p-3.5 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-700/30 dark:text-yellow-300 bg-yellow-50 border border-yellow-200 text-yellow-800">
         <AlertCircleIcon size={18} className="flex-shrink-0 mt-0.5" />
-        <p className="text-sm font-medium">Retention Policy: Audit logs are retained for 365 days and automatically removed thereafter.</p>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-medium">Retention Policy: Audit logs are retained for <strong>{retentionDays ?? 365}</strong> days and automatically removed thereafter.</p>
+          </div>
+        </div>
       </div>
 
       {/* Statistics */}
