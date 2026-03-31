@@ -17,10 +17,10 @@
 <style>
     /* Force consistent page margins so header/footer repeat. Adjusted top margin
        and header positioning so header sits lower on the page and doesn't push content down. */
-    @page { margin: 80px 25px; }
+    @page { margin: 100px 25px; }
     header.pdf-header {
         position: fixed;
-        top: -80px;
+        top: -10px;
         left: 0;
         right: 0;
         height: 120px;
@@ -30,12 +30,22 @@
         overflow: visible;
         background: #ffffff;
     }
-    header.pdf-header .header-logo-wrap img { max-width: 360px; max-height: 96px; display:block; margin:0 auto 8px; }
-    header.pdf-header h1 { font-size: 22px; color: #154734; margin: 2px 0 4px; letter-spacing: 0.4px; line-height:1.05; font-weight:700 }
+    /* Place logo on the left so the title and subtitle can center */
+    header.pdf-header .header-logo-wrap {
+        position: absolute;
+        left: 24px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 220px;
+        text-align: left;
+    }
+    header.pdf-header .header-logo-wrap img { max-width: 220px; max-height: 86px; display:block; }
+    header.pdf-header .header-content { max-width: 760px; margin: 0 auto; }
+    header.pdf-header h1 { font-size: 22px; color: #154734; margin: 16px 0 4px; letter-spacing: 0.4px; line-height:1.05; font-weight:700; text-align:center }
     header.pdf-header .subtitle { font-size: 12px; color: #374151; font-weight: 600; }
     header.pdf-header .period { font-size: 10px; color: #6b7280; margin-top: 3px; }
     /* Ensure body content doesn't overlap header */
-    body { margin-top: 95px; }
+    body { margin-top: 140px; }
 </style>
 
 <header class="pdf-header">
