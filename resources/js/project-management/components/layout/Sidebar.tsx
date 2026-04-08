@@ -17,8 +17,7 @@ import {
   ClipboardCheckIcon,
   XIcon,
   ShieldIcon,
-  ShieldAlertIcon } from
-'lucide-react';
+} from 'lucide-react';
 import { useAuth, useNavigation } from '../../context/AppContext';
 import { isElevatedRole, isSupervisor } from '../../utils/roles';
 
@@ -78,7 +77,15 @@ const SUPERVISOR_NAV: NavItem[] = [
   { id: 'admin-reviews', label: 'Task Reviews', icon: <ClipboardCheckIcon size={16} /> },
 ];
 
-export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+  isExpanded?: boolean;
+}
+
+export function Sidebar({ isOpen, onClose, onMouseEnter, onMouseLeave, isExpanded }: SidebarProps) {
   const { currentUser, logout } = useAuth();
   const { currentPage, setCurrentPage } = useNavigation();
 
@@ -89,16 +96,22 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
     : department && DEPARTMENT_NAV[department]
       ? DEPARTMENT_NAV[department]
       : (isElevatedRole(currentUser?.role) ? ADMIN_NAV : EMPLOYEE_NAV);
+  
   return (
-    <aside className={`
-      fixed inset-y-0 left-0 z-50 w-64 flex flex-col h-full
-      lg:static lg:w-56 lg:flex-shrink-0 lg:z-auto lg:translate-x-0
-      dark:bg-dark-card dark:border-dark-border bg-white border-r border-light-border
-      transform transition-transform duration-300 ease-in-out
-      ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-    `}>
+    <aside 
+      className={`
+        fixed inset-y-0 left-0 z-50 flex flex-col h-full
+        dark:bg-dark-card dark:border-dark-border bg-white border-r border-light-border
+        transition-[width,transform,box-shadow] duration-200 ease-out
+        ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64'}
+        lg:translate-x-0
+        ${isExpanded ? 'lg:w-64 lg:shadow-xl' : 'lg:w-16'}
+      `}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
       {/* Logo + mobile close */}
-      <div className="flex flex-col items-center justify-center px-4 py-3 dark:border-dark-border border-b border-light-border flex-shrink-0 relative">
+      <div className={`flex items-center justify-center py-3 dark:border-dark-border border-b border-light-border flex-shrink-0 relative transition-[padding] duration-200 ease-out ${isExpanded ? 'lg:px-4 px-4' : 'lg:px-2 px-4'}`}>
         <button
           onClick={onClose}
           className="absolute top-2 right-2 lg:hidden p-1.5 rounded-lg dark:text-dark-muted dark:hover:bg-dark-card2 text-gray-400 hover:bg-gray-100 transition-colors"
@@ -108,13 +121,14 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         </button>
         <img
           src="/Maptech_Official_Logo_version2_(1).png"
-          alt="Maptech Information Solutions Inc."
-          className="h-14 w-auto object-contain brightness-100 dark:brightness-150 dark:contrast-110" />
+          alt="Maptech"
+          className={`object-contain brightness-100 dark:brightness-150 dark:contrast-110 transition-[height,width] duration-200 ease-out ${isExpanded ? 'h-14 w-auto' : 'lg:h-8 lg:w-8 h-14 w-auto'}`} 
+        />
       </div>
 
       {/* Navigation */}
       <nav
-        className="flex-1 overflow-y-auto py-3 px-2"
+        className={`flex-1 overflow-y-auto overflow-x-hidden py-3 transition-[padding] duration-200 ease-out ${isExpanded ? 'px-2' : 'lg:px-1 px-2'}`}
         aria-label="Main navigation">
 
         <div className="space-y-0.5">
@@ -124,16 +138,20 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
               <button
                 key={item.id}
                 onClick={() => { setCurrentPage(item.id); onClose(); }}
+                title={!isExpanded ? item.label : undefined}
                 className={`
-                  relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left
+                  relative w-full flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 text-left
+                  ${isExpanded ? 'px-3 justify-start' : 'lg:px-0 lg:justify-center px-3 justify-start'}
                   ${isActive ? 'bg-green-primary/10 text-green-primary sidebar-active' : 'dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text'}
                 `}
                 aria-current={isActive ? 'page' : undefined}>
 
-                <span className={isActive ? 'text-green-primary' : ''}>
+                <span className={`flex-shrink-0 ${isActive ? 'text-green-primary' : ''}`}>
                   {item.icon}
                 </span>
-                {item.label}
+                <span className={`whitespace-nowrap overflow-hidden transition-[opacity,max-width] duration-200 ease-out ${isExpanded ? 'opacity-100 max-w-[200px]' : 'lg:opacity-0 lg:max-w-0 opacity-100 max-w-[200px]'}`}>
+                  {item.label}
+                </span>
               </button>);
 
           })}
@@ -141,13 +159,18 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
       </nav>
 
       {/* Bottom: logout */}
-      <div className="p-3 dark:border-dark-border border-t border-light-border flex-shrink-0">
+      <div className={`py-3 dark:border-dark-border border-t border-light-border flex-shrink-0 transition-[padding] duration-200 ease-out ${isExpanded ? 'px-3' : 'lg:px-1 px-3'}`}>
         <button
           onClick={logout}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors">
+          title={!isExpanded ? 'Logout' : undefined}
+          className={`w-full flex items-center gap-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors duration-150
+            ${isExpanded ? 'px-3 justify-start' : 'lg:px-0 lg:justify-center px-3 justify-start'}
+          `}>
 
-          <LogOutIcon size={16} />
-          Logout
+          <LogOutIcon size={16} className="flex-shrink-0" />
+          <span className={`whitespace-nowrap overflow-hidden transition-[opacity,max-width] duration-200 ease-out ${isExpanded ? 'opacity-100 max-w-[200px]' : 'lg:opacity-0 lg:max-w-0 opacity-100 max-w-[200px]'}`}>
+            Logout
+          </span>
         </button>
       </div>
     </aside>);
