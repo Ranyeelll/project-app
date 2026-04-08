@@ -493,12 +493,22 @@ export function GanttPage() {
 
   const handleDelete = async (item: GanttItem) => {
     if (!confirm(`Delete "${item.name}" and all its children?`)) return;
-    await fetch(`/api/projects/${selectedProject}/gantt-items/${item.id}`, {
-      method: 'DELETE',
-      headers: { 'X-CSRF-TOKEN': csrfToken() },
-    });
-    refreshGanttItems(selectedProject);
-    refreshGanttDependencies(selectedProject);
+    try {
+      const res = await fetch(`/api/projects/${selectedProject}/gantt-items/${item.id}`, {
+        method: 'DELETE',
+        headers: { 'X-CSRF-TOKEN': csrfToken() },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.message || 'Failed to delete gantt item.');
+      }
+
+      await refreshGanttItems(selectedProject);
+      await refreshGanttDependencies(selectedProject);
+    } catch (e: any) {
+      alert(e?.message || 'Failed to delete gantt item.');
+    }
   };
 
   const handleStateChange = async (item: GanttItem, nextState: ItemState) => {
@@ -513,7 +523,6 @@ export function GanttPage() {
     });
 
     const payload = {
-      parent_id: item.parentId ?? null,
       type: item.type,
       name: item.name,
       description: item.description ?? '',

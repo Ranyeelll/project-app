@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   PlusIcon,
   SearchIcon,
@@ -37,6 +37,8 @@ export function ProjectsPage() {
   const [approvalProject, setApprovalProject] = useState<Project | null>(null);
   const [approvalAction, setApprovalAction] = useState('');
   const [saveError, setSaveError] = useState('');
+  const [pageError, setPageError] = useState('');
+  const [taskActionError, setTaskActionError] = useState('');
   const [savingProject, setSavingProject] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -107,6 +109,59 @@ export function ProjectsPage() {
       (p.approvalStatus || 'draft') === approvalFilter;
     return matchSearch && matchStatus && matchApproval;
   });
+
+  const approvalFilterOptions = useMemo(() => {
+    const base = [{ value: 'all', label: 'All Approval' }];
+
+    if (isAdmin) {
+      return [
+        ...base,
+        { value: 'draft', label: 'Draft' },
+        { value: 'technical_review', label: 'Technical Review' },
+        { value: 'accounting_review', label: 'Accounting Review' },
+        { value: 'supervisor_review', label: 'Supervisor Review' },
+        { value: 'superadmin_review', label: 'Superadmin Review' },
+        { value: 'approved', label: 'Approved' },
+        { value: 'revision_requested', label: 'Revision Requested' },
+        { value: 'rejected', label: 'Rejected' },
+      ];
+    }
+
+    if (isSupervisor(currentUser?.role)) {
+      return [
+        ...base,
+        { value: 'supervisor_review', label: 'Needs My Review' },
+        { value: 'approved', label: 'Approved' },
+        { value: 'revision_requested', label: 'Revision Requested' },
+        { value: 'rejected', label: 'Rejected' },
+      ];
+    }
+
+    if (currentUser?.department === 'Accounting') {
+      return [
+        ...base,
+        { value: 'accounting_review', label: 'Needs My Review' },
+        { value: 'approved', label: 'Approved' },
+        { value: 'revision_requested', label: 'Revision Requested' },
+        { value: 'rejected', label: 'Rejected' },
+      ];
+    }
+
+    return [
+      ...base,
+      { value: 'draft', label: 'Draft' },
+      { value: 'approved', label: 'Approved' },
+      { value: 'revision_requested', label: 'Revision Requested' },
+      { value: 'rejected', label: 'Rejected' },
+    ];
+  }, [currentUser?.department, currentUser?.role, isAdmin]);
+
+  useEffect(() => {
+    if (!approvalFilterOptions.some((opt) => opt.value === approvalFilter)) {
+      setApprovalFilter('all');
+    }
+  }, [approvalFilterOptions, approvalFilter]);
+
   const openCreate = () => {
     setCurrentPage('admin-create-project');
   };
@@ -131,6 +186,7 @@ export function ProjectsPage() {
   const openView = (p: Project) => {
     setSelectedProject(p);
     setShowTaskForm(false);
+    setTaskActionError('');
     setTaskForm({ title: '', description: '', priority: 'medium', assignedTo: '', startDate: '', endDate: '', estimatedHours: '' });
     refreshTasks();
     refreshProjects();
@@ -213,12 +269,19 @@ export function ProjectsPage() {
     setSavingProject(false);
   };
   const handleDelete = async (id: string) => {
+    setPageError('');
     try {
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      await fetch(`/api/projects/${id}`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken } });
-    } catch { /* continue with local removal */ }
-    setProjects((prev) => prev.filter((p) => p.id !== id));
-    setDeleteConfirm(null);
+      const res = await fetch(`/api/projects/${id}`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken } });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || 'Failed to delete project.');
+      }
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+      setDeleteConfirm(null);
+    } catch (err) {
+      setPageError(err instanceof Error ? err.message : 'Failed to delete project.');
+    }
   };
   const resetTaskForm = () => {
     setTaskForm({ title: '', description: '', priority: 'medium', assignedTo: '', startDate: '', endDate: '', estimatedHours: '' });
@@ -240,6 +303,7 @@ export function ProjectsPage() {
   };
   const handleEditTask = async () => {
     if (!editingTaskId || !taskForm.title) return;
+    setTaskActionError('');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
       const res = await fetch(`/api/tasks/${editingTaskId}`, {
@@ -255,15 +319,20 @@ export function ProjectsPage() {
           estimated_hours: Number(taskForm.estimatedHours) || 0,
         }),
       });
-      if (res.ok) {
-        const saved = await res.json();
-        setTasks((prev) => prev.map((t) => t.id === editingTaskId ? saved : t));
-        resetTaskForm();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || 'Failed to update task.');
       }
-    } catch { /* silently fail */ }
+      const saved = await res.json();
+      setTasks((prev) => prev.map((t) => t.id === editingTaskId ? saved : t));
+      resetTaskForm();
+    } catch (err) {
+      setTaskActionError(err instanceof Error ? err.message : 'Failed to update task.');
+    }
   };
   const handleAddTask = async () => {
     if (!selectedProject || !taskForm.title) return;
+    setTaskActionError('');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
       const res = await fetch('/api/tasks', {
@@ -280,19 +349,30 @@ export function ProjectsPage() {
           estimated_hours: Number(taskForm.estimatedHours) || 0,
         }),
       });
-      if (res.ok) {
-        const saved = await res.json();
-        setTasks((prev) => [saved, ...prev]);
-        resetTaskForm();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || 'Failed to create task.');
       }
-    } catch { /* silently fail */ }
+      const saved = await res.json();
+      setTasks((prev) => [saved, ...prev]);
+      resetTaskForm();
+    } catch (err) {
+      setTaskActionError(err instanceof Error ? err.message : 'Failed to create task.');
+    }
   };
   const handleDeleteTask = async (taskId: string) => {
+    setTaskActionError('');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      await fetch(`/api/tasks/${taskId}`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken } });
-    } catch { /* continue */ }
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken } });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || 'Failed to delete task.');
+      }
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    } catch (err) {
+      setTaskActionError(err instanceof Error ? err.message : 'Failed to delete task.');
+    }
   };
   const handleApprovalConfirm = async (notes: string) => {
     if (!approvalProject || !approvalAction) return;
@@ -375,6 +455,30 @@ export function ProjectsPage() {
     currency: 'PHP',
     maximumFractionDigits: 0
   }).format(n);
+
+  const formatDateShort = (value: string) => {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const formatTimelineRange = (start: string, end: string) => {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return { range: 'N/A', meta: '' };
+    }
+
+    const range = `${formatDateShort(start)} - ${formatDateShort(end)}`;
+    const days = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+    const meta = `${days} day${days === 1 ? '' : 's'}`;
+    return { range, meta };
+  };
   const budgetWarningTotalExceeded = budgetWarningProjects.reduce(
     (sum, project) => sum + Math.max(project.spent - project.budget, 0),
     0,
@@ -406,11 +510,7 @@ export function ProjectsPage() {
             className="w-36" />
 
           <Select
-            options={[
-            { value: 'all', label: 'All Approval' },
-            { value: 'accounting_review', label: 'Supervisor Review' },
-            { value: 'approved', label: 'Approved' },
-            ]}
+            options={approvalFilterOptions}
             value={approvalFilter}
             onChange={(e) => setApprovalFilter(e.target.value)}
             className="w-40" />
@@ -425,6 +525,12 @@ export function ProjectsPage() {
           </Button>
         )}
       </div>
+
+      {pageError && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+          {pageError}
+        </div>
+      )}
 
       {/* Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -945,9 +1051,21 @@ export function ProjectsPage() {
                 <div className="text-xs dark:text-dark-subtle text-light-subtle mb-1">
                   Timeline
                 </div>
-                <div className="text-sm dark:text-dark-text text-light-text font-medium">
-                  {selectedProject.startDate} → {selectedProject.endDate}
-                </div>
+                {(() => {
+                  const timeline = formatTimelineRange(selectedProject.startDate, selectedProject.endDate);
+                  return (
+                    <>
+                      <div className="text-sm dark:text-dark-text text-light-text font-medium">
+                        {timeline.range}
+                      </div>
+                      {timeline.meta && (
+                        <div className="text-xs dark:text-dark-subtle text-light-subtle mt-1">
+                          Duration: {timeline.meta}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               <div className="dark:bg-dark-card2 bg-light-card2 rounded-lg p-3">
                 <div className="text-xs dark:text-dark-subtle text-light-subtle mb-1">
@@ -991,6 +1109,11 @@ export function ProjectsPage() {
               {/* Add Task Form */}
               {showTaskForm && (
                 <div className="dark:bg-dark-card2 bg-light-card2 rounded-lg p-4 mb-3 space-y-3 border dark:border-dark-border border-light-border">
+                  {taskActionError && (
+                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                      {taskActionError}
+                    </div>
+                  )}
                   <Input
                     label="Task Title"
                     placeholder="e.g. Setup network cabling"
@@ -1067,6 +1190,11 @@ export function ProjectsPage() {
                 if (editingTaskId === task.id) {
                   return (
                     <div key={task.id} className="dark:bg-dark-card2 bg-light-card2 rounded-lg p-4 space-y-3 border dark:border-green-primary/30 border-green-primary/30">
+                      {taskActionError && (
+                        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                          {taskActionError}
+                        </div>
+                      )}
                       <Input
                         label="Task Title"
                         value={taskForm.title}

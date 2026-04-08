@@ -103,7 +103,12 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   const notifications = useMemo((): Notification[] => {
     const notifs: Notification[] = [];
     const isAdmin = isElevatedRole(currentUser?.role);
-    const canManageBudget = isSuperadmin(currentUser?.role) || currentUser?.department === 'Accounting';
+    const isSupervisorUser = currentUser?.role === 'supervisor' && !isSuperadmin(currentUser?.role);
+    const isAccountingUser = currentUser?.department === 'Accounting' && !isSuperadmin(currentUser?.role) && !isSupervisorUser;
+    const canManageBudget = isSuperadmin(currentUser?.role) || isSupervisorUser || isAccountingUser;
+    const budgetQueueStatus = isAccountingUser
+      ? 'pending'
+      : (isSupervisorUser ? 'accounting_approved' : 'supervisor_approved');
 
     if (isAdmin) {
       // 1. Pending task reviews
@@ -123,14 +128,14 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
 
       // 2. Pending budget requests
       if (canManageBudget) {
-        const pendingBudgets = budgetRequests.filter((b) => b.status === 'pending');
+        const pendingBudgets = budgetRequests.filter((b) => b.status === budgetQueueStatus);
         if (pendingBudgets.length > 0) {
           notifs.push({
             id: 'admin-pending-budgets',
             icon: <DollarSignIcon size={14} />,
             iconBg: 'bg-yellow-500/15 text-yellow-400',
-            title: 'Budget Requests Pending',
-            description: `${pendingBudgets.length} budget request${pendingBudgets.length > 1 ? 's' : ''} need approval`,
+            title: 'Budget Requests In Queue',
+            description: `${pendingBudgets.length} budget request${pendingBudgets.length > 1 ? 's' : ''} awaiting your approval stage`,
             time: 'Action needed',
             navigateTo: 'admin-budget',
             read: false,
@@ -151,6 +156,23 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
             read: false,
           });
         }
+      }
+
+      // Completed projects submitted by employees for elevated review.
+      const completedProjectsAwaitingApproval = projects.filter(
+        (p) => p.status === 'completed' && (p.approvalStatus || 'draft') === 'supervisor_review'
+      );
+      if (completedProjectsAwaitingApproval.length > 0) {
+        notifs.push({
+          id: 'admin-completed-projects-awaiting-approval',
+          icon: <CheckCircleIcon size={14} />,
+          iconBg: 'bg-emerald-500/15 text-emerald-400',
+          title: 'Completed Projects Awaiting Approval',
+          description: `${completedProjectsAwaitingApproval.length} completed project${completedProjectsAwaitingApproval.length > 1 ? 's' : ''} awaiting supervisor/superadmin review`,
+          time: 'Action needed',
+          navigateTo: 'admin-projects',
+          read: false,
+        });
       }
 
       // 3. Overdue tasks
@@ -651,21 +673,26 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors"
                 >
-                  <CameraIcon size={14} />
-                  {currentUser?.profilePhoto ? 'Change Photo' : 'Upload Photo'}
+                  <span className="h-4 w-4 flex items-center justify-center shrink-0">
+                    <CameraIcon size={14} />
+                  </span>
+                  <span className="leading-5">{currentUser?.profilePhoto ? 'Change Photo' : 'Upload Photo'}</span>
                 </button>
                 <button
                   onClick={() => { setShowProfileMenu(false); setShowChangePassword(true); }}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors"
                 >
-                  <KeyIcon size={14} />
-                  Change Password
+                  <span className="h-4 w-4 flex items-center justify-center shrink-0">
+                    <KeyIcon size={14} />
+                  </span>
+                  <span className="leading-5">Change Password</span>
                 </button>
               {/* Edit Retention (superadmin only) */}
               {String(currentUser?.role).toLowerCase() === 'superadmin' && (
                 <div className="px-2 py-2 dark:border-dark-border border-b border-light-border">
                   <button
                     onClick={async () => {
+                      setShowProfileMenu(false);
                       // load current value then open modal
                       try {
                         const res = await fetch('/api/settings/audit-log-retention', { credentials: 'include' });
@@ -680,10 +707,12 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                       }
                       setShowRetentionModal(true);
                     }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors bg-white"
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors"
                   >
-                    <ClipboardCheckIcon size={14} />
-                    Edit Retention Policy
+                    <span className="h-4 w-4 flex items-center justify-center shrink-0">
+                      <ClipboardCheckIcon size={14} />
+                    </span>
+                    <span className="leading-5">Edit Retention Policy</span>
                   </button>
                 </div>
               )}
@@ -698,8 +727,10 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-red-500/10 dark:hover:text-red-400 text-light-muted hover:bg-red-50 hover:text-red-500 transition-colors"
                 >
-                  <LogOutIcon size={14} />
-                  Logout
+                  <span className="h-4 w-4 flex items-center justify-center shrink-0">
+                    <LogOutIcon size={14} />
+                  </span>
+                  <span className="leading-5">Logout</span>
                 </button>
               </div>
             </div>

@@ -77,7 +77,6 @@ Route::prefix('api')->group(function () {
         // ─── Superadmin Only ───────────────────────────────────────
         Route::middleware('role:superadmin')->group(function () {
             // User management
-            Route::get('/users', [UserController::class, 'index']);
             Route::post('/users', [UserController::class, 'store']);
             Route::put('/users/{user}', [UserController::class, 'update']);
             Route::delete('/users/{user}', [UserController::class, 'destroy']);
@@ -125,8 +124,6 @@ Route::prefix('api')->group(function () {
 
         // ─── Accounting (+ superadmin bypass) Budget management ────
         Route::middleware('department:Accounting')->group(function () {
-            // Budget approvals and management
-            Route::put('/budget-requests/{budget_request}', [BudgetRequestController::class, 'update']);
             Route::delete('/budget-requests/{budget_request}', [BudgetRequestController::class, 'destroy']);
 
             // Budget reports
@@ -141,6 +138,9 @@ Route::prefix('api')->group(function () {
         });
 
         // ─── Any Authenticated User ───────────────────────────────
+        // Read-only users list (used by team views and assignee labels)
+        Route::get('/users', [UserController::class, 'index']);
+
         // Gantt read access (visibility filtering enforced server-side)
         Route::get('/projects/{project}/gantt-items', [GanttController::class, 'index']);
         Route::get('/projects/{project}/gantt-dependencies', [GanttController::class, 'indexDependencies']);
@@ -203,6 +203,7 @@ Route::prefix('api')->group(function () {
         // Budget requests (all can view/create, approval in controller)
         Route::get('/budget-requests', [BudgetRequestController::class, 'index']);
         Route::post('/budget-requests', [BudgetRequestController::class, 'store']);
+        Route::put('/budget-requests/{budget_request}', [BudgetRequestController::class, 'update']);
 
         // Media
         Route::get('/media', [MediaController::class, 'index']);

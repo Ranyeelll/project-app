@@ -28,7 +28,7 @@ class ProjectApprovalController extends Controller
     public function transition(Request $request, Project $project): JsonResponse
     {
         $data = $request->validate([
-            'action' => 'required|string|in:submit_for_review,approve_technical,approve_accounting,approve_supervisor,approve_superadmin,approve_final,request_revision,reject,resubmit',
+            'action' => 'required|string|in:submit_for_review,approve_technical,approve_accounting,approve_supervisor,approve_superadmin,approve_final,request_revision,reject,resubmit,finish_project',
             'notes'  => 'nullable|string|max:2000',
         ]);
 
@@ -79,7 +79,7 @@ class ProjectApprovalController extends Controller
                 'userId'        => $log->user_id ? (string) $log->user_id : null,
                 'performedVia'  => $log->performed_via,
                 'sensitiveFlag' => (bool) $log->sensitive_flag,
-                'createdAt'     => $log->created_at?->toISOString(),
+                'createdAt'     => $log->created_at?->toIso8601String(),
             ]);
 
         return response()->json($logs);
@@ -96,7 +96,7 @@ class ProjectApprovalController extends Controller
             'approvalNotes'  => $p->approval_notes,
             'submittedBy'    => $p->submitted_by ? (string) $p->submitted_by : null,
             'reviewedBy'     => $p->reviewed_by  ? (string) $p->reviewed_by  : null,
-            'lastReviewedAt' => $p->last_reviewed_at?->toISOString(),
+            'lastReviewedAt' => $p->last_reviewed_at?->toIso8601String(),
         ];
     }
 }

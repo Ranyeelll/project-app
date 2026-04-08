@@ -132,7 +132,7 @@ export interface BudgetRequest {
   amount: number;
   type: 'spending' | 'additional_budget';
   purpose: string;
-  status: 'pending' | 'approved' | 'rejected' | 'revision_requested';
+  status: 'pending' | 'accounting_approved' | 'supervisor_approved' | 'approved' | 'rejected' | 'revision_requested';
   createdAt: string;
   reviewedAt?: string;
   reviewComment?: string;

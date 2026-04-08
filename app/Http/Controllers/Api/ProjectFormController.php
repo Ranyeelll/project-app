@@ -200,9 +200,9 @@ class ProjectFormController extends Controller
             'data'        => $s->data,
             'notes'       => $s->notes,
             'reviewedBy'  => $s->reviewed_by ? (string) $s->reviewed_by : null,
-            'reviewedAt'  => $s->reviewed_at?->toISOString(),
-            'createdAt'   => $s->created_at?->toISOString(),
-            'updatedAt'   => $s->updated_at?->toISOString(),
+            'reviewedAt'  => $s->reviewed_at?->toIso8601String(),
+            'createdAt'   => $s->created_at?->toIso8601String(),
+            'updatedAt'   => $s->updated_at?->toIso8601String(),
         ];
     }
 }

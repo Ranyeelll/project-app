@@ -85,13 +85,13 @@ export function ProfilePhotoModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div className="dark:bg-dark-card dark:border dark:border-dark-border bg-white rounded-lg shadow-xl max-w-md w-full overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-lg font-semibold">Profile Photo</h2>
+        <div className="flex items-center justify-between p-6 dark:border-dark-border border-b border-light-border">
+          <h2 className="text-lg font-semibold dark:text-dark-text text-light-text">Profile Photo</h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-lg transition"
+            className="p-1 rounded-lg transition dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-gray-100 hover:text-light-text"
           >
             <X size={20} />
           </button>
@@ -107,10 +107,10 @@ export function ProfilePhotoModal({
                   key={photoVersion}
                   src={currentPhotoUrl}
                   alt={user.name}
-                  className="w-32 h-32 rounded-full object-cover border-4 border-gray-200"
+                  className="w-32 h-32 rounded-full object-cover border-4 dark:border-dark-border border-gray-200"
                 />
               ) : (
-                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-2xl font-bold border-4 border-gray-200">
+                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-2xl font-bold border-4 dark:border-dark-border border-gray-200">
                   {user.name
                     .split(/\s+/)
                     .slice(0, 2)
@@ -129,14 +129,14 @@ export function ProfilePhotoModal({
 
           {/* User Name */}
           <div className="text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm dark:text-dark-muted text-gray-600">
               Uploading photo for <strong>{user.name}</strong>
             </p>
           </div>
 
           {/* Error Message */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
               {error}
             </div>
           )}
@@ -162,16 +162,16 @@ export function ProfilePhotoModal({
           />
 
           {/* Info Text */}
-          <p className="text-xs text-gray-500 text-center">
+          <p className="text-xs dark:text-dark-subtle text-gray-500 text-center">
             Supported formats: JPG, PNG, GIF, WebP (Max 5MB)
           </p>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 rounded-b-lg border-t flex justify-end">
+        <div className="px-6 py-4 dark:bg-dark-card2 dark:border-dark-border bg-gray-50 border-t border-light-border flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-200 font-medium rounded-lg transition"
+            className="px-4 py-2 font-medium rounded-lg transition dark:text-dark-text dark:hover:bg-dark-bg text-gray-700 hover:bg-gray-200"
           >
             Done
           </button>

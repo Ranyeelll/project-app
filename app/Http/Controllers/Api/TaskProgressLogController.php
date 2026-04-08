@@ -35,6 +35,13 @@ class TaskProgressLogController extends Controller
         // Authorization: If project has 2+ employees and leader is set,
         // only the leader can submit progress updates.
         if ($user && $user->department === Department::Employee) {
+            if ($project && in_array($project->status, ['completed', 'archived'], true)) {
+                return response()->json([
+                    'error' => 'Locked',
+                    'message' => 'This project is already completed and can no longer be updated by employees.',
+                ], 422);
+            }
+
             if ($isMultiMemberProject && $leaderId > 0) {
                 if ((int) $user->id !== $leaderId) {
                     return response()->json([

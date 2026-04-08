@@ -9,9 +9,9 @@ use App\Models\User;
 /**
  * Gantt Visibility Service: Controls which gantt items a user can see.
  * Visibility rules:
- * - Admin always sees all items (unless preview_as is set)
- * - If both visible_to_roles and visible_to_users are empty → visible to all
- * - Otherwise: user must match at least one of visible_to_roles OR visible_to_users
+ * - Admin/supervisor/technical always see all items
+ * - Project members (manager, leader, team member) can see project items
+ * - Non-members are denied unless explicitly included by assignee/visibility lists
  */
 class GanttVisibilityService
 {
@@ -30,10 +30,35 @@ class GanttVisibilityService
             return true;
         }
 
+        $project = $item->project;
+        if ($project) {
+            $uid = (string) $user->id;
+            $teamIds = array_map('strval', $project->team_ids ?? []);
+            $isProjectManager = (string) ($project->manager_id ?? '') === $uid;
+            $isProjectLeader = (string) ($project->project_leader_id ?? '') === $uid;
+            $isProjectMember = in_array($uid, $teamIds, true);
+
+            if ($isProjectManager || $isProjectLeader || $isProjectMember) {
+                return true;
+            }
+        }
+
         // Enforce simplified visibility policy:
-        // Only assignees on the gantt item (and the elevated roles above) can view.
+        // Allow explicit per-item visibility for non-members.
         $assignees = $item->assignee_ids ?? [];
-        if (!empty($assignees) && in_array((int) $user->id, array_map('intval', $assignees), true)) {
+        if (!empty($assignees) && in_array((string) $user->id, array_map('strval', $assignees), true)) {
+            return true;
+        }
+
+        $visibleUsers = $item->visible_to_users ?? [];
+        if (!empty($visibleUsers) && in_array((string) $user->id, array_map('strval', $visibleUsers), true)) {
+            return true;
+        }
+
+        $visibleRoles = array_map('strtolower', array_map('strval', $item->visible_to_roles ?? []));
+        $role = strtolower((string) ($user->role ?? ''));
+        $department = strtolower((string) ($user->department?->value ?? $user->department ?? ''));
+        if (!empty($visibleRoles) && (in_array($role, $visibleRoles, true) || in_array($department, $visibleRoles, true))) {
             return true;
         }
 

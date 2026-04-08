@@ -95,6 +95,14 @@ export function StatusBadge({ status }: {status: string;}) {
       variant: 'warning',
       label: 'Pending'
     },
+    accounting_approved: {
+      variant: 'info',
+      label: 'Accounting Approved'
+    },
+    supervisor_approved: {
+      variant: 'purple',
+      label: 'Supervisor Approved'
+    },
     approved: {
       variant: 'success',
       label: 'Approved'

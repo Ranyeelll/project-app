@@ -81,26 +81,30 @@ function AppContent() {
     return <LoginPage />;
   }
   // Render page based on current navigation and department
-  const renderPage = () => {
+  const renderPage = (): { page: React.ReactNode; routeNotice: string | null } => {
     const dept = currentUser.department;
+    const redirectedNotice = 'That page is unavailable for your role, so you were redirected to your dashboard.';
+    const chatNotice = 'Chat is currently disabled, so you were redirected to your dashboard.';
 
     // Supervisor role - project and monitoring access only
     if (isSupervisor(currentUser.role)) {
       switch (currentPage) {
         case 'admin-dashboard':
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: null };
         case 'admin-projects':
-          return <ProjectsPage />;
+          return { page: <ProjectsPage />, routeNotice: null };
         case 'admin-create-project':
-          return <CreateProjectPage />;
+          return { page: <CreateProjectPage />, routeNotice: null };
         case 'admin-gantt':
-          return <GanttPage />;
+          return { page: <GanttPage />, routeNotice: null };
         case 'admin-monitor':
-          return <MonitorControlPage />;
+          return { page: <MonitorControlPage />, routeNotice: null };
         case 'admin-reviews':
-          return <TaskReviewsPage />;
+          return { page: <TaskReviewsPage />, routeNotice: null };
+        case 'admin-chat':
+          return { page: <AdminDashboard />, routeNotice: chatNotice };
         default:
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: redirectedNotice };
       }
     }
 
@@ -108,34 +112,34 @@ function AppContent() {
     if (dept === 'Admin' && isSuperadmin(currentUser.role)) {
       switch (currentPage) {
         case 'admin-dashboard':
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: null };
         case 'admin-projects':
-          return <ProjectsPage />;
+          return { page: <ProjectsPage />, routeNotice: null };
         case 'admin-create-project':
-          return <CreateProjectPage />;
+          return { page: <CreateProjectPage />, routeNotice: null };
         case 'admin-gantt':
-          return <GanttPage />;
+          return { page: <GanttPage />, routeNotice: null };
         case 'admin-monitor':
-          return <MonitorControlPage />;
+          return { page: <MonitorControlPage />, routeNotice: null };
         case 'admin-budget':
-          return <BudgetApprovalsPage />;
+          return { page: <BudgetApprovalsPage />, routeNotice: null };
         case 'admin-budget-report':
-          return <BudgetReportPage />;
+          return { page: <BudgetReportPage />, routeNotice: null };
         case 'admin-team':
-          return <TeamManagementPage />;
+          return { page: <TeamManagementPage />, routeNotice: null };
         case 'admin-reports':
-          return <ReportsMediaPage />;
+          return { page: <ReportsMediaPage />, routeNotice: null };
         case 'admin-reviews':
-          return <TaskReviewsPage />;
+          return { page: <TaskReviewsPage />, routeNotice: null };
         case 'admin-audit-logs':
-          return <AuditLogPage />;
+          return { page: <AuditLogPage />, routeNotice: null };
         case 'admin-archive':
-          return <ArchivePage />;
+          return { page: <ArchivePage />, routeNotice: null };
         // chat removed -> fall back to dashboard
         case 'admin-chat':
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: chatNotice };
         default:
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: redirectedNotice };
       }
     }
 
@@ -143,18 +147,18 @@ function AppContent() {
     if (dept === 'Accounting') {
       switch (currentPage) {
         case 'accounting-dashboard':
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: null };
         case 'admin-budget':
-          return <BudgetApprovalsPage />;
+          return { page: <BudgetApprovalsPage />, routeNotice: null };
         case 'admin-budget-report':
-          return <BudgetReportPage />;
+          return { page: <BudgetReportPage />, routeNotice: null };
         case 'accounting-review':
-          return <TaskReviewsPage />;
+          return { page: <TaskReviewsPage />, routeNotice: null };
         // chat removed -> fall back to dashboard
         case 'admin-chat':
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: chatNotice };
         default:
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: redirectedNotice };
       }
     }
 
@@ -162,20 +166,20 @@ function AppContent() {
     if (dept === 'Technical') {
       switch (currentPage) {
         case 'technical-dashboard':
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: null };
         case 'admin-gantt':
-          return <GanttPage />;
+          return { page: <GanttPage />, routeNotice: null };
         case 'admin-projects':
-          return <ProjectsPage />;
+          return { page: <ProjectsPage />, routeNotice: null };
         case 'technical-tasks':
-          return <MyTasksPage />;
+          return { page: <MyTasksPage />, routeNotice: null };
         case 'technical-review':
-          return <TaskReviewsPage />;
+          return { page: <TaskReviewsPage />, routeNotice: null };
         // chat removed -> fall back to dashboard
         case 'admin-chat':
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: chatNotice };
         default:
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: redirectedNotice };
       }
     }
 
@@ -184,24 +188,24 @@ function AppContent() {
     if (dept === 'Employee' || isEmployeeRole(currentUser.role)) {
       switch (currentPage) {
         case 'employee-dashboard':
-          return <EmployeeDashboard />;
+          return { page: <EmployeeDashboard />, routeNotice: null };
         case 'employee-tasks':
-          return <MyTasksPage />;
+          return { page: <MyTasksPage />, routeNotice: null };
         case 'employee-gantt':
-          return <ViewGanttPage />;
+          return { page: <ViewGanttPage />, routeNotice: null };
         case 'employee-budget':
-          return <BudgetRequestPage />;
+          return { page: <BudgetRequestPage />, routeNotice: null };
         case 'employee-time':
-          return <LogTimePage />;
+          return { page: <LogTimePage />, routeNotice: null };
         case 'employee-issues':
-          return <ReportIssuePage />;
+          return { page: <ReportIssuePage />, routeNotice: null };
         case 'employee-resources':
-          return <ResourcesPage />;
+          return { page: <ResourcesPage />, routeNotice: null };
         // chat removed -> fall back to employee dashboard
         case 'employee-chat':
-          return <EmployeeDashboard />;
+          return { page: <EmployeeDashboard />, routeNotice: chatNotice };
         default:
-          return <EmployeeDashboard />;
+          return { page: <EmployeeDashboard />, routeNotice: redirectedNotice };
       }
     }
 
@@ -209,38 +213,48 @@ function AppContent() {
     if (isSuperadmin(currentUser.role)) {
       switch (currentPage) {
         case 'admin-dashboard':
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: null };
         case 'admin-projects':
-          return <ProjectsPage />;
+          return { page: <ProjectsPage />, routeNotice: null };
         case 'admin-gantt':
-          return <GanttPage />;
+          return { page: <GanttPage />, routeNotice: null };
         case 'admin-monitor':
-          return <MonitorControlPage />;
+          return { page: <MonitorControlPage />, routeNotice: null };
         case 'admin-budget':
-          return <BudgetApprovalsPage />;
+          return { page: <BudgetApprovalsPage />, routeNotice: null };
         case 'admin-budget-report':
-          return <BudgetReportPage />;
+          return { page: <BudgetReportPage />, routeNotice: null };
         case 'admin-team':
-          return <TeamManagementPage />;
+          return { page: <TeamManagementPage />, routeNotice: null };
         case 'admin-reports':
-          return <ReportsMediaPage />;
+          return { page: <ReportsMediaPage />, routeNotice: null };
         case 'admin-reviews':
-          return <TaskReviewsPage />;
+          return { page: <TaskReviewsPage />, routeNotice: null };
         case 'admin-archive':
-          return <ArchivePage />;
+          return { page: <ArchivePage />, routeNotice: null };
         // chat removed -> fall back to dashboard
         case 'admin-chat':
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: chatNotice };
         default:
-          return <AdminDashboard />;
+          return { page: <AdminDashboard />, routeNotice: redirectedNotice };
       }
     }
 
-    return <LoginPage />;
+    return { page: <LoginPage />, routeNotice: redirectedNotice };
   };
+
+  const { page, routeNotice } = renderPage();
+
   return (
     <>
-      <AppLayout>{renderPage()}</AppLayout>
+      <AppLayout>
+        {routeNotice && (
+          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+            {routeNotice}
+          </div>
+        )}
+        {page}
+      </AppLayout>
       <ChangePasswordModal
         isOpen={showForceChange}
         onClose={() => setShowForceChange(false)}

@@ -37,7 +37,7 @@ class DirectMessageSent implements ShouldBroadcastNow
             'metadata'         => $msg->metadata ?? [],
             'reply_to_id'      => $msg->reply_to_id,
             'read_by'          => $msg->read_by ?? [],
-            'created_at'       => $msg->created_at->toISOString(),
+            'created_at'       => $msg->created_at->toIso8601String(),
             'sender'           => $msg->sender ? [
                 'id'            => $msg->sender->id,
                 'name'          => $msg->sender->name,

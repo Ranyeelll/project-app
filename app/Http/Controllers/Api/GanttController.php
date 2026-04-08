@@ -794,6 +794,10 @@ class GanttController extends Controller
             'visible_to_users.*' => 'string',
         ]);
 
+        if (array_key_exists('parent_id', $data) && $data['parent_id'] !== null) {
+            $this->validateParentAssignment($project, $data['parent_id']);
+        }
+
         $this->assertWithinProjectDateRange($project, $data['start_date'] ?? null, $data['end_date'] ?? null);
 
         // If visibility wasn't explicitly set, default to project members
@@ -840,6 +844,7 @@ class GanttController extends Controller
         $this->authorizeItemBelongsToProject($item, $project);
 
         $data = $request->validate([
+            'parent_id'        => 'nullable|exists:gantt_items,id',
             'name'             => 'sometimes|string|max:255',
             'description'      => 'nullable|string',
             'start_date'       => 'nullable|date|required_with:end_date',
@@ -853,6 +858,10 @@ class GanttController extends Controller
             'visible_to_users' => 'nullable|array',
             'visible_to_users.*' => 'string',
         ]);
+
+        if (array_key_exists('parent_id', $data)) {
+            $this->validateParentAssignment($project, $data['parent_id'], $item);
+        }
 
         $nextStart = array_key_exists('start_date', $data)
             ? ($data['start_date'] ?: null)
@@ -916,6 +925,8 @@ class GanttController extends Controller
             'parent_id' => 'nullable|exists:gantt_items,id',
             'position'  => 'required|integer|min:0',
         ]);
+
+        $this->validateParentAssignment($project, $data['parent_id'] ?? null, $item);
 
         DB::transaction(function () use ($item, $data) {
             $item->update([
@@ -1046,6 +1057,64 @@ class GanttController extends Controller
         }
     }
 
+    private function validateParentAssignment(Project $project, mixed $parentId, ?GanttItem $item = null): void
+    {
+        if ($parentId === null || $parentId === '') {
+            return;
+        }
+
+        $parent = GanttItem::where('project_id', $project->id)
+            ->where('id', $parentId)
+            ->first();
+
+        if (!$parent) {
+            throw ValidationException::withMessages([
+                'parent_id' => ['Parent item must belong to the same project.'],
+            ]);
+        }
+
+        if ($item && (string) $item->id === (string) $parent->id) {
+            throw ValidationException::withMessages([
+                'parent_id' => ['An item cannot be its own parent.'],
+            ]);
+        }
+
+        if ($item && $this->wouldCreateParentCycle($project->id, (int) $item->id, (int) $parent->id)) {
+            throw ValidationException::withMessages([
+                'parent_id' => ['An item cannot be moved under one of its descendants.'],
+            ]);
+        }
+    }
+
+    private function wouldCreateParentCycle(int $projectId, int $itemId, int $candidateParentId): bool
+    {
+        $childrenByParent = GanttItem::where('project_id', $projectId)
+            ->select(['id', 'parent_id'])
+            ->get()
+            ->groupBy('parent_id');
+
+        $queue = [$itemId];
+        $visited = [];
+
+        while (!empty($queue)) {
+            $current = array_shift($queue);
+
+            if (isset($visited[$current])) {
+                continue;
+            }
+            $visited[$current] = true;
+
+            foreach ($childrenByParent[$current] ?? [] as $child) {
+                if ((int) $child->id === $candidateParentId) {
+                    return true;
+                }
+                $queue[] = (int) $child->id;
+            }
+        }
+
+        return false;
+    }
+
     private function assertWithinProjectDateRange(Project $project, ?string $startDate, ?string $endDate): void
     {
         if (!$startDate && !$endDate) {
@@ -1094,8 +1163,8 @@ class GanttController extends Controller
             'assigneeIds'    => $item->assignee_ids ?? [],
             'visibleToRoles' => $item->visible_to_roles ?? [],
             'visibleToUsers' => $item->visible_to_users ?? [],
-            'createdAt'      => $item->created_at?->toISOString(),
-            'updatedAt'      => $item->updated_at?->toISOString(),
+            'createdAt'      => $item->created_at?->toIso8601String(),
+            'updatedAt'      => $item->updated_at?->toIso8601String(),
         ];
     }
 

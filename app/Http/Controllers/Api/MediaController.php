@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Department;
 use App\Http\Controllers\Controller;
 use App\Models\Media;
+use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
 class MediaController extends Controller
@@ -29,7 +32,8 @@ class MediaController extends Controller
             $query->where('uploaded_by', $request->input('uploaded_by'));
         }
 
-        $media = $query->orderByDesc('created_at')
+        $media = $query->with(['project', 'task', 'uploader'])
+            ->orderByDesc('created_at')
             ->get()
             ->map(fn ($m) => $this->formatMedia($m));
 
@@ -49,9 +53,20 @@ class MediaController extends Controller
             'type'        => 'required|in:file,video,text',
             'title'       => 'required|string|max:255',
             'content'     => 'nullable|string',
-            'file'        => 'nullable|file|max:512000', // 500 MB max
+            'file'        => 'nullable|file|max:512000|mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,zip,rar,mp4,mov,avi,mkv,webm',
             'visible_to'  => 'nullable|string',
         ]);
+
+        $actor = Auth::user();
+        if ($actor && $actor->department?->value === 'Employee') {
+            $project = Project::find($data['project_id']);
+            if ($project && in_array($project->status, ['completed', 'archived'], true)) {
+                return response()->json([
+                    'error' => 'Locked',
+                    'message' => 'This project is already completed and can no longer accept employee submissions.',
+                ], 422);
+            }
+        }
 
         $filePath = null;
         $originalFilename = null;
@@ -89,9 +104,23 @@ class MediaController extends Controller
 
     /**
      * Delete a media upload.
+     * Only admins, superadmins, or the uploader can delete.
      */
     public function destroy(Media $medium): JsonResponse
     {
+        $user = Auth::user();
+
+        // Authorization: Only admin/superadmin or the uploader can delete
+        $isAdmin = $user->department === Department::Admin || $user->role === 'superadmin';
+        $isUploader = $user->id === $medium->uploaded_by;
+
+        if (!$isAdmin && !$isUploader) {
+            return response()->json([
+                'error' => 'Forbidden',
+                'message' => 'Only admins or the uploader can delete media.',
+            ], 403);
+        }
+
         // Delete the physical file if it exists
         if ($medium->file_path) {
             Storage::disk('public')->delete($medium->file_path);

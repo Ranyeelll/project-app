@@ -17,37 +17,40 @@ import { Modal } from '../../components/ui/Modal';
 import { Textarea } from '../../components/ui/Input';
 import { Badge, StatusBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
-import { isSuperadmin } from '../../utils/roles';
+import { isSuperadmin, isSupervisor } from '../../utils/roles';
 export function BudgetApprovalsPage() {
   const { currentUser } = useAuth();
   const { budgetRequests, setBudgetRequests, projects, users, refreshBudgetRequests, refreshProjects } = useData();
 
-  const canManageBudget = isSuperadmin(currentUser?.role) || currentUser?.department === 'Accounting';
+  const isSuperadminUser = isSuperadmin(currentUser?.role);
+  const isSupervisorUser = isSupervisor(currentUser?.role) && !isSuperadminUser;
+  const isAccountingUser = currentUser?.department === 'Accounting' && !isSuperadminUser && !isSupervisorUser;
+  const canManageBudget = isSuperadminUser || isSupervisorUser || isAccountingUser;
+  const queueStatus = isAccountingUser
+    ? 'pending'
+    : (isSupervisorUser ? 'accounting_approved' : 'supervisor_approved');
+  const queueLabel = isAccountingUser
+    ? 'Accounting Queue'
+    : (isSupervisorUser ? 'Supervisor Queue' : 'Superadmin Queue');
   if (!canManageBudget) {
     return (
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-6">
         <p className="text-sm dark:text-dark-text text-light-text font-medium">Access denied.</p>
         <p className="text-xs dark:text-dark-subtle text-light-subtle mt-1">
-          Budget approvals are limited to Accounting and Superadmin.
+          Budget approvals are limited to Accounting, Supervisor, and Superadmin.
         </p>
       </div>
     );
   }
-  const [statusFilter, setStatusFilter] = useState('all');
   const [reviewModal, setReviewModal] = useState<{
     request: BudgetRequest;
     action: 'approve' | 'reject' | 'revision';
   } | null>(null);
   const [reviewComment, setReviewComment] = useState('');
-  const filtered = budgetRequests.filter(
-    (b) => statusFilter === 'all' || b.status === statusFilter
-  );
-  const totalPending = budgetRequests.
-  filter((b) => b.status === 'pending').
-  reduce((s, b) => s + b.amount, 0);
-  const totalApproved = budgetRequests.
-  filter((b) => b.status === 'approved').
-  reduce((s, b) => s + b.amount, 0);
+  const visibleRequests = budgetRequests.filter((b) => b.status === queueStatus);
+  const filtered = visibleRequests;
+  const queueAmount = visibleRequests.reduce((s, b) => s + b.amount, 0);
+  const queueProjectCount = new Set(visibleRequests.map((b) => b.projectId)).size;
 
   // Budget utilization helpers
   const getProjectBudgetInfo = (projectId: string) => {
@@ -84,8 +87,11 @@ export function BudgetApprovalsPage() {
   };
   const handleReview = async () => {
     if (!reviewModal) return;
+    const approveStatus = isAccountingUser
+      ? 'accounting_approved'
+      : (isSupervisorUser ? 'supervisor_approved' : 'approved');
     const statusMap = {
-      approve: 'approved',
+      approve: approveStatus,
       reject: 'rejected',
       revision: 'revision_requested',
     } as const;
@@ -99,7 +105,7 @@ export function BudgetApprovalsPage() {
       if (reviewModal.action === 'revision') {
         body.admin_remarks = reviewComment || null;
       }
-      await fetch(`/api/budget-requests/${reviewModal.request.id}`, {
+      const response = await fetch(`/api/budget-requests/${reviewModal.request.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -108,9 +114,23 @@ export function BudgetApprovalsPage() {
         },
         body: JSON.stringify(body),
       });
+      if (!response.ok) {
+        let message = `Failed to update request (${response.status})`;
+        try {
+          const payload = await response.json();
+          if (payload?.message && typeof payload.message === 'string') {
+            message = payload.message;
+          }
+        } catch {
+          // Keep generic fallback when response is not JSON.
+        }
+        throw new Error(message);
+      }
       refreshBudgetRequests();
       refreshProjects();
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update budget request.';
+      alert(message);
       // Fallback to local update
       setBudgetRequests((prev) =>
         prev.map((b) =>
@@ -141,43 +161,43 @@ export function BudgetApprovalsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
           <div className="text-xs dark:text-dark-muted text-light-muted mb-1">
-            Pending Requests
+            {queueLabel}
           </div>
           <div className="text-xl font-bold text-yellow-400">
-            {budgetRequests.filter((b) => b.status === 'pending').length}
+            {visibleRequests.length}
           </div>
           <div className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
-            {formatCurrency(totalPending)} total
+            Requests in current stage
           </div>
         </div>
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
           <div className="text-xs dark:text-dark-muted text-light-muted mb-1">
-            Revision Requested
+            Queue Amount
           </div>
-          <div className="text-xl font-bold text-purple-400">
-            {budgetRequests.filter((b) => b.status === 'revision_requested').length}
+          <div className="text-xl font-bold text-blue-400">
+            {formatCurrency(queueAmount)}
           </div>
           <div className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
-            Awaiting employee revision
+            Total at this stage
           </div>
         </div>
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
           <div className="text-xs dark:text-dark-muted text-light-muted mb-1">
-            Approved
+            Projects Impacted
           </div>
           <div className="text-xl font-bold text-green-primary">
-            {budgetRequests.filter((b) => b.status === 'approved').length}
+            {queueProjectCount}
           </div>
           <div className="text-xs dark:text-dark-subtle text-light-subtle mt-0.5">
-            {formatCurrency(totalApproved)} total
+            Distinct projects
           </div>
         </div>
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-4">
           <div className="text-xs dark:text-dark-muted text-light-muted mb-1">
-            Rejected
+            Next Step
           </div>
-          <div className="text-xl font-bold text-red-400">
-            {budgetRequests.filter((b) => b.status === 'rejected').length}
+          <div className="text-sm font-semibold text-purple-400">
+            {isAccountingUser ? 'Supervisor Review' : isSupervisorUser ? 'Superadmin Review' : 'Final Approval'}
           </div>
         </div>
       </div>
@@ -223,17 +243,14 @@ export function BudgetApprovalsPage() {
         </div>
       </div>
 
-      {/* Filter */}
+      {/* Queue indicator */}
       <div className="flex gap-2">
-        {['all', 'pending', 'revision_requested', 'approved', 'rejected'].map((s) =>
         <button
-          key={s}
-          onClick={() => setStatusFilter(s)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${statusFilter === s ? 'bg-green-primary text-black' : 'dark:bg-dark-card dark:border-dark-border dark:text-dark-muted dark:hover:text-dark-text bg-white border border-light-border text-light-muted hover:text-light-text'}`}>
-
-            {s === 'all' ? 'All' : s === 'revision_requested' ? 'Revision Requested' : s.charAt(0).toUpperCase() + s.slice(1)}
-          </button>
-        )}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-primary text-black"
+          disabled
+        >
+          {queueLabel}
+        </button>
       </div>
 
       {/* List */}
@@ -277,7 +294,7 @@ export function BudgetApprovalsPage() {
                     </div>
                   </div>
                   {/* Budget warning */}
-                  {req.status === 'pending' && (() => {
+                  {req.status === queueStatus && (() => {
                     const info = getProjectBudgetInfo(req.projectId);
 
                     // Additional budget requests don't need overage warnings
@@ -354,7 +371,7 @@ export function BudgetApprovalsPage() {
                   <span className="text-xs dark:text-dark-subtle text-light-subtle">
                     {req.createdAt}
                   </span>
-                  {req.status === 'pending' &&
+                  {req.status === queueStatus &&
                   <div className="flex gap-2">
                       <Button
                       variant="danger"
@@ -409,7 +426,7 @@ export function BudgetApprovalsPage() {
         {filtered.length === 0 &&
         <div className="flex flex-col items-center justify-center py-16 dark:text-dark-subtle text-light-subtle">
             <DollarSignIcon size={40} className="mb-3 opacity-30" />
-            <p className="text-sm">No budget requests found</p>
+            <p className="text-sm">No requests in your queue</p>
           </div>
         }
       </div>
@@ -420,7 +437,7 @@ export function BudgetApprovalsPage() {
         onClose={() => setReviewModal(null)}
         title={
         reviewModal?.action === 'approve' ?
-        'Approve Budget Request' :
+        (isAccountingUser ? 'Forward to Supervisor' : isSupervisorUser ? 'Forward to Superadmin' : 'Final Approval') :
         reviewModal?.action === 'revision' ?
         'Request Revision' :
         'Reject Budget Request'
@@ -437,7 +454,7 @@ export function BudgetApprovalsPage() {
             disabled={reviewModal?.action === 'revision' && !reviewComment.trim()}>
 
               {reviewModal?.action === 'approve' ?
-            'Confirm Approval' :
+            (isAccountingUser ? 'Confirm and Forward' : isSupervisorUser ? 'Confirm and Escalate' : 'Confirm Final Approval') :
             reviewModal?.action === 'revision' ?
             'Send Revision Request' :
             'Confirm Rejection'}

@@ -30,13 +30,27 @@ class BudgetRequestController extends Controller
         $user = Auth::user();
         $query = BudgetRequest::query();
 
-        // Employees can only see their own budget requests
+        // Employees can only see their own budget requests.
         if ($user && $user->department === Department::Employee) {
             $query->where('requested_by', $user->id);
         } else {
             // Other departments can filter by requested_by if provided
             if ($request->has('requested_by')) {
                 $query->where('requested_by', $request->input('requested_by'));
+            }
+
+            // Staged review queues for approvers.
+            if ($user && !$user->isAdmin()) {
+                if ($user->department === Department::Accounting) {
+                    $query->where('status', 'pending');
+                } elseif ($user->isSupervisor()) {
+                    $query->where('status', 'accounting_approved');
+                } else {
+                    // Other non-admin departments do not have approval queue access.
+                    $query->whereRaw('1 = 0');
+                }
+            } elseif ($user && $user->isAdmin()) {
+                $query->where('status', 'supervisor_approved');
             }
         }
 
@@ -78,19 +92,26 @@ class BudgetRequestController extends Controller
      */
     public function update(Request $request, BudgetRequest $budget_request): JsonResponse
     {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
         $data = $request->validate([
             'project_id'     => 'sometimes|exists:projects,id',
             'amount'         => 'sometimes|numeric|min:0',
             'type'           => 'sometimes|in:spending,additional_budget',
             'purpose'        => 'sometimes|string',
-            'status'         => 'sometimes|in:pending,approved,rejected,revision_requested',
+            'status'         => 'sometimes|in:pending,accounting_approved,supervisor_approved,approved,rejected,revision_requested',
             'review_comment' => 'nullable|string',
             'admin_remarks'  => 'nullable|string',
             'attachment'     => 'nullable|string',
         ]);
 
-        // If status is being changed to approved/rejected, set reviewed_at
-        if (isset($data['status']) && in_array($data['status'], ['approved', 'rejected'])) {
+        $this->authorizeBudgetRequestUpdate($user, $budget_request, $data);
+
+        // If status is being changed by any approver stage, set reviewed_at.
+        if (isset($data['status']) && in_array($data['status'], ['accounting_approved', 'supervisor_approved', 'approved', 'rejected'])) {
             $data['reviewed_at'] = now();
         }
 
@@ -110,7 +131,7 @@ class BudgetRequestController extends Controller
         $budget_request->update($data);
 
         // Audit log for status changes (approvals, rejections, revision requests)
-        if (isset($data['status']) && in_array($data['status'], ['approved', 'rejected', 'revision_requested'])) {
+        if (isset($data['status']) && in_array($data['status'], ['approved', 'rejected', 'revision_requested', 'accounting_approved', 'supervisor_approved'])) {
             $this->audit->budgetRequestApproved($budget_request, $data['status'], $data['review_comment'] ?? null);
         }
 
@@ -163,9 +184,31 @@ class BudgetRequestController extends Controller
 
     /**
      * Delete a budget request.
+     * Only admins, superadmins, or accounting can delete, and only if still pending.
      */
     public function destroy(BudgetRequest $budget_request): JsonResponse
     {
+        $user = Auth::user();
+
+        // Authorization: Only admin/superadmin or accounting can delete
+        $isAdmin = $user->department === Department::Admin || $user->role === 'superadmin';
+        $isAccounting = $user->department === Department::Accounting;
+
+        if (!$isAdmin && !$isAccounting) {
+            return response()->json([
+                'error' => 'Forbidden',
+                'message' => 'Only admins or accounting can delete budget requests.',
+            ], 403);
+        }
+
+        // Prevent deletion of already approved requests
+        if ($budget_request->status === 'approved') {
+            return response()->json([
+                'error' => 'Forbidden',
+                'message' => 'Cannot delete approved budget requests.',
+            ], 403);
+        }
+
         $budget_request->delete();
 
         return response()->json(['message' => 'Budget request deleted']);
@@ -176,13 +219,14 @@ class BudgetRequestController extends Controller
      */
     public function report(): JsonResponse
     {
+        $inReviewStatuses = ['pending', 'accounting_approved', 'supervisor_approved'];
         $projects = Project::orderBy('name')->get();
         $allRequests = BudgetRequest::all();
 
-        $report = $projects->map(function ($p) use ($allRequests) {
+        $report = $projects->map(function ($p) use ($allRequests, $inReviewStatuses) {
             $projectRequests = $allRequests->where('project_id', $p->id);
             $approved = $projectRequests->where('status', 'approved');
-            $pending  = $projectRequests->where('status', 'pending');
+            $pending  = $projectRequests->whereIn('status', $inReviewStatuses);
             $rejected = $projectRequests->where('status', 'rejected');
 
             // Separate spending vs additional_budget
@@ -249,7 +293,7 @@ class BudgetRequestController extends Controller
         $summary = [
             'totalBudget'       => $projects->sum('budget'),
             'totalApproved'     => $totalSpending,
-            'totalPending'      => (float) $allRequests->where('status', 'pending')->sum('amount'),
+            'totalPending'      => (float) $allRequests->whereIn('status', $inReviewStatuses)->sum('amount'),
             'totalRejected'     => (float) $allRequests->where('status', 'rejected')->sum('amount'),
             'totalRequests'     => $allRequests->count(),
             'projectCount'      => $projects->count(),
@@ -269,6 +313,7 @@ class BudgetRequestController extends Controller
      */
     public function exportPdf(Request $request)
     {
+        $inReviewStatuses = ['pending', 'accounting_approved', 'supervisor_approved'];
         $period = $request->input('period', 'monthly'); // weekly, monthly, yearly
         $now    = Carbon::now();
 
@@ -304,10 +349,10 @@ class BudgetRequestController extends Controller
             ->get();
 
         // Build per-project report data (same as report() method logic)
-        $reportProjects = $projects->map(function ($p) use ($allRequests, $startDate, $endDate) {
+        $reportProjects = $projects->map(function ($p) use ($allRequests, $startDate, $endDate, $inReviewStatuses) {
             $projectRequests = $allRequests->where('project_id', $p->id);
             $approved = $projectRequests->where('status', 'approved');
-            $pending  = $projectRequests->where('status', 'pending');
+            $pending  = $projectRequests->whereIn('status', $inReviewStatuses);
             $rejected = $projectRequests->where('status', 'rejected');
 
             $spendingApproved   = $approved->where('type', 'spending');
@@ -369,7 +414,7 @@ class BudgetRequestController extends Controller
         $summary = [
             'totalBudget'        => (float) $projects->sum('budget'),
             'totalApproved'      => $totalSpending,
-            'totalPending'       => (float) $allRequests->where('status', 'pending')->sum('amount'),
+            'totalPending'       => (float) $allRequests->whereIn('status', $inReviewStatuses)->sum('amount'),
             'totalRejected'      => (float) $allRequests->where('status', 'rejected')->sum('amount'),
             'totalRequests'      => $allRequests->count(),
             'projectCount'       => $projects->count(),
@@ -422,6 +467,7 @@ class BudgetRequestController extends Controller
      */
     public function exportSheet(Request $request)
     {
+        $inReviewStatuses = ['pending', 'accounting_approved', 'supervisor_approved'];
         $period = $request->input('period', 'monthly');
         $now    = Carbon::now();
 
@@ -454,10 +500,10 @@ class BudgetRequestController extends Controller
         $periodRequests = BudgetRequest::whereBetween('created_at', [$startDate, $endDate])
             ->orderBy('created_at', 'desc')->get();
 
-        $reportProjects = $projects->map(function ($p) use ($allRequests) {
+        $reportProjects = $projects->map(function ($p) use ($allRequests, $inReviewStatuses) {
             $pr       = $allRequests->where('project_id', $p->id);
             $approved = $pr->where('status', 'approved');
-            $pending  = $pr->where('status', 'pending');
+            $pending  = $pr->whereIn('status', $inReviewStatuses);
             $rejected = $pr->where('status', 'rejected');
             $spending = $approved->where('type', 'spending');
             $spent    = (float) $spending->sum('amount');
@@ -483,7 +529,7 @@ class BudgetRequestController extends Controller
         $summary = [
             'totalBudget'        => (float) $projects->sum('budget'),
             'totalApproved'      => $totalSpending,
-            'totalPending'       => (float) $allRequests->where('status', 'pending')->sum('amount'),
+            'totalPending'       => (float) $allRequests->whereIn('status', $inReviewStatuses)->sum('amount'),
             'totalRejected'      => (float) $allRequests->where('status', 'rejected')->sum('amount'),
             'totalRequests'      => $allRequests->count(),
             'projectCount'       => $projects->count(),
@@ -805,5 +851,68 @@ class BudgetRequestController extends Controller
             'originalAmount' => $b->original_amount ? (float) $b->original_amount : null,
             'revisionCount'  => (int) ($b->revision_count ?? 0),
         ];
+    }
+
+    private function authorizeBudgetRequestUpdate(User $user, BudgetRequest $budgetRequest, array $data): void
+    {
+        $nextStatus = $data['status'] ?? null;
+        $currentStatus = (string) $budgetRequest->status;
+        $isEmployee = $user->department === Department::Employee;
+
+        // Employee can only edit own request while it's pending/revision_requested,
+        // and can only move revision_requested -> pending on resubmission.
+        if ($isEmployee) {
+            if ((int) $budgetRequest->requested_by !== (int) $user->id) {
+                abort(403, 'You can only update your own budget requests.');
+            }
+
+            $editableStatuses = ['pending', 'revision_requested'];
+            if (!in_array($currentStatus, $editableStatuses, true)) {
+                abort(403, 'This budget request can no longer be edited.');
+            }
+
+            $allowedFields = ['project_id', 'amount', 'type', 'purpose', 'attachment', 'status'];
+            foreach (array_keys($data) as $field) {
+                if (!in_array($field, $allowedFields, true)) {
+                    abort(403, 'You are not allowed to change review fields.');
+                }
+            }
+
+            if ($nextStatus !== null && !($currentStatus === 'revision_requested' && $nextStatus === 'pending')) {
+                abort(403, 'Invalid status transition for employee action.');
+            }
+
+            return;
+        }
+
+        if ($nextStatus === null) {
+            abort(403, 'Approver updates must include a status transition.');
+        }
+
+        if ($user->department === Department::Accounting) {
+            $allowed = ['accounting_approved', 'rejected', 'revision_requested'];
+            if ($currentStatus !== 'pending' || !in_array($nextStatus, $allowed, true)) {
+                abort(403, 'Accounting can only review pending requests.');
+            }
+            return;
+        }
+
+        if ($user->isSupervisor() && !$user->isAdmin()) {
+            $allowed = ['supervisor_approved', 'rejected', 'revision_requested'];
+            if ($currentStatus !== 'accounting_approved' || !in_array($nextStatus, $allowed, true)) {
+                abort(403, 'Supervisor can only review accounting-approved requests.');
+            }
+            return;
+        }
+
+        if ($user->isAdmin()) {
+            $allowed = ['approved', 'rejected', 'revision_requested'];
+            if ($currentStatus !== 'supervisor_approved' || !in_array($nextStatus, $allowed, true)) {
+                abort(403, 'Superadmin can only review supervisor-approved requests.');
+            }
+            return;
+        }
+
+        abort(403, 'You do not have permission to review budget requests.');
     }
 }

@@ -221,7 +221,8 @@ class ProjectController extends Controller
         $allTaskAvg = Task::where('project_id', $p->id)->avg('progress');
         $taskAverageProgress = (int) round($teamTaskAvg ?? $allTaskAvg ?? 0);
         $storedProgress = (int) ($p->progress ?? 0);
-        $computedProgress = max($storedProgress, $taskAverageProgress);
+        $hasProjectTasks = Task::where('project_id', $p->id)->exists();
+        $computedProgress = $hasProjectTasks ? $taskAverageProgress : $storedProgress;
 
         // Compute spent from approved spending budget requests + approved task report costs
         $approvedSpent = BudgetRequest::where('project_id', $p->id)
@@ -253,7 +254,7 @@ class ProjectController extends Controller
             'approvalNotes'  => $p->approval_notes,
             'submittedBy'    => $p->submitted_by ? (string) $p->submitted_by : null,
             'reviewedBy'     => $p->reviewed_by  ? (string) $p->reviewed_by  : null,
-            'lastReviewedAt' => $p->last_reviewed_at?->toISOString(),
+            'lastReviewedAt' => $p->last_reviewed_at?->toIso8601String(),
         ];
     }
 

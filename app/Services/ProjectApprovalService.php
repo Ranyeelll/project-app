@@ -29,6 +29,7 @@ class ProjectApprovalService
 
         return match ($action) {
             'submit_for_review'   => $this->submitForReview($project, $actor, $current),
+            'finish_project'      => $this->finishProject($project, $actor, $current),
             'approve_technical'   => $this->approveTechnical($project, $actor, $current),
             'approve_accounting'  => $this->approveAccounting($project, $actor, $current),
             'approve_supervisor'  => $this->approveSupervisor($project, $actor, $current),
@@ -58,6 +59,38 @@ class ProjectApprovalService
             'submitted_by'     => $actor->id,
             'approval_notes'   => null,
         ]);
+
+        return $project->fresh();
+    }
+
+    private function finishProject(Project $project, User $actor, string $current): Project
+    {
+        $this->requireStatus($current, [
+            'draft',
+            'technical_review',
+            'accounting_review',
+            'supervisor_review',
+            'superadmin_review',
+            'approved',
+            'rejected',
+            'revision_requested',
+        ], 'finish_project');
+        $this->requireProjectMemberOrElevated($project, $actor, 'finish_project');
+        $this->requireProjectCompletion($project, 'finish_project');
+
+        $project->update([
+            'status'           => 'completed',
+            'approval_status'  => $current === 'approved' ? 'approved' : 'supervisor_review',
+            'submitted_by'     => $actor->id,
+            'approval_notes'   => null,
+        ]);
+
+        $message = sprintf(
+            'Project "%s" was marked as completed by %s and is awaiting final approval.',
+            $project->name,
+            $actor->name
+        );
+        $this->notifySupervisorAndSuperadmin($project, $message, 'Project marked as completed');
 
         return $project->fresh();
     }
@@ -264,6 +297,33 @@ class ProjectApprovalService
         }
     }
 
+    private function notifySupervisorAndSuperadmin(Project $project, string $message, string $subject = 'Project approval update'): void
+    {
+        try {
+            $recipients = User::query()
+                ->get()
+                ->filter(static function (User $user): bool {
+                    $role = strtolower(trim((string) ($user->role ?? '')));
+                    // Include legacy "admin" role aliases as superadmin-equivalent recipients.
+                    return in_array($role, ['supervisor', 'superadmin', 'admin'], true);
+                })
+                ->values();
+
+            $payload = [
+                'project_id' => $project->id,
+                'message'    => $message,
+                'subject'    => $subject,
+                'url'        => url('/admin-monitor'),
+            ];
+
+            foreach ($recipients as $user) {
+                Notification::send($user, new ProjectApprovalUpdate($payload));
+            }
+        } catch (\Throwable $e) {
+            // Never block state transitions because notification delivery failed.
+        }
+    }
+
     // ─── Guards ───────────────────────────────────────────────────────────────
 
     private function requireStatus(string $current, array $allowed, string $action): void
@@ -306,6 +366,15 @@ class ProjectApprovalService
                 "Action '{$action}' is only allowed for users assigned to this project.",
             );
         }
+    }
+
+    private function requireProjectMemberOrElevated(Project $project, User $actor, string $action): void
+    {
+        if ($actor->isAdmin() || $actor->isSupervisor()) {
+            return;
+        }
+
+        $this->requireProjectMember($project, $actor, $action);
     }
 
     private function requireProjectCompletion(Project $project, string $action): void

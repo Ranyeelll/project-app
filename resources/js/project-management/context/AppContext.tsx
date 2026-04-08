@@ -356,7 +356,9 @@ export function AppProvider({ children }: AppProviderProps) {
         }
 
         // User is authenticated — resolve page from path
-        if (p.startsWith('/admin')) {
+        if (p === '/admin') {
+          setCurrentPage('admin-dashboard');
+        } else if (p.startsWith('/admin')) {
           const key = p.replace(/^\//, '') || 'admin-dashboard';
           setCurrentPage(key);
         } else if (p === '/dashboard' || p.startsWith('/employee')) {
@@ -464,9 +466,16 @@ export function AppProvider({ children }: AppProviderProps) {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to load users (${res.status})`);
+        }
+        return res.json();
+      })
       .then((data: User[]) => { if (Array.isArray(data)) setUsers(data); })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('refreshUsers failed:', error);
+      });
   }, [currentUser]);
   const refreshProjects = useCallback(() => {
     fetch('/api/projects', {
@@ -474,15 +483,16 @@ export function AppProvider({ children }: AppProviderProps) {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
     })
-      .then(async (res) => {
+      .then((res) => {
         if (!res.ok) {
-          setProjects([]);
-          return [] as Project[];
+          throw new Error(`Failed to load projects (${res.status})`);
         }
-        return (await res.json()) as Project[];
+        return res.json();
       })
       .then((data: Project[]) => { if (Array.isArray(data)) setProjects(data); })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('refreshProjects failed:', error);
+      });
   }, []);
   const refreshTasks = useCallback(() => {
     fetch('/api/tasks', {
@@ -491,11 +501,15 @@ export function AppProvider({ children }: AppProviderProps) {
       cache: 'no-store',
     })
       .then((res) => {
-        if (!res.ok) return [] as Task[];
+        if (!res.ok) {
+          throw new Error(`Failed to load tasks (${res.status})`);
+        }
         return res.json();
       })
       .then((data: Task[]) => { if (Array.isArray(data)) setTasks(data); })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('refreshTasks failed:', error);
+      });
   }, []);
   const refreshMedia = useCallback(() => {
     fetch('/api/media', {
@@ -504,11 +518,15 @@ export function AppProvider({ children }: AppProviderProps) {
       cache: 'no-store',
     })
       .then((res) => {
-        if (!res.ok) return [] as MediaUpload[];
+        if (!res.ok) {
+          throw new Error(`Failed to load media (${res.status})`);
+        }
         return res.json();
       })
       .then((data: MediaUpload[]) => { if (Array.isArray(data)) setMedia(data); })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('refreshMedia failed:', error);
+      });
   }, []);
   const refreshTimeLogs = useCallback(() => {
     fetch('/api/time-logs', {
@@ -517,11 +535,15 @@ export function AppProvider({ children }: AppProviderProps) {
       cache: 'no-store',
     })
       .then((res) => {
-        if (!res.ok) return [] as TimeLog[];
+        if (!res.ok) {
+          throw new Error(`Failed to load time logs (${res.status})`);
+        }
         return res.json();
       })
       .then((data: TimeLog[]) => { if (Array.isArray(data)) setTimeLogs(data); })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('refreshTimeLogs failed:', error);
+      });
   }, []);
   const refreshBudgetRequests = useCallback(() => {
     fetch('/api/budget-requests', {
@@ -530,11 +552,15 @@ export function AppProvider({ children }: AppProviderProps) {
       cache: 'no-store',
     })
       .then((res) => {
-        if (!res.ok) return [] as BudgetRequest[];
+        if (!res.ok) {
+          throw new Error(`Failed to load budget requests (${res.status})`);
+        }
         return res.json();
       })
       .then((data: BudgetRequest[]) => { if (Array.isArray(data)) setBudgetRequests(data); })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('refreshBudgetRequests failed:', error);
+      });
   }, []);
   const refreshIssues = useCallback(() => {
     fetch('/api/issues', {
@@ -543,11 +569,15 @@ export function AppProvider({ children }: AppProviderProps) {
       cache: 'no-store',
     })
       .then((res) => {
-        if (!res.ok) return [] as Issue[];
+        if (!res.ok) {
+          throw new Error(`Failed to load issues (${res.status})`);
+        }
         return res.json();
       })
       .then((data: Issue[]) => { if (Array.isArray(data)) setIssues(data); })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('refreshIssues failed:', error);
+      });
   }, []);
   const refreshGanttItems = useCallback((projectId: string, previewAs?: string): Promise<void> => {
     const url = previewAs
@@ -558,7 +588,12 @@ export function AppProvider({ children }: AppProviderProps) {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
     })
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to load gantt items (${res.status})`);
+        }
+        return res.json();
+      })
       .then((data: GanttItem[]) => {
         if (!Array.isArray(data)) return;
         setGanttItems((prev) => {
@@ -566,7 +601,9 @@ export function AppProvider({ children }: AppProviderProps) {
           return [...untouched, ...data];
         });
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('refreshGanttItems failed:', error);
+      });
   }, []);
   const refreshGanttDependencies = useCallback((projectId: string) => {
     fetch(`/api/projects/${projectId}/gantt-dependencies`, {
@@ -574,7 +611,12 @@ export function AppProvider({ children }: AppProviderProps) {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
     })
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to load gantt dependencies (${res.status})`);
+        }
+        return res.json();
+      })
       .then((data: GanttDependency[]) => {
         if (!Array.isArray(data)) return;
         setGanttDependencies((prev) => {
@@ -582,7 +624,9 @@ export function AppProvider({ children }: AppProviderProps) {
           return [...untouched, ...data];
         });
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('refreshGanttDependencies failed:', error);
+      });
   }, []);
   const refreshFormSubmissions = useCallback((projectId: string, formType?: string) => {
     const url = formType
@@ -594,11 +638,15 @@ export function AppProvider({ children }: AppProviderProps) {
       cache: 'no-store',
     })
       .then((res) => {
-        if (!res.ok) return [] as ProjectFormSubmission[];
+        if (!res.ok) {
+          throw new Error(`Failed to load form submissions (${res.status})`);
+        }
         return res.json();
       })
       .then((data: ProjectFormSubmission[]) => { if (Array.isArray(data)) setFormSubmissions(data); })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('refreshFormSubmissions failed:', error);
+      });
   }, []);
   const refreshAll = useCallback(() => {
     refreshUsers();

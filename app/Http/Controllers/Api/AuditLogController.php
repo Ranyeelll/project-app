@@ -431,7 +431,7 @@ class AuditLogController extends Controller
             'snapshot'     => $log->snapshot,
             'context'      => $log->context,
             'sensitive'    => (bool) $log->sensitive_flag,
-            'createdAt'    => $log->created_at?->toISOString(),
+            'createdAt'    => $log->created_at?->toIso8601String(),
         ];
     }
 }
