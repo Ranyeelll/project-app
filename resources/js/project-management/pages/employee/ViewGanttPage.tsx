@@ -7,10 +7,12 @@ import {
   ZoomOutIcon,
   Maximize2Icon,
   CalendarIcon,
+  GanttChartIcon,
 } from 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { GanttItem } from '../../data/mockData';
 import { UserAvatar } from '../../components/ui/UserAvatar';
+import { GanttCalendarView } from '../../components/gantt/GanttCalendarView';
 
 type ZoomLevel = 'week' | 'month' | 'quarter';
 interface Column { label: string; subLabel?: string; startDate: Date; endDate: Date; }
@@ -112,6 +114,7 @@ export function ViewGanttPage() {
   );
 
   const [selectedProject, setSelectedProject] = useState('');
+  const [viewMode, setViewMode] = useState<'gantt' | 'calendar'>('gantt');
   const [zoom, setZoom] = useState<ZoomLevel>('month');
   const [zoomScale, setZoomScale] = useState(1);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
@@ -383,21 +386,58 @@ export function ViewGanttPage() {
           ))}
         </div>
         <div className="flex items-center gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex items-center dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg overflow-hidden">
+            <button
+              onClick={() => setViewMode('gantt')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                viewMode === 'gantt' ? 'bg-green-primary text-black' : 'dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text'
+              }`}
+            >
+              <GanttChartIcon size={13} /> Gantt
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                viewMode === 'calendar' ? 'bg-green-primary text-black' : 'dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text'
+              }`}
+            >
+              <CalendarIcon size={13} /> Calendar
+            </button>
+          </div>
+
+          {/* Zoom level - only show in gantt view */}
+          {viewMode === 'gantt' && (
           <div className="flex items-center dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg overflow-hidden">
             {(['week','month','quarter'] as ZoomLevel[]).map(z => (
               <button key={z} onClick={() => setZoom(z)} className={`px-3 py-1.5 text-xs font-medium transition-colors capitalize ${zoom === z ? 'bg-green-primary text-black' : 'dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text'}`}>{z}</button>
             ))}
           </div>
+          )}
+          {viewMode === 'gantt' && (
           <div className="flex items-center gap-1 dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg px-1.5 py-1">
             <button onClick={zoomOut} disabled={zoomScale <= MIN_SCALE} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted disabled:opacity-30"><ZoomOutIcon size={13} /></button>
             <button onClick={() => setZoomScale(1)} className="px-1.5 py-0.5 text-[10px] font-semibold rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted min-w-[36px] text-center">{Math.round(zoomScale * 100)}%</button>
             <button onClick={zoomIn} disabled={zoomScale >= MAX_SCALE} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted disabled:opacity-30"><ZoomInIcon size={13} /></button>
             <button onClick={() => setZoomScale(1)} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted"><Maximize2Icon size={12} /></button>
           </div>
+          )}
         </div>
       </div>
 
+      {/* Calendar View */}
+      {viewMode === 'calendar' && (
+        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card overflow-hidden" style={{ height: '70vh' }}>
+          <GanttCalendarView
+            items={projectItems}
+            users={users}
+          />
+        </div>
+      )}
+
       {/* Chart */}
+      {viewMode === 'gantt' && (
+      <>
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card overflow-hidden">
         {/* Column headers */}
         <div className="flex dark:border-dark-border border-b border-light-border sticky top-0 z-10 dark:bg-dark-card bg-white">
@@ -620,6 +660,8 @@ export function ViewGanttPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

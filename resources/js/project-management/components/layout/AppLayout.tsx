@@ -10,7 +10,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSidebarMouseEnter = useCallback(() => {
-    // Clear any pending close timeout
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
@@ -19,7 +18,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, []);
 
   const handleSidebarMouseLeave = useCallback(() => {
-    // Add small delay before closing to prevent flicker
     hoverTimeoutRef.current = setTimeout(() => {
       setSidebarExpanded(false);
     }, 150);
@@ -42,12 +40,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         onMouseEnter={handleSidebarMouseEnter}
         onMouseLeave={handleSidebarMouseLeave}
       />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden lg:ml-16">
+      {/* Main content shifts when sidebar expands */}
+      <div className={`flex-1 flex flex-col min-w-0 overflow-hidden transition-[margin] duration-200 ease-out ${sidebarExpanded ? 'lg:ml-64' : 'lg:ml-16'}`}>
         <Header onMenuToggle={() => setSidebarOpen((o) => !o)} />
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-6">{children}</main>
       </div>
-
-      {/* Chat feature removed */}
     </div>);
 
 }

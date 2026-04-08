@@ -9,10 +9,12 @@ import {
   ZoomOutIcon,
   Maximize2Icon,
   CalendarIcon,
+  GanttChartIcon,
 } from 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { GanttItem, GanttDependency, User } from '../../data/mockData';
 import { GanttItemForm } from '../../components/gantt/GanttItemForm';
+import { GanttCalendarView } from '../../components/gantt/GanttCalendarView';
 import { UserAvatar } from '../../components/ui/UserAvatar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -121,6 +123,7 @@ export function GanttPage() {
   const isAdmin = currentUser?.department === 'Admin';
 
   const [selectedProject, setSelectedProject] = useState('');
+  const [viewMode, setViewMode] = useState<'gantt' | 'calendar'>('gantt');
   const [zoom, setZoom] = useState<ZoomLevel>('month');
   const [zoomScale, setZoomScale] = useState(1);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
@@ -590,20 +593,44 @@ export function GanttPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Zoom level */}
+          {/* View Mode Toggle */}
           <div className="flex items-center dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg overflow-hidden">
-            {(['week','month','quarter'] as ZoomLevel[]).map(z => (
-              <button key={z} onClick={() => setZoom(z)} className={`px-3 py-1.5 text-xs font-medium transition-colors capitalize ${zoom === z ? 'bg-green-primary text-black' : 'dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text'}`}>{z}</button>
-            ))}
+            <button
+              onClick={() => setViewMode('gantt')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                viewMode === 'gantt' ? 'bg-green-primary text-black' : 'dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text'
+              }`}
+            >
+              <GanttChartIcon size={13} /> Gantt
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                viewMode === 'calendar' ? 'bg-green-primary text-black' : 'dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text'
+              }`}
+            >
+              <CalendarIcon size={13} /> Calendar
+            </button>
           </div>
 
-          {/* Zoom scale */}
-          <div className="flex items-center gap-1 dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg px-1.5 py-1">
-            <button onClick={zoomOut} disabled={zoomScale <= MIN_SCALE} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text disabled:opacity-30"><ZoomOutIcon size={13} /></button>
-            <button onClick={() => setZoomScale(1)} className="px-1.5 py-0.5 text-[10px] font-semibold rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted min-w-[36px] text-center">{Math.round(zoomScale * 100)}%</button>
-            <button onClick={zoomIn} disabled={zoomScale >= MAX_SCALE} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text disabled:opacity-30"><ZoomInIcon size={13} /></button>
-            <button onClick={() => setZoomScale(1)} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text"><Maximize2Icon size={12} /></button>
-          </div>
+          {/* Zoom level - only show in gantt view */}
+          {viewMode === 'gantt' && (
+            <div className="flex items-center dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg overflow-hidden">
+              {(['week','month','quarter'] as ZoomLevel[]).map(z => (
+                <button key={z} onClick={() => setZoom(z)} className={`px-3 py-1.5 text-xs font-medium transition-colors capitalize ${zoom === z ? 'bg-green-primary text-black' : 'dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text'}`}>{z}</button>
+              ))}
+            </div>
+          )}
+
+          {/* Zoom scale - only show in gantt view */}
+          {viewMode === 'gantt' && (
+            <div className="flex items-center gap-1 dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg px-1.5 py-1">
+              <button onClick={zoomOut} disabled={zoomScale <= MIN_SCALE} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text disabled:opacity-30"><ZoomOutIcon size={13} /></button>
+              <button onClick={() => setZoomScale(1)} className="px-1.5 py-0.5 text-[10px] font-semibold rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted min-w-[36px] text-center">{Math.round(zoomScale * 100)}%</button>
+              <button onClick={zoomIn} disabled={zoomScale >= MAX_SCALE} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text disabled:opacity-30"><ZoomInIcon size={13} /></button>
+              <button onClick={() => setZoomScale(1)} className="p-1 rounded dark:text-dark-muted dark:hover:text-dark-text text-light-muted hover:text-light-text"><Maximize2Icon size={12} /></button>
+            </div>
+          )}
 
           <button
             onClick={() => { setEditItem(null); setAddParent(null); setShowForm(true); }}
@@ -614,7 +641,20 @@ export function GanttPage() {
         </div>
       </div>
 
-      {/* ── Chart ───────────────────────────────────────────────────────── */}
+      {/* ── Calendar View ──────────────────────────────────────────────────── */}
+      {viewMode === 'calendar' && (
+        <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card overflow-hidden" style={{ height: '70vh' }}>
+          <GanttCalendarView
+            items={projectItems}
+            users={users}
+            onItemClick={(item) => { setEditItem(item); setAddParent(null); setShowForm(true); }}
+          />
+        </div>
+      )}
+
+      {/* ── Gantt Chart ─────────────────────────────────────────────────────── */}
+      {viewMode === 'gantt' && (
+      <>
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card overflow-hidden">
         {/* Column header row */}
         <div className="flex dark:border-dark-border border-b border-light-border sticky top-0 z-10 dark:bg-dark-card bg-white">
@@ -901,28 +941,28 @@ export function GanttPage() {
         </div>
       </div>
 
-          {/* Timeline slider (horizontal) */}
-          <div className="px-4 mt-2">
-            <style>{`
-              .timeline-range { -webkit-appearance:none; appearance:none; height:10px; background:#f3f4f6; border-radius:999px; outline:none; }
-              .timeline-range:focus { box-shadow: none; }
-              .timeline-range::-webkit-slider-runnable-track { height:10px; background:transparent; }
-              .timeline-range::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:#9ca3af; margin-top:-1px; box-shadow: 0 1px 0 rgba(0,0,0,0.08); }
-              .timeline-range::-moz-range-track { height:10px; background:transparent; }
-              .timeline-range::-moz-range-thumb { width:12px; height:12px; border-radius:50%; background:#9ca3af; border:none; }
-            `}</style>
-            <input
-              aria-label="Timeline horizontal scroll"
-              type="range"
-              min={0}
-              max={scrollMax}
-              value={scrollPos}
-              onChange={handleSliderChange}
-              className="timeline-range w-full"
-            />
-          </div>
+      {/* Timeline slider (horizontal) */}
+      <div className="px-4 mt-2">
+        <style>{`
+          .timeline-range { -webkit-appearance:none; appearance:none; height:10px; background:#f3f4f6; border-radius:999px; outline:none; }
+          .timeline-range:focus { box-shadow: none; }
+          .timeline-range::-webkit-slider-runnable-track { height:10px; background:transparent; }
+          .timeline-range::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:#9ca3af; margin-top:-1px; box-shadow: 0 1px 0 rgba(0,0,0,0.08); }
+          .timeline-range::-moz-range-track { height:10px; background:transparent; }
+          .timeline-range::-moz-range-thumb { width:12px; height:12px; border-radius:50%; background:#9ca3af; border:none; }
+        `}</style>
+        <input
+          aria-label="Timeline horizontal scroll"
+          type="range"
+          min={0}
+          max={scrollMax}
+          value={scrollPos}
+          onChange={handleSliderChange}
+          className="timeline-range w-full"
+        />
+      </div>
 
-          {/* ── Legend ──────────────────────────────────────────────────────── */}
+      {/* ── Legend ──────────────────────────────────────────────────────── */}
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card px-5 py-3">
         <div className="flex items-center gap-5 flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -951,6 +991,8 @@ export function GanttPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* ── GanttItemForm (inline while debugging) ──────────────────────────── */}
       {showForm && (
