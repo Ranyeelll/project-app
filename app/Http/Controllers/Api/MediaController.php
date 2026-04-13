@@ -34,6 +34,7 @@ class MediaController extends Controller
 
         $media = $query->with(['project', 'task', 'uploader'])
             ->orderByDesc('created_at')
+            ->limit(500)
             ->get()
             ->map(fn ($m) => $this->formatMedia($m));
 
@@ -136,6 +137,8 @@ class MediaController extends Controller
      */
     public function download(Media $medium)
     {
+        $this->authorizeMediaAccess($medium);
+
         if (!$medium->file_path || !Storage::disk('public')->exists($medium->file_path)) {
             return response()->json(['error' => 'File not found'], 404);
         }
@@ -151,11 +154,43 @@ class MediaController extends Controller
      */
     public function serve(Media $medium)
     {
+        $this->authorizeMediaAccess($medium);
+
         if (!$medium->file_path || !Storage::disk('public')->exists($medium->file_path)) {
             return response()->json(['error' => 'File not found'], 404);
         }
 
         return Storage::disk('public')->response($medium->file_path);
+    }
+
+    /**
+     * Verify the current user has access to the media's project.
+     */
+    private function authorizeMediaAccess(Media $medium): void
+    {
+        $user = Auth::user();
+        if (!$user) {
+            abort(401);
+        }
+
+        // Admins, superadmins, and Technical dept have full access
+        if ($user->role === 'superadmin' || $user->department === Department::Admin || $user->department === Department::Technical) {
+            return;
+        }
+
+        // Employees must be on the project's team
+        $project = $medium->project;
+        if ($project) {
+            $teamIds = array_map('intval', $project->team_ids ?? []);
+            if (in_array((int) $user->id, $teamIds, true)) {
+                return;
+            }
+            if ((int) $user->id === (int) $project->manager_id || (int) $user->id === (int) $project->project_leader_id) {
+                return;
+            }
+        }
+
+        abort(403, 'You do not have access to this file.');
     }
 
     /**

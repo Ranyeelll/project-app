@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   PlusIcon,
   FileTextIcon,
@@ -13,14 +13,26 @@ import {
 'lucide-react';
 import { MediaUpload } from '../../data/mockData';
 import { useData, useAuth } from '../../context/AppContext';
+import { apiFetch } from '../../utils/apiFetch';
 import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { isSuperadmin } from '../../utils/roles';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 export function ReportsMediaPage() {
   const { media, projects, users, refreshMedia } = useData();
   const { currentUser } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
   const [projectFilter, setProjectFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [uploadModal, setUploadModal] = useState(false);
@@ -66,11 +78,8 @@ export function ReportsMediaPage() {
         formData.append('file', uploadFile);
       }
 
-      const res = await fetch('/api/media', {
+      const res = await apiFetch('/api/media', {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-        },
         body: formData,
       });
 
@@ -97,11 +106,8 @@ export function ReportsMediaPage() {
   };
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(`/api/media/${id}`, {
+      const res = await apiFetch(`/api/media/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Accept': 'application/json',
-        },
       });
       if (!res.ok) {
         alert('Failed to delete media.');
@@ -120,6 +126,9 @@ export function ReportsMediaPage() {
     video: '#8b5cf6',
     text: '#63D44A'
   };
+
+  if (isLoading) return <LoadingSpinner message="Loading reports & media..." />;
+
   return (
     <div className="space-y-5">
       {/* Toolbar */}

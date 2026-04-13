@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   CheckSquareIcon,
   ClockIcon,
   AlertTriangleIcon,
   TrendingUpIcon,
   ArrowUpRightIcon,
-  FolderKanbanIcon } from
+  FolderKanbanIcon,
+  ListTodoIcon,
+  UploadIcon,
+  DollarSignIcon,
+  OctagonAlertIcon } from
 'lucide-react';
 import {
   ResponsiveContainer,
@@ -27,10 +31,21 @@ import { ProgressBar } from '../../components/ui/ProgressBar';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { UserAvatar } from '../../components/ui/UserAvatar';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 export function EmployeeDashboard() {
-  const { tasks, projects, timeLogs, budgetRequests } = useData();
+  const { tasks, projects, users, timeLogs, budgetRequests } = useData();
   const { currentUser } = useAuth();
   const { setCurrentPage } = useNavigation();
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
   const today = new Date();
   const myProjects = projects.filter((p) => (p.teamIds || []).map(String).includes(String(currentUser?.id)));
   const myProjectIds = myProjects.map((p) => p.id);
@@ -145,6 +160,9 @@ export function EmployeeDashboard() {
   const hasMyTaskBreakdownData = myTaskStatusChartData.some((d) => d.count > 0);
   const hasMyHoursTrendData = myHoursTrendData.some((d) => d.hours > 0 || d.completed > 0);
   const myProjectHealthTotal = myProjectHealthData.reduce((sum, item) => sum + item.value, 0);
+
+  if (isLoading) return <LoadingSpinner message="Loading dashboard..." />;
+
   return (
     <div className="space-y-6">
       {/* Welcome */}
@@ -175,6 +193,58 @@ export function EmployeeDashboard() {
             })}
           </p>
         </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <button
+          onClick={() => setCurrentPage('employee-tasks')}
+          className="flex items-center gap-3 dark:bg-dark-card dark:border-dark-border dark:hover:border-green-primary/40 bg-white border border-light-border hover:border-green-primary/40 rounded-card p-3 transition-colors group"
+        >
+          <div className="w-8 h-8 rounded-lg bg-green-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-green-primary/25 transition-colors">
+            <ListTodoIcon size={15} className="text-green-primary" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-xs font-semibold dark:text-dark-text text-light-text">My Tasks</p>
+            <p className="text-[10px] dark:text-dark-subtle text-light-subtle">Update progress</p>
+          </div>
+        </button>
+        <button
+          onClick={() => setCurrentPage('employee-tasks')}
+          className="flex items-center gap-3 dark:bg-dark-card dark:border-dark-border dark:hover:border-blue-400/40 bg-white border border-light-border hover:border-blue-400/40 rounded-card p-3 transition-colors group"
+        >
+          <div className="w-8 h-8 rounded-lg bg-blue-400/15 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-400/25 transition-colors">
+            <UploadIcon size={15} className="text-blue-400" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-xs font-semibold dark:text-dark-text text-light-text">Submit Report</p>
+            <p className="text-[10px] dark:text-dark-subtle text-light-subtle">Completion report</p>
+          </div>
+        </button>
+        <button
+          onClick={() => setCurrentPage('employee-budget')}
+          className="flex items-center gap-3 dark:bg-dark-card dark:border-dark-border dark:hover:border-yellow-400/40 bg-white border border-light-border hover:border-yellow-400/40 rounded-card p-3 transition-colors group"
+        >
+          <div className="w-8 h-8 rounded-lg bg-yellow-400/15 flex items-center justify-center flex-shrink-0 group-hover:bg-yellow-400/25 transition-colors">
+            <DollarSignIcon size={15} className="text-yellow-400" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-xs font-semibold dark:text-dark-text text-light-text">Budget</p>
+            <p className="text-[10px] dark:text-dark-subtle text-light-subtle">Request funds</p>
+          </div>
+        </button>
+        <button
+          onClick={() => setCurrentPage('employee-issues')}
+          className="flex items-center gap-3 dark:bg-dark-card dark:border-dark-border dark:hover:border-red-400/40 bg-white border border-light-border hover:border-red-400/40 rounded-card p-3 transition-colors group"
+        >
+          <div className="w-8 h-8 rounded-lg bg-red-400/15 flex items-center justify-center flex-shrink-0 group-hover:bg-red-400/25 transition-colors">
+            <OctagonAlertIcon size={15} className="text-red-400" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-xs font-semibold dark:text-dark-text text-light-text">Report Issue</p>
+            <p className="text-[10px] dark:text-dark-subtle text-light-subtle">Flag blockers</p>
+          </div>
+        </button>
       </div>
 
       {/* Stats */}

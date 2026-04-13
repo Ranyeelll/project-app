@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   TrendingUpIcon,
   TrendingDownIcon,
@@ -24,10 +24,21 @@ import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { UserAvatar } from '../../components/ui/UserAvatar';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
 export function MonitorControlPage() {
   const { projects, tasks, issues, setIssues, users, budgetRequests, timeLogs } = useData();
   const { isDark } = useTheme();
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'team' | 'raid'>('overview');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [editModal, setEditModal] = useState<Issue | null>(null);
@@ -215,6 +226,8 @@ export function MonitorControlPage() {
 
   // ── Shared tooltip style ──
   const customTooltipStyle = { backgroundColor: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: '8px', fontSize: '12px', color: textColor };
+
+  if (isLoading) return <LoadingSpinner message="Loading monitor & control..." />;
 
   return (
     <div className="space-y-5">

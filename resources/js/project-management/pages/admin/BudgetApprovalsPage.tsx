@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { apiFetch } from '../../utils/apiFetch';
 import {
   CheckIcon,
   XIcon,
@@ -18,6 +19,7 @@ import { Textarea } from '../../components/ui/Input';
 import { Badge, StatusBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { isSuperadmin, isSupervisor } from '../../utils/roles';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 export function BudgetApprovalsPage() {
   const { currentUser } = useAuth();
   const { budgetRequests, setBudgetRequests, projects, users, refreshBudgetRequests, refreshProjects } = useData();
@@ -32,6 +34,23 @@ export function BudgetApprovalsPage() {
   const queueLabel = isAccountingUser
     ? 'Accounting Queue'
     : (isSupervisorUser ? 'Supervisor Queue' : 'Superadmin Queue');
+
+  const [reviewModal, setReviewModal] = useState<{
+    request: BudgetRequest;
+    action: 'approve' | 'reject' | 'revision';
+  } | null>(null);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
   if (!canManageBudget) {
     return (
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-6">
@@ -42,11 +61,7 @@ export function BudgetApprovalsPage() {
       </div>
     );
   }
-  const [reviewModal, setReviewModal] = useState<{
-    request: BudgetRequest;
-    action: 'approve' | 'reject' | 'revision';
-  } | null>(null);
-  const [reviewComment, setReviewComment] = useState('');
+
   const visibleRequests = budgetRequests.filter((b) => b.status === queueStatus);
   const filtered = visibleRequests;
   const queueAmount = visibleRequests.reduce((s, b) => s + b.amount, 0);
@@ -87,6 +102,7 @@ export function BudgetApprovalsPage() {
   };
   const handleReview = async () => {
     if (!reviewModal) return;
+    setSubmitting(true);
     const approveStatus = isAccountingUser
       ? 'accounting_approved'
       : (isSupervisorUser ? 'supervisor_approved' : 'approved');
@@ -97,7 +113,6 @@ export function BudgetApprovalsPage() {
     } as const;
     const newStatus = statusMap[reviewModal.action];
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
       const body: Record<string, any> = {
         status: newStatus,
         review_comment: reviewComment || null,
@@ -105,13 +120,8 @@ export function BudgetApprovalsPage() {
       if (reviewModal.action === 'revision') {
         body.admin_remarks = reviewComment || null;
       }
-      const response = await fetch(`/api/budget-requests/${reviewModal.request.id}`, {
+      const response = await apiFetch(`/api/budget-requests/${reviewModal.request.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-        },
         body: JSON.stringify(body),
       });
       if (!response.ok) {
@@ -145,6 +155,8 @@ export function BudgetApprovalsPage() {
             : b
         )
       );
+    } finally {
+      setSubmitting(false);
     }
     setReviewModal(null);
     setReviewComment('');
@@ -155,6 +167,7 @@ export function BudgetApprovalsPage() {
     currency: 'PHP',
     maximumFractionDigits: 0
   }).format(n);
+  if (isLoading) return <LoadingSpinner message="Loading data..." />;
   return (
     <div className="space-y-5">
       {/* Stats */}
@@ -451,7 +464,7 @@ export function BudgetApprovalsPage() {
             <Button
             variant={reviewModal?.action === 'approve' ? 'primary' : reviewModal?.action === 'revision' ? 'secondary' : 'danger'}
             onClick={handleReview}
-            disabled={reviewModal?.action === 'revision' && !reviewComment.trim()}>
+            disabled={submitting || (reviewModal?.action === 'revision' && !reviewComment.trim())}>
 
               {reviewModal?.action === 'approve' ?
             (isAccountingUser ? 'Confirm and Forward' : isSupervisorUser ? 'Confirm and Escalate' : 'Confirm Final Approval') :

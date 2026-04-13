@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   PlusIcon,
   SearchIcon,
@@ -10,7 +10,9 @@ import {
   AlertTriangleIcon,
   CalendarIcon,
   DollarSignIcon,
-  UsersIcon } from
+  UsersIcon,
+  ActivityIcon,
+  DownloadIcon } from
 'lucide-react';
 import { useData, useAuth, useNavigation } from '../../context/AppContext';
 import { Project, Task, ApprovalStatus } from '../../data/mockData';
@@ -22,6 +24,10 @@ import { ProgressBar } from '../../components/ui/ProgressBar';
 import { UserAvatar } from '../../components/ui/UserAvatar';
 import { ApprovalActionModal } from '../../components/projects/ApprovalActionModal';
 import { isSupervisor } from '../../utils/roles';
+import { apiFetch } from '../../utils/apiFetch';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { TaskActivityTimeline } from '../../components/projects/TaskActivityTimeline';
+import { downloadCsv } from '../../utils/exportCsv';
 type ModalMode = 'create' | 'edit' | 'view' | null;
 export function ProjectsPage() {
   const { projects, setProjects, users, tasks, setTasks, refreshTasks, refreshProjects } = useData();
@@ -44,6 +50,16 @@ export function ProjectsPage() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [showBudgetWarning, setShowBudgetWarning] = useState(false);
   const [budgetWarningProjects, setBudgetWarningProjects] = useState<Project[]>([]);
+  const [taskActivityTarget, setTaskActivityTarget] = useState<{ id: string; title: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
@@ -58,6 +74,15 @@ export function ProjectsPage() {
     description: '',
     status: 'active',
     priority: 'medium',
+    category: 'development',
+    riskLevel: 'low',
+    beneficiaryType: 'internal',
+    beneficiaryName: '',
+    contactPerson: '',
+    contactEmail: '',
+    contactPhone: '',
+    location: '',
+    objectives: '',
     startDate: '',
     endDate: '',
     budget: '',
@@ -70,7 +95,7 @@ export function ProjectsPage() {
     if (modalMode) return;
 
     const interval = setInterval(() => {
-      fetch('/api/projects')
+      apiFetch('/api/projects')
         .then((res) => res.json())
         .then((data: Project[]) => { if (Array.isArray(data)) setProjects(data); })
         .catch(() => {});
@@ -174,6 +199,15 @@ export function ProjectsPage() {
       description: p.description,
       status: p.status,
       priority: p.priority,
+      category: p.category || 'development',
+      riskLevel: p.riskLevel || 'low',
+      beneficiaryType: p.beneficiaryType || 'internal',
+      beneficiaryName: p.beneficiaryName || '',
+      contactPerson: p.contactPerson || '',
+      contactEmail: p.contactEmail || '',
+      contactPhone: p.contactPhone || '',
+      location: p.location || '',
+      objectives: p.objectives || '',
       startDate: p.startDate,
       endDate: p.endDate,
       budget: String(p.budget),
@@ -193,7 +227,6 @@ export function ProjectsPage() {
     setModalMode('view');
   };
   const handleSave = async () => {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     setSaveError('');
 
     if (form.teamIds.length >= 2 && !form.leaderId) {
@@ -204,9 +237,8 @@ export function ProjectsPage() {
     setSavingProject(true);
     if (modalMode === 'create') {
       try {
-        const res = await fetch('/api/projects', {
+        const res = await apiFetch('/api/projects', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
           body: JSON.stringify({
             name: form.name,
             description: form.description,
@@ -236,14 +268,22 @@ export function ProjectsPage() {
       }
     } else if (modalMode === 'edit' && selectedProject) {
       try {
-        const res = await fetch(`/api/projects/${selectedProject.id}`, {
+        const res = await apiFetch(`/api/projects/${selectedProject.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
           body: JSON.stringify({
             name: form.name,
             description: form.description,
             status: form.status,
             priority: form.priority,
+            category: form.category,
+            risk_level: form.riskLevel,
+            beneficiary_type: form.beneficiaryType,
+            beneficiary_name: form.beneficiaryName,
+            contact_person: form.contactPerson || null,
+            contact_email: form.contactEmail || null,
+            contact_phone: form.contactPhone || null,
+            location: form.location || null,
+            objectives: form.objectives,
             start_date: form.startDate,
             end_date: form.endDate,
             budget: Number(form.budget) || 0,
@@ -271,8 +311,7 @@ export function ProjectsPage() {
   const handleDelete = async (id: string) => {
     setPageError('');
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch(`/api/projects/${id}`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken } });
+      const res = await apiFetch(`/api/projects/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.message || 'Failed to delete project.');
@@ -304,11 +343,9 @@ export function ProjectsPage() {
   const handleEditTask = async () => {
     if (!editingTaskId || !taskForm.title) return;
     setTaskActionError('');
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      const res = await fetch(`/api/tasks/${editingTaskId}`, {
+      const res = await apiFetch(`/api/tasks/${editingTaskId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({
           title: taskForm.title,
           description: taskForm.description,
@@ -333,11 +370,9 @@ export function ProjectsPage() {
   const handleAddTask = async () => {
     if (!selectedProject || !taskForm.title) return;
     setTaskActionError('');
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      const res = await fetch('/api/tasks', {
+      const res = await apiFetch('/api/tasks', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({
           project_id: selectedProject.id,
           title: taskForm.title,
@@ -362,9 +397,8 @@ export function ProjectsPage() {
   };
   const handleDeleteTask = async (taskId: string) => {
     setTaskActionError('');
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken } });
+      const res = await apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.message || 'Failed to delete task.');
@@ -376,11 +410,8 @@ export function ProjectsPage() {
   };
   const handleApprovalConfirm = async (notes: string) => {
     if (!approvalProject || !approvalAction) return;
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    const res = await fetch(`/api/projects/${approvalProject.id}/approval`, {
+    const res = await apiFetch(`/api/projects/${approvalProject.id}/approval`, {
       method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
       body: JSON.stringify({ action: approvalAction, notes }),
     });
     if (!res.ok) {
@@ -395,16 +426,9 @@ export function ProjectsPage() {
     setApprovalAction('');
   };
   const handleArchive = async (id: string) => {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-
     try {
-      const res = await fetch(`/api/projects/${id}`, {
+      const res = await apiFetch(`/api/projects/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-        },
         body: JSON.stringify({ status: 'archived' }),
       });
 
@@ -485,6 +509,7 @@ export function ProjectsPage() {
   );
   const projectTasks = (projectId: string) =>
   tasks.filter((t) => t.projectId === projectId);
+  if (isLoading) return <LoadingSpinner message="Loading data..." />;
   return (
     <div className="space-y-5">
       {/* Toolbar */}
@@ -515,15 +540,32 @@ export function ProjectsPage() {
             onChange={(e) => setApprovalFilter(e.target.value)}
             className="w-40" />
         </div>
-        {isAdmin && (
+        <div className="flex items-center gap-2">
           <Button
-            variant="primary"
-            icon={<PlusIcon size={14} />}
-            onClick={openCreate}>
-
-            New Project
+            variant="outline"
+            size="sm"
+            icon={<DownloadIcon size={14} />}
+            onClick={() => {
+              const headers = ['Name', 'Status', 'Priority', 'Category', 'Approval', 'Budget', 'Spent', 'Progress', 'Start Date', 'End Date'];
+              const rows = filtered.map((p) => [
+                p.name, p.status, p.priority, p.category || '', p.approvalStatus || '', String(p.budget), String(p.spent),
+                String(Math.round((tasks.filter((t) => t.projectId === p.id && t.status === 'completed').length / Math.max(tasks.filter((t) => t.projectId === p.id).length, 1)) * 100)),
+                p.startDate, p.endDate,
+              ]);
+              downloadCsv('projects', headers, rows);
+            }}
+          >
+            Export CSV
           </Button>
-        )}
+          {isAdmin && (
+            <Button
+              variant="primary"
+              icon={<PlusIcon size={14} />}
+              onClick={openCreate}>
+              New Project
+            </Button>
+          )}
+        </div>
       </div>
 
       {pageError && (
@@ -649,6 +691,19 @@ export function ProjectsPage() {
                     Budget
                   </div>
                 </div>
+              </div>
+
+              {/* Timestamps */}
+              <div className="flex items-center gap-3 text-xs dark:text-dark-subtle text-light-subtle">
+                <span className="flex items-center gap-1" title="Created">
+                  <CalendarIcon size={11} />
+                  {new Date(project.createdAt).toLocaleDateString()}
+                </span>
+                {project.updatedAt && project.updatedAt !== project.createdAt && (
+                  <span className="flex items-center gap-1" title="Last updated">
+                    Updated {new Date(project.updatedAt).toLocaleDateString()}
+                  </span>
+                )}
               </div>
 
               {/* Footer */}
@@ -806,7 +861,7 @@ export function ProjectsPage() {
         isOpen={modalMode === 'edit'}
         onClose={() => { if (!savingProject) { setModalMode(null); setSaveError(''); } }}
         title="Edit Project"
-        size="md"
+        size="lg"
         footer={
         <>
             <Button variant="secondary" onClick={() => { if (!savingProject) { setModalMode(null); setSaveError(''); } }} disabled={savingProject}>
@@ -900,6 +955,89 @@ export function ProjectsPage() {
               } />
 
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Category"
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+              options={[
+                { value: 'development', label: 'Development' },
+                { value: 'maintenance', label: 'Maintenance' },
+                { value: 'research', label: 'Research' },
+                { value: 'infrastructure', label: 'Infrastructure' },
+                { value: 'consultation', label: 'Consultation' },
+              ]}
+            />
+            <Select
+              label="Risk Level"
+              value={form.riskLevel}
+              onChange={(e) => setForm({ ...form, riskLevel: e.target.value })}
+              options={[
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' },
+              ]}
+            />
+          </div>
+
+          {/* Stakeholder Info */}
+          <div className="pt-2 border-t dark:border-dark-border border-light-border">
+            <p className="text-xs font-semibold dark:text-dark-muted text-light-muted uppercase tracking-wider mb-3">Stakeholder Info</p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <Select
+                  label="Beneficiary Type"
+                  value={form.beneficiaryType}
+                  onChange={(e) => setForm({ ...form, beneficiaryType: e.target.value })}
+                  options={[
+                    { value: 'internal', label: 'Internal' },
+                    { value: 'external', label: 'External' },
+                  ]}
+                />
+                <Input
+                  label="Beneficiary Name"
+                  placeholder="e.g. IT Department"
+                  value={form.beneficiaryName}
+                  onChange={(e) => setForm({ ...form, beneficiaryName: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <Input
+                  label="Contact Person"
+                  placeholder="Full name"
+                  value={form.contactPerson}
+                  onChange={(e) => setForm({ ...form, contactPerson: e.target.value })}
+                />
+                <Input
+                  label="Contact Email"
+                  type="email"
+                  placeholder="email@example.com"
+                  value={form.contactEmail}
+                  onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
+                />
+                <Input
+                  label="Contact Phone"
+                  placeholder="+63..."
+                  value={form.contactPhone}
+                  onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
+                />
+              </div>
+              <Input
+                label="Location / Address"
+                placeholder="Project location"
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+              />
+              <Textarea
+                label="Objectives"
+                placeholder="Project goals and objectives..."
+                value={form.objectives}
+                onChange={(e) => setForm({ ...form, objectives: e.target.value })}
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Start Date"
@@ -1042,10 +1180,57 @@ export function ProjectsPage() {
                 {selectedProject.description}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <StatusBadge status={selectedProject.status} />
               <PriorityBadge priority={selectedProject.priority} />
+              {selectedProject.category && (
+                <span className="px-2 py-0.5 text-xs rounded-full bg-blue-500/15 text-blue-400 capitalize">
+                  {selectedProject.category}
+                </span>
+              )}
+              {selectedProject.riskLevel && selectedProject.riskLevel !== 'low' && (
+                <span className={`px-2 py-0.5 text-xs rounded-full ${selectedProject.riskLevel === 'high' ? 'bg-red-500/15 text-red-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
+                  Risk: {selectedProject.riskLevel.charAt(0).toUpperCase() + selectedProject.riskLevel.slice(1)}
+                </span>
+              )}
             </div>
+
+            {/* Stakeholder & Project Details */}
+            {(selectedProject.beneficiaryName || selectedProject.objectives || selectedProject.location) && (
+              <div className="dark:bg-dark-card2 bg-light-card2 rounded-lg p-3 space-y-2">
+                {selectedProject.beneficiaryName && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs dark:text-dark-subtle text-light-subtle min-w-[80px]">Beneficiary</span>
+                    <span className="text-sm dark:text-dark-text text-light-text">
+                      {selectedProject.beneficiaryName}
+                      {selectedProject.beneficiaryType && (
+                        <span className="text-xs dark:text-dark-subtle text-light-subtle ml-1">({selectedProject.beneficiaryType})</span>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {(selectedProject.contactPerson || selectedProject.contactEmail || selectedProject.contactPhone) && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs dark:text-dark-subtle text-light-subtle min-w-[80px]">Contact</span>
+                    <span className="text-sm dark:text-dark-text text-light-text">
+                      {[selectedProject.contactPerson, selectedProject.contactEmail, selectedProject.contactPhone].filter(Boolean).join(' · ')}
+                    </span>
+                  </div>
+                )}
+                {selectedProject.location && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs dark:text-dark-subtle text-light-subtle min-w-[80px]">Location</span>
+                    <span className="text-sm dark:text-dark-text text-light-text">{selectedProject.location}</span>
+                  </div>
+                )}
+                {selectedProject.objectives && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs dark:text-dark-subtle text-light-subtle min-w-[80px]">Objectives</span>
+                    <span className="text-sm dark:text-dark-text text-light-text whitespace-pre-line">{selectedProject.objectives}</span>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="dark:bg-dark-card2 bg-light-card2 rounded-lg p-3">
                 <div className="text-xs dark:text-dark-subtle text-light-subtle mb-1">
@@ -1277,6 +1462,13 @@ export function ProjectsPage() {
                           {task.progress}%
                         </span>
                         <button
+                          onClick={() => setTaskActivityTarget({ id: task.id, title: task.title })}
+                          className="p-1 rounded dark:text-dark-muted dark:hover:bg-dark-card dark:hover:text-green-primary text-light-muted hover:bg-light-card hover:text-green-primary transition-colors"
+                          title="View activity"
+                        >
+                          <ActivityIcon size={12} />
+                        </button>
+                        <button
                           onClick={() => openEditTask(task)}
                           className="p-1 rounded dark:text-dark-muted dark:hover:bg-dark-card dark:hover:text-green-primary text-light-muted hover:bg-light-card hover:text-green-primary transition-colors"
                           title="Edit task"
@@ -1338,6 +1530,24 @@ export function ProjectsPage() {
           onConfirm={handleApprovalConfirm}
         />
       )}
+
+      {/* Task Activity Timeline Modal */}
+      <Modal
+        isOpen={!!taskActivityTarget}
+        onClose={() => setTaskActivityTarget(null)}
+        title={taskActivityTarget ? `Activity — ${taskActivityTarget.title}` : 'Task Activity'}
+        size="md"
+        footer={
+          <Button variant="secondary" onClick={() => setTaskActivityTarget(null)}>
+            Close
+          </Button>
+        }>
+        {taskActivityTarget && (
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <TaskActivityTimeline taskId={taskActivityTarget.id} />
+          </div>
+        )}
+      </Modal>
     </div>);
 
 }

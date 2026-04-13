@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PlusIcon, AlertTriangleIcon, EditIcon } from 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { Issue } from '../../data/mockData';
@@ -6,8 +6,11 @@ import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
+import { apiFetch } from '../../utils/apiFetch';
+import { parseApiError } from '../../utils/parseApiError';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 export function ReportIssuePage() {
-  const { issues, setIssues, projects, refreshIssues } = useData();
+  const { issues, setIssues, projects, users, refreshIssues } = useData();
   const { currentUser } = useAuth();
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState<Issue | null>(null);
@@ -19,12 +22,24 @@ export function ReportIssuePage() {
     severity: 'medium'
   });
   const myIssues = issues.filter((i) => String(i.reportedBy) === String(currentUser?.id));
+  const [isLoading, setIsLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
   const handleCreate = async () => {
+    setSubmitting(true);
+    setFormError(null);
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch('/api/issues', {
+      const res = await apiFetch('/api/issues', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({
           project_id: form.projectId,
           title: form.title,
@@ -36,18 +51,25 @@ export function ReportIssuePage() {
       });
       if (res.ok) {
         refreshIssues();
+        setCreateModal(false);
+        setForm({
+          projectId: projects[0]?.id || '',
+          title: '',
+          description: '',
+          type: 'issue',
+          severity: 'medium'
+        });
+      } else {
+        setFormError(await parseApiError(res, 'Failed to report issue.'));
       }
-    } catch { /* ignore */ }
-    setCreateModal(false);
-    setForm({
-      projectId: projects[0]?.id || '',
-      title: '',
-      description: '',
-      type: 'issue',
-      severity: 'medium'
-    });
+    } catch {
+      setFormError('Network error. Please check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
   const openEdit = (issue: Issue) => {
+    setFormError(null);
     setEditModal(issue);
     setForm({
       projectId: issue.projectId,
@@ -59,11 +81,11 @@ export function ReportIssuePage() {
   };
   const handleEdit = async () => {
     if (!editModal) return;
+    setSubmitting(true);
+    setFormError(null);
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch(`/api/issues/${editModal.id}`, {
+      const res = await apiFetch(`/api/issues/${editModal.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({
           title: form.title,
           description: form.description,
@@ -73,9 +95,15 @@ export function ReportIssuePage() {
       });
       if (res.ok) {
         refreshIssues();
+        setEditModal(null);
+      } else {
+        setFormError(await parseApiError(res, 'Failed to update issue.'));
       }
-    } catch { /* ignore */ }
-    setEditModal(null);
+    } catch {
+      setFormError('Network error. Please check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
   const TYPE_COLORS: Record<string, string> = {
     risk: 'danger',
@@ -83,6 +111,7 @@ export function ReportIssuePage() {
     issue: 'danger',
     dependency: 'info'
   };
+  if (isLoading) return <LoadingSpinner message="Loading data..." />;
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -101,6 +130,7 @@ export function ReportIssuePage() {
               type: 'issue',
               severity: 'medium'
             });
+            setFormError(null);
             setCreateModal(true);
           }}>
 
@@ -195,9 +225,9 @@ export function ReportIssuePage() {
             <Button
             variant="primary"
             onClick={handleCreate}
-            disabled={!form.title || !form.description}>
+            disabled={submitting || !form.title || !form.description}>
 
-              Submit Report
+              {submitting ? 'Submitting...' : 'Submit Report'}
             </Button>
           </>
         }>
@@ -298,6 +328,7 @@ export function ReportIssuePage() {
             }
             rows={4} />
 
+          {formError && <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded p-2">{formError}</div>}
         </div>
       </Modal>
 
@@ -312,8 +343,8 @@ export function ReportIssuePage() {
             <Button variant="secondary" onClick={() => setEditModal(null)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleEdit}>
-              Save Changes
+            <Button variant="primary" onClick={handleEdit} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </>
         }>
@@ -398,6 +429,7 @@ export function ReportIssuePage() {
             }
             rows={4} />
 
+          {formError && <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded p-2">{formError}</div>}
         </div>
       </Modal>
     </div>);

@@ -25,6 +25,7 @@ class IssueController extends Controller
         }
 
         $items = $query->orderByDesc('created_at')
+            ->limit(500)
             ->get()
             ->map(fn ($i) => $this->formatIssue($i));
 

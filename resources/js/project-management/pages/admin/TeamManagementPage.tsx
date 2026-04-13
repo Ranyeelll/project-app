@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   PlusIcon,
   SearchIcon,
@@ -10,7 +10,8 @@ import {
   ClipboardCopyIcon,
   CheckCircleIcon,
   ShieldCheckIcon,
-  ShieldIcon } from
+  ShieldIcon,
+  DownloadIcon } from
 'lucide-react';
 import { useData } from '../../context/AppContext';
 import { useAuth } from '../../context/AppContext';
@@ -18,12 +19,44 @@ import { User } from '../../data/mockData';
 import { Button } from '../../components/ui/Button';
 import { Input, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
+import { apiFetch } from '../../utils/apiFetch';
 import { Badge, StatusBadge } from '../../components/ui/Badge';
 import { UserAvatar } from '../../components/ui/UserAvatar';
 import { isSuperadmin } from '../../utils/roles';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { downloadCsv } from '../../utils/exportCsv';
 export function TeamManagementPage() {
   const { currentUser } = useAuth();
   const { users, setUsers } = useData();
+
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [recoveryInfo, setRecoveryInfo] = useState<{ code: string; name: string; id: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'employee',
+    department: 'Employee',
+    position: '',
+    status: 'active'
+  });
 
   if (!isSuperadmin(currentUser?.role)) {
     return (
@@ -35,24 +68,6 @@ export function TeamManagementPage() {
       </div>
     );
   }
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [recoveryInfo, setRecoveryInfo] = useState<{ code: string; name: string; id: string } | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [saveError, setSaveError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    role: 'employee',
-    department: 'Employee',
-    position: '',
-    status: 'active'
-  });
 
   // Department options for the dropdown
   const DEPARTMENTS: { value: string; label: string }[] = [
@@ -113,14 +128,12 @@ export function TeamManagementPage() {
       return;
     }
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     setSaving(true);
 
     if (modalMode === 'create') {
       try {
-        const res = await fetch('/api/users', {
+        const res = await apiFetch('/api/users', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
           body: JSON.stringify({
             name: form.name,
             email: form.email,
@@ -155,9 +168,8 @@ export function TeamManagementPage() {
       }
     } else if (modalMode === 'edit' && selectedUser) {
       try {
-        const res = await fetch(`/api/users/${selectedUser.id}`, {
+        const res = await apiFetch(`/api/users/${selectedUser.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
           body: JSON.stringify({
             name: form.name,
             email: form.email,
@@ -188,11 +200,9 @@ export function TeamManagementPage() {
     setSaving(false);
   };
   const handleDelete = async (id: string) => {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      await fetch(`/api/users/${id}`, {
+      await apiFetch(`/api/users/${id}`, {
         method: 'DELETE',
-        headers: { 'X-CSRF-TOKEN': csrfToken },
       });
     } catch { /* silent */ }
     setUsers((prev) => prev.filter((u) => u.id !== id));
@@ -202,11 +212,9 @@ export function TeamManagementPage() {
     const user = users.find((u) => u.id === id);
     if (!user) return;
     const newStatus = user.status === 'active' ? 'inactive' : 'active';
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      await fetch(`/api/users/${id}`, {
+      await apiFetch(`/api/users/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({ status: newStatus }),
       });
     } catch { /* silent */ }
@@ -217,11 +225,9 @@ export function TeamManagementPage() {
     );
   };
   const handleRegenerate = async (id: string, name: string) => {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      const res = await fetch(`/api/users/${id}/regenerate-recovery`, {
+      const res = await apiFetch(`/api/users/${id}/regenerate-recovery`, {
         method: 'POST',
-        headers: { 'X-CSRF-TOKEN': csrfToken },
       });
       if (res.ok) {
         const data = await res.json();
@@ -243,6 +249,7 @@ export function TeamManagementPage() {
     QA: '#f59e0b',
     Backend: '#3b82f6'
   };
+  if (isLoading) return <LoadingSpinner message="Loading data..." />;
   return (
     <div className="space-y-5">
       {/* Toolbar */}
@@ -280,13 +287,26 @@ export function TeamManagementPage() {
             className="w-36" />
 
         </div>
-        <Button
-          variant="primary"
-          icon={<PlusIcon size={14} />}
-          onClick={openCreate}>
-
-          Add Employee
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<DownloadIcon size={14} />}
+            onClick={() => {
+              const headers = ['Name', 'Email', 'Department', 'Position', 'Role', 'Status'];
+              const rows = filtered.map((u) => [u.name, u.email, u.department || '', u.position || '', u.role, u.isActive ? 'Active' : 'Inactive']);
+              downloadCsv('team-directory', headers, rows);
+            }}
+          >
+            Export CSV
+          </Button>
+          <Button
+            variant="primary"
+            icon={<PlusIcon size={14} />}
+            onClick={openCreate}>
+            Add Employee
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

@@ -1,59 +1,143 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# MAPTECH Project Management System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A web-based project management application for managing projects, tasks, budgets, Gantt timelines, and team operations with role-based access control and comprehensive audit logging.
 
-## About Laravel
+## Technology Stack
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+| Layer | Technology |
+|-------|------------|
+| Backend | Laravel 11 (PHP 8.2+) |
+| Frontend | React 18 + TypeScript |
+| Build | Vite 5 |
+| Styling | Tailwind CSS 3 |
+| Database | PostgreSQL / MySQL |
+| Auth | Session-based (database driver) |
+| Queue | Database driver (ShouldQueue notifications) |
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Features
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- **Project Management** — Full lifecycle with multi-stage approval workflows, archiving, and team assignment
+- **Task Management** — Assignment, progress tracking, time logging, completion reports, review/approval workflows
+- **Gantt Charts** — Interactive timeline visualization with phases, steps, milestones, and dependencies
+- **Budget Management** — Request submission, staged approval (Accounting → Supervisor), and financial reporting with PDF/Excel export
+- **Media Management** — File upload/download with project-level access authorization
+- **Issue Tracking** — Risk, issue, assumption, and dependency tracking
+- **Audit Logging** — Immutable, append-only audit trail for compliance (project approvals, budget changes, exports, config updates)
+- **Notifications** — Queued notifications for budget approvals, task reviews, blockers, and overdue tasks
+- **Role-Based Access** — Superadmin, Supervisor, Admin, Technical, Accounting, and Employee roles with department-based permissions
 
-## Learning Laravel
+## Prerequisites
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+- PHP 8.2+
+- Composer
+- Node.js 18+ & npm
+- PostgreSQL 15+ (or MySQL 8+)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Setup
 
-## Laravel Sponsors
+```bash
+# Clone and install dependencies
+git clone <repository-url>
+cd project-app
+composer install
+npm install
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+# Configure environment
+cp .env.example .env
+php artisan key:generate
 
-### Premium Partners
+# Set up database
+php artisan migrate --seed
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+# Build frontend
+npm run build          # Production
+npm run dev            # Development (Vite HMR)
 
-## Contributing
+# Start the application
+php artisan serve
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Queue Worker
 
-## Code of Conduct
+Notifications are queued asynchronously. Start the queue worker:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan queue:work --tries=3
+```
 
-## Security Vulnerabilities
+### Scheduled Commands
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Register the Laravel scheduler in your system crontab:
+
+```bash
+* * * * * cd /path-to-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+This runs the `tasks:notify-overdue` command daily at 08:00 to send overdue task notifications.
+
+## Environment Variables
+
+Key variables to configure in `.env`:
+
+| Variable | Purpose |
+|----------|---------|
+| `DB_CONNECTION` / `DB_HOST` / `DB_DATABASE` | Database connection |
+| `SESSION_DRIVER` | Must be `database` for production |
+| `QUEUE_CONNECTION` | Set to `database` for async notifications |
+| `TRUSTED_PROXIES` | Comma-separated proxy IPs (or `*` for all) |
+| `APP_DEBUG` | Set to `false` in production |
+
+## Project Structure
+
+```
+app/
+├── Console/Commands/       # Artisan commands (NotifyOverdueTasks)
+├── Enums/                  # PHP enums (ApprovalStatus, Department)
+├── Http/Controllers/Api/   # API controllers
+├── Models/                 # Eloquent models
+├── Notifications/          # Queued notification classes
+└── Services/               # Business logic (AuditService, TaskActivityLogger)
+
+resources/js/project-management/
+├── context/AppContext.tsx   # Central state management & API calls
+├── utils/
+│   ├── apiFetch.ts         # Centralized HTTP client (CSRF, credentials, 401 handling)
+│   └── parseApiError.ts    # Laravel 422 validation error parser
+├── components/ui/          # Reusable UI components (Modal, Button, LoadingSpinner, ErrorBoundary)
+├── constants/              # Shared constants (approvalStatuses)
+└── pages/                  # Page components (admin/, employee/)
+```
+
+## Security Highlights
+
+- **Session-based auth** with server-side invalidation on logout
+- **CSRF protection** via `X-CSRF-TOKEN` header on all state-changing requests
+- **Rate limiting** on login (10/min) and password change (5/15min) endpoints
+- **Media authorization** — download/serve requires project team membership
+- **Password policy** — minimum 12 characters; random defaults for new users
+- **FK integrity** — `nullOnDelete` foreign keys preserve records when users are removed
+- **Immutable audit logs** — append-only with model-level update/delete guards
+- **Global 401 handling** — automatic session-expiry detection and redirect to login
+- **Double-submit protection** — form buttons disabled during API calls
+- **Query result limits** — safety caps on list endpoints (500–1000 records)
+
+## Documentation
+
+Comprehensive system documentation is available at [`docs/SYSTEM_DOCUMENTATION.md`](docs/SYSTEM_DOCUMENTATION.md) (v4.0), covering:
+
+- System architecture and data models
+- API endpoint reference
+- Business process workflows
+- User roles and permissions
+- Deployment and operations guide
+- User manual
+
+Additional documentation:
+- [`AUDIT_LOG_SYSTEM.md`](AUDIT_LOG_SYSTEM.md) — Audit logging architecture
+- [`AUDIT_IMPLEMENTATION.md`](AUDIT_IMPLEMENTATION.md) — Audit implementation guide
+- [`TASK_FORMS_IMPLEMENTATION.md`](TASK_FORMS_IMPLEMENTATION.md) — Task form system
+- [`TASK_ACTIVITY_TIMELINE.md`](TASK_ACTIVITY_TIMELINE.md) — Activity timeline system
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Proprietary — MAPTECH IT Department. Internal use only.

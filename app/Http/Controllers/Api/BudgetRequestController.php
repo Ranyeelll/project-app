@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Notifications\BudgetApprovalNotification;
 use App\Services\AuditService;
 
 class BudgetRequestController extends Controller
@@ -73,9 +74,9 @@ class BudgetRequestController extends Controller
         $data = $request->validate([
             'project_id'   => 'required|exists:projects,id',
             'requested_by' => 'required|exists:users,id',
-            'amount'       => 'required|numeric|min:0',
+            'amount'       => 'required|numeric|min:0|max:99999999.99',
             'type'         => 'sometimes|in:spending,additional_budget',
-            'purpose'      => 'required|string',
+            'purpose'      => 'required|string|max:2000',
             'attachment'   => 'nullable|string',
         ]);
 
@@ -133,6 +134,28 @@ class BudgetRequestController extends Controller
         // Audit log for status changes (approvals, rejections, revision requests)
         if (isset($data['status']) && in_array($data['status'], ['approved', 'rejected', 'revision_requested', 'accounting_approved', 'supervisor_approved'])) {
             $this->audit->budgetRequestApproved($budget_request, $data['status'], $data['review_comment'] ?? null);
+        }
+
+        // Notify the requester about status changes
+        if (isset($data['status']) && in_array($data['status'], ['approved', 'rejected', 'revision_requested', 'accounting_approved', 'supervisor_approved'])) {
+            try {
+                $requester = User::find($budget_request->requested_by);
+                if ($requester) {
+                    $project = Project::find($budget_request->project_id);
+                    $requester->notify(new BudgetApprovalNotification([
+                        'type'       => 'budget_approval',
+                        'budget_id'  => $budget_request->id,
+                        'project_id' => $budget_request->project_id,
+                        'project_name' => $project?->name ?? 'Unknown',
+                        'status'     => $data['status'],
+                        'amount'     => $budget_request->amount,
+                        'message'    => "Your budget request for {$project?->name} has been " . str_replace('_', ' ', $data['status']) . ".",
+                        'remarks'    => $data['admin_remarks'] ?? $data['review_comment'] ?? null,
+                    ]));
+                }
+            } catch (\Throwable $e) {
+                // Don't block budget flow for notification failures
+            }
         }
 
         // Auto-recalculate project budget & spent from approved budget requests
@@ -223,7 +246,13 @@ class BudgetRequestController extends Controller
         $projects = Project::orderBy('name')->get();
         $allRequests = BudgetRequest::all();
 
-        $report = $projects->map(function ($p) use ($allRequests, $inReviewStatuses) {
+        // Pre-compute report costs per project in a single query
+        $reportCostsByProject = Task::where('completion_report_status', 'approved')
+            ->selectRaw('project_id, SUM(report_cost) as total_report_cost')
+            ->groupBy('project_id')
+            ->pluck('total_report_cost', 'project_id');
+
+        $report = $projects->map(function ($p) use ($allRequests, $inReviewStatuses, $reportCostsByProject) {
             $projectRequests = $allRequests->where('project_id', $p->id);
             $approved = $projectRequests->where('status', 'approved');
             $pending  = $projectRequests->whereIn('status', $inReviewStatuses);
@@ -231,17 +260,13 @@ class BudgetRequestController extends Controller
 
             // Separate spending vs additional_budget
             $spendingApproved = $approved->where('type', 'spending');
-            $additionalApproved = $approved->where('type', 'additional_budget');
 
             $totalSpent    = $spendingApproved->sum('amount');
             $totalPending  = $pending->sum('amount');
             $totalRejected = $rejected->sum('amount');
 
-            // Include approved task report costs in spending
-            $reportCosts = Task::where('project_id', $p->id)
-                ->where('completion_report_status', 'approved')
-                ->sum('report_cost');
-            $totalSpent += $reportCosts;
+            // Include approved task report costs from pre-computed map
+            $totalSpent += (float) ($reportCostsByProject[$p->id] ?? 0);
 
             // Budget = base budget + approved additional budget requests
             $budget = (float) $p->budget;

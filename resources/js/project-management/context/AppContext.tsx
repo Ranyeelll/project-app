@@ -18,16 +18,10 @@ import {
   TimeLog,
   GanttItem,
   GanttDependency,
-  ProjectFormSubmission,
-  MOCK_USERS,
-  MOCK_PROJECTS,
-  MOCK_TASKS,
-  MOCK_BUDGET_REQUESTS,
-  MOCK_ISSUES,
-  MOCK_MEDIA,
-  MOCK_TIME_LOGS } from
+  ProjectFormSubmission } from
 '../data/mockData';
 import { isElevatedRole } from '../utils/roles';
+import { apiFetch, setSessionExpiredHandler } from '../utils/apiFetch';
 // ─── Theme Context ───────────────────────────────────────────────────────────
 interface ThemeContextType {
   isDark: boolean;
@@ -47,7 +41,7 @@ interface AuthContextType {
     success: boolean;
     error?: string;
   }>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateCurrentUser: (user: User) => void;
 }
 const AuthContext = createContext<AuthContextType>({
@@ -55,7 +49,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => ({
     success: false
   }),
-  logout: () => {},
+  logout: async () => {},
   updateCurrentUser: () => {}
 });
 // ─── Navigation Context ──────────────────────────────────────────────────────
@@ -126,6 +120,28 @@ const DataContext = createContext<DataContextType>({
   refreshFormSubmissions: () => {},
   refreshAll: () => {}
 });
+// ─── Notification Context ────────────────────────────────────────────────
+interface ApiNotification {
+  id: string;
+  type: string;
+  data: Record<string, any>;
+  read: boolean;
+  createdAt: string;
+}
+interface NotificationContextType {
+  notifications: ApiNotification[];
+  unreadCount: number;
+  markAsRead: (id: string) => void;
+  markAllAsRead: () => void;
+  refreshNotifications: () => void;
+}
+const NotificationContext = createContext<NotificationContextType>({
+  notifications: [],
+  unreadCount: 0,
+  markAsRead: () => {},
+  markAllAsRead: () => {},
+  refreshNotifications: () => {},
+});
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 export function useTheme() {
   return useContext(ThemeContext);
@@ -138,6 +154,9 @@ export function useNavigation() {
 }
 export function useData() {
   return useContext(DataContext);
+}
+export function useNotifications() {
+  return useContext(NotificationContext);
 }
 // ─── Provider ────────────────────────────────────────────────────────────────
 interface AppProviderProps {
@@ -195,12 +214,6 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   }, [currentUser]);
 
-  // Clear potentially stale cross-account caches when account changes.
-  useEffect(() => {
-    if (!currentUser) return;
-    localStorage.removeItem('maptech-users');
-    localStorage.removeItem('maptech-projects');
-  }, [currentUser?.id]);
 
   const login = useCallback(
     async (
@@ -208,15 +221,8 @@ export function AppProvider({ children }: AppProviderProps) {
       password: string
     ): Promise<{ success: boolean; error?: string }> => {
       try {
-        const csrfToken =
-          document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-        const res = await fetch('/api/login', {
+        const res = await apiFetch('/api/login', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': csrfToken,
-          },
-          credentials: 'include',
           body: JSON.stringify({ email, password }),
         });
         const data = await res.json();
@@ -232,8 +238,12 @@ export function AppProvider({ children }: AppProviderProps) {
     []
   );
 
-  const logout = useCallback(() => {
-    // Clear overdue-dismissed flag so modal shows again on next login
+  const logout = useCallback(async () => {
+    try {
+      await apiFetch('/api/logout', { method: 'POST' });
+    } catch {
+      // Network failure — still clear client state
+    }
     if (currentUser) {
       sessionStorage.removeItem(`overdue-dismissed-${currentUser.id}`);
     }
@@ -244,6 +254,19 @@ export function AppProvider({ children }: AppProviderProps) {
 
   const updateCurrentUser = useCallback((user: User) => {
     setCurrentUser(user);
+  }, []);
+
+  // Register global 401 handler so any apiFetch 401 triggers logout
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      setCurrentUser(null);
+      localStorage.removeItem('maptech-current-user');
+      setCurrentPage('login');
+      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        window.history.replaceState({}, '', '/');
+      }
+    });
+    return () => setSessionExpiredHandler(() => {});
   }, []);
   // Navigation — default to 'login'; will be updated once auth is checked
   const [currentPage, setCurrentPage] = useState<string>('login');
@@ -283,10 +306,7 @@ export function AppProvider({ children }: AppProviderProps) {
       return;
     }
 
-    fetch('/api/me', {
-      headers: { Accept: 'application/json' },
-      credentials: 'include',
-    })
+    apiFetch('/api/me')
       .then(async (res) => {
         if (!res.ok) {
           throw new Error(`Auth check failed (${res.status})`);
@@ -377,38 +397,18 @@ export function AppProvider({ children }: AppProviderProps) {
     return () => window.removeEventListener('popstate', syncFromPath);
   }, []);
 
-  // ─── Helper: load from localStorage with fallback to mock data ───────────
-  function loadState<T>(key: string, fallback: T): T {
-    try {
-      const saved = localStorage.getItem(key);
-      if (saved) return JSON.parse(saved) as T;
-    } catch { /* ignore corrupt data */ }
-    return fallback;
-  }
-
-  // Data (persisted in localStorage so edits survive page refresh)
-  const [users, setUsers] = useState<User[]>(() => loadState('maptech-users', []));
-  const [projects, setProjects] = useState<Project[]>(() => loadState('maptech-projects', []));
-  const [tasks, setTasks] = useState<Task[]>(() => loadState('maptech-tasks', MOCK_TASKS));
-  const [budgetRequests, setBudgetRequests] =
-    useState<BudgetRequest[]>(() => loadState('maptech-budgetRequests', MOCK_BUDGET_REQUESTS));
-  const [issues, setIssues] = useState<Issue[]>(() => loadState('maptech-issues', MOCK_ISSUES));
-  const [media, setMedia] = useState<MediaUpload[]>(() => loadState('maptech-media', MOCK_MEDIA));
-  const [timeLogs, setTimeLogs] = useState<TimeLog[]>(() => loadState('maptech-timeLogs', MOCK_TIME_LOGS));
-  const [ganttItems, setGanttItems] = useState<GanttItem[]>(() => loadState('maptech-ganttItems', []));
-  const [ganttDependencies, setGanttDependencies] = useState<GanttDependency[]>(() => loadState('maptech-ganttDependencies', []));
+  // Data — API is the single source of truth; state starts empty until fetched
+  const [users, setUsers] = useState<User[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [budgetRequests, setBudgetRequests] = useState<BudgetRequest[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [media, setMedia] = useState<MediaUpload[]>([]);
+  const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
+  const [ganttItems, setGanttItems] = useState<GanttItem[]>([]);
+  const [ganttDependencies, setGanttDependencies] = useState<GanttDependency[]>([]);
   const [formSubmissions, setFormSubmissions] = useState<ProjectFormSubmission[]>([]);
 
-  // Persist every data slice to localStorage whenever it changes
-  useEffect(() => { localStorage.setItem('maptech-users', JSON.stringify(users)); }, [users]);
-  useEffect(() => { localStorage.setItem('maptech-projects', JSON.stringify(projects)); }, [projects]);
-  useEffect(() => { localStorage.setItem('maptech-tasks', JSON.stringify(tasks)); }, [tasks]);
-  useEffect(() => { localStorage.setItem('maptech-budgetRequests', JSON.stringify(budgetRequests)); }, [budgetRequests]);
-  useEffect(() => { localStorage.setItem('maptech-issues', JSON.stringify(issues)); }, [issues]);
-  useEffect(() => { localStorage.setItem('maptech-media', JSON.stringify(media)); }, [media]);
-  useEffect(() => { localStorage.setItem('maptech-timeLogs', JSON.stringify(timeLogs)); }, [timeLogs]);
-  useEffect(() => { localStorage.setItem('maptech-ganttItems', JSON.stringify(ganttItems)); }, [ganttItems]);
-  useEffect(() => { localStorage.setItem('maptech-ganttDependencies', JSON.stringify(ganttDependencies)); }, [ganttDependencies]);
 
   // ─── Load users from the database on mount ───────────────────────────────
   useEffect(() => {
@@ -419,18 +419,14 @@ export function AppProvider({ children }: AppProviderProps) {
     // Chat removed -> always use users listing endpoint
     const usersEndpoint = '/api/users';
 
-    fetch(usersEndpoint, {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    apiFetch(usersEndpoint, { cache: 'no-store' })
       .then((res) => res.json())
       .then((data: User[]) => {
         if (Array.isArray(data)) {
           setUsers(data);
         }
       })
-      .catch(() => { /* fallback to localStorage / mock data already loaded */ });
+      .catch(() => { /* API fetch failed; state remains empty until next retry */ });
   }, [currentUser]);
 
   // ─── Keep currentUser in sync with latest user data from DB ──────────────
@@ -461,11 +457,7 @@ export function AppProvider({ children }: AppProviderProps) {
     // Chat removed -> always use users listing endpoint
     const usersEndpoint = '/api/users';
 
-    fetch(usersEndpoint, {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    apiFetch(usersEndpoint, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load users (${res.status})`);
@@ -478,11 +470,7 @@ export function AppProvider({ children }: AppProviderProps) {
       });
   }, [currentUser]);
   const refreshProjects = useCallback(() => {
-    fetch('/api/projects', {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    apiFetch('/api/projects', { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load projects (${res.status})`);
@@ -495,11 +483,7 @@ export function AppProvider({ children }: AppProviderProps) {
       });
   }, []);
   const refreshTasks = useCallback(() => {
-    fetch('/api/tasks', {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    apiFetch('/api/tasks', { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load tasks (${res.status})`);
@@ -512,11 +496,7 @@ export function AppProvider({ children }: AppProviderProps) {
       });
   }, []);
   const refreshMedia = useCallback(() => {
-    fetch('/api/media', {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    apiFetch('/api/media', { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load media (${res.status})`);
@@ -529,11 +509,7 @@ export function AppProvider({ children }: AppProviderProps) {
       });
   }, []);
   const refreshTimeLogs = useCallback(() => {
-    fetch('/api/time-logs', {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    apiFetch('/api/time-logs', { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load time logs (${res.status})`);
@@ -546,11 +522,7 @@ export function AppProvider({ children }: AppProviderProps) {
       });
   }, []);
   const refreshBudgetRequests = useCallback(() => {
-    fetch('/api/budget-requests', {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    apiFetch('/api/budget-requests', { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load budget requests (${res.status})`);
@@ -563,11 +535,7 @@ export function AppProvider({ children }: AppProviderProps) {
       });
   }, []);
   const refreshIssues = useCallback(() => {
-    fetch('/api/issues', {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    apiFetch('/api/issues', { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load issues (${res.status})`);
@@ -583,11 +551,7 @@ export function AppProvider({ children }: AppProviderProps) {
     const url = previewAs
       ? `/api/projects/${projectId}/gantt-items?preview_as=${previewAs}`
       : `/api/projects/${projectId}/gantt-items`;
-    return fetch(url, {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    return apiFetch(url, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load gantt items (${res.status})`);
@@ -606,11 +570,7 @@ export function AppProvider({ children }: AppProviderProps) {
       });
   }, []);
   const refreshGanttDependencies = useCallback((projectId: string) => {
-    fetch(`/api/projects/${projectId}/gantt-dependencies`, {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    apiFetch(`/api/projects/${projectId}/gantt-dependencies`, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load gantt dependencies (${res.status})`);
@@ -632,11 +592,7 @@ export function AppProvider({ children }: AppProviderProps) {
     const url = formType
       ? `/api/projects/${projectId}/form-submissions?form_type=${formType}`
       : `/api/projects/${projectId}/form-submissions`;
-    fetch(url, {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
+    apiFetch(url, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load form submissions (${res.status})`);
@@ -658,21 +614,57 @@ export function AppProvider({ children }: AppProviderProps) {
     refreshIssues();
   }, [refreshUsers, refreshProjects, refreshTasks, refreshMedia, refreshTimeLogs, refreshBudgetRequests, refreshIssues]);
 
+  // ─── Notifications (fetched from API) ────────────────────────────────
+  const [notifications, setNotifications] = useState<ApiNotification[]>([]);
+
+  const refreshNotifications = useCallback(() => {
+    if (!currentUser) return;
+    apiFetch('/api/notifications', { cache: 'no-store' })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load notifications (${res.status})`);
+        return res.json();
+      })
+      .then((data: ApiNotification[]) => { if (Array.isArray(data)) setNotifications(data); })
+      .catch(() => {});
+  }, [currentUser]);
+
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
+
+  const markAsRead = useCallback((id: string) => {
+    apiFetch(`/api/notifications/${id}/read`, { method: 'POST' }).catch(() => {});
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+  }, []);
+
+  const markAllAsRead = useCallback(() => {
+    apiFetch('/api/notifications/read-all', { method: 'POST' }).catch(() => {});
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }, []);
+
   // ─── Load all data from the database on mount (only when authenticated)
   useEffect(() => {
     if (!currentUser) return;
     refreshAll();
-  }, [refreshAll, currentUser]);
+    refreshNotifications();
+  }, [refreshAll, refreshNotifications, currentUser]);
 
-  // ─── Auto-refresh every 15 seconds (skip while tab is hidden or not authed)
+  // ─── Auto-refresh every 15 seconds (skip while tab is hidden, not authed, or already refreshing)
+  const isRefreshingRef = useRef(false);
   useEffect(() => {
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       if (document.visibilityState === 'hidden') return;
       if (!currentUser) return;
-      refreshAll();
+      if (isRefreshingRef.current) return;
+      isRefreshingRef.current = true;
+      try {
+        refreshAll();
+        refreshNotifications();
+      } finally {
+        // Allow next refresh after a short delay to prevent overlap
+        setTimeout(() => { isRefreshingRef.current = false; }, 2000);
+      }
     }, 15000);
     return () => clearInterval(interval);
-  }, [refreshAll, currentUser]);
+  }, [refreshAll, refreshNotifications, currentUser]);
 
   const themeContextValue = useMemo(() => ({
     isDark,
@@ -742,6 +734,14 @@ export function AppProvider({ children }: AppProviderProps) {
     refreshAll,
   ]);
 
+  const notificationContextValue = useMemo(() => ({
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    refreshNotifications,
+  }), [notifications, unreadCount, markAsRead, markAllAsRead, refreshNotifications]);
+
   return (
     <ThemeContext.Provider
       value={themeContextValue}>
@@ -754,8 +754,10 @@ export function AppProvider({ children }: AppProviderProps) {
 
           <DataContext.Provider
             value={dataContextValue}>
-
-            {children}
+            <NotificationContext.Provider
+              value={notificationContextValue}>
+              {children}
+            </NotificationContext.Provider>
           </DataContext.Provider>
         </NavigationContext.Provider>
       </AuthContext.Provider>

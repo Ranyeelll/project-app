@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FileTextIcon,
   VideoIcon,
@@ -14,10 +14,21 @@ import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { isSuperadmin } from '../../utils/roles';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
 export function ResourcesPage() {
   const { media, projects, users } = useData();
   const { currentUser } = useAuth();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
 
   const [projectFilter, setProjectFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -59,6 +70,8 @@ export function ResourcesPage() {
   const totalFiles = adminMedia.filter((m) => m.type === 'file').length;
   const totalVideos = adminMedia.filter((m) => m.type === 'video').length;
   const totalTexts = adminMedia.filter((m) => m.type === 'text').length;
+
+  if (isLoading) return <LoadingSpinner message="Loading resources..." />;
 
   return (
     <div className="space-y-5">

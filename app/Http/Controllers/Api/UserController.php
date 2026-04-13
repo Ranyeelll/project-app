@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use App\Services\AuditService;
 
 class UserController extends Controller
 {
@@ -118,14 +119,15 @@ class UserController extends Controller
         $data = $request->validate([
             'name'       => 'required|string|max:255',
             'email'      => 'required|email|unique:users,email',
-            'password'   => 'sometimes|string|min:6',
+            'password'   => 'sometimes|string|min:12',
             'role'       => 'required|in:superadmin,supervisor,employee',
             'department' => ['required', Rule::in(Department::values())],
             'position'   => 'nullable|string|max:255',
             'status'     => 'required|in:active,inactive',
         ]);
 
-        $data['password'] = Hash::make($data['password'] ?? 'password123');
+        // Use provided password or generate a secure random one
+        $data['password'] = Hash::make($data['password'] ?? bin2hex(random_bytes(16)));
         $data['must_change_password'] = 1;
 
         // Generate a recovery code (plain shown once, hashed stored)
@@ -133,6 +135,13 @@ class UserController extends Controller
         $data['recovery_code'] = Hash::make($plainCode);
 
         $user = User::create($data);
+
+        AuditService::logUserCreated($user->id, [
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+            'department' => $user->department instanceof Department ? $user->department->value : $user->department,
+        ], Auth::id());
 
         $payload = $this->formatUser($user);
         $payload['recovery_code'] = $plainCode; // shown ONCE to the admin
@@ -148,7 +157,7 @@ class UserController extends Controller
         $data = $request->validate([
             'name'       => 'sometimes|string|max:255',
             'email'      => 'sometimes|email|unique:users,email,' . $user->id,
-            'password'   => 'sometimes|nullable|string|min:6',
+            'password'   => 'sometimes|nullable|string|min:12',
             'role'       => 'sometimes|in:superadmin,supervisor,employee',
             'department' => ['sometimes', Rule::in(Department::values())],
             'position'   => 'nullable|string|max:255',
@@ -162,7 +171,35 @@ class UserController extends Controller
             unset($data['password']);
         }
 
+        $oldRole = $user->role;
+        $oldDept = $user->department instanceof Department ? $user->department->value : ($user->department ?? '');
+        $oldData = $user->only(['name', 'email', 'role', 'department', 'position', 'status']);
+
         $user->update($data);
+
+        $newData = $user->only(['name', 'email', 'role', 'department', 'position', 'status']);
+        $changes = [];
+        foreach ($newData as $key => $val) {
+            $oldVal = $oldData[$key] ?? null;
+            $newVal = $val instanceof Department ? $val->value : $val;
+            $oldCompare = $oldVal instanceof Department ? $oldVal->value : $oldVal;
+            if ($oldCompare !== $newVal) {
+                $changes[$key] = ['from' => $oldCompare, 'to' => $newVal];
+            }
+        }
+        if (!empty($changes)) {
+            AuditService::logUserUpdated($user->id, $changes, Auth::id());
+        }
+
+        // Log specific permission-related changes
+        $newRole = $user->role;
+        $newDept = $user->department instanceof Department ? $user->department->value : ($user->department ?? '');
+        if ($oldRole !== $newRole) {
+            AuditService::logRoleChanged($user->id, (string) $oldRole, (string) $newRole, Auth::id());
+        }
+        if ($oldDept !== $newDept) {
+            AuditService::logDepartmentChanged($user->id, $oldDept, $newDept, Auth::id());
+        }
 
         return response()->json($this->formatUser($user));
     }
@@ -231,6 +268,13 @@ class UserController extends Controller
                 'error'   => 'The primary superadmin account cannot be deleted.',
             ], 403);
         }
+
+        AuditService::logUserDeleted($user->id, [
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+            'department' => $user->department instanceof Department ? $user->department->value : ($user->department ?? ''),
+        ], Auth::id());
 
         $user->delete();
 

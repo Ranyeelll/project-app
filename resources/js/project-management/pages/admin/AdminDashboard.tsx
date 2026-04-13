@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FolderKanbanIcon,
   CheckSquareIcon,
@@ -7,7 +7,11 @@ import {
   TrendingUpIcon,
   AlertTriangleIcon,
   ClockIcon,
-  ArrowUpRightIcon } from
+  ArrowUpRightIcon,
+  PlusIcon,
+  ClipboardListIcon,
+  ShieldCheckIcon,
+  FileTextIcon } from
 'lucide-react';
 import {
   ResponsiveContainer,
@@ -29,6 +33,7 @@ import { ProgressBar } from '../../components/ui/ProgressBar';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { UserAvatar } from '../../components/ui/UserAvatar';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 function StatCard({
   label,
   value,
@@ -77,6 +82,16 @@ function StatCard({
 export function AdminDashboard() {
   const { projects, tasks, users, budgetRequests, issues } = useData();
   const { setCurrentPage } = useNavigation();
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
   const today = new Date();
   const nonArchivedProjects = projects.filter((p) => p.status !== 'archived');
   const scopedProjectIds = new Set(nonArchivedProjects.map((p) => p.id));
@@ -241,6 +256,9 @@ export function AdminDashboard() {
     currency: 'PHP',
     maximumFractionDigits: 0
   }).format(n);
+
+  if (isLoading) return <LoadingSpinner message="Loading dashboard..." />;
+
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -273,6 +291,58 @@ export function AdminDashboard() {
           icon={<DollarSignIcon size={18} />}
           color="#0E8F79" />
 
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <button
+          onClick={() => setCurrentPage('admin-projects')}
+          className="flex items-center gap-3 dark:bg-dark-card dark:border-dark-border dark:hover:border-green-primary/40 bg-white border border-light-border hover:border-green-primary/40 rounded-card p-3 transition-colors group"
+        >
+          <div className="w-8 h-8 rounded-lg bg-green-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-green-primary/25 transition-colors">
+            <PlusIcon size={15} className="text-green-primary" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-xs font-semibold dark:text-dark-text text-light-text">New Project</p>
+            <p className="text-[10px] dark:text-dark-subtle text-light-subtle">Create & assign</p>
+          </div>
+        </button>
+        <button
+          onClick={() => setCurrentPage('admin-reviews')}
+          className="flex items-center gap-3 dark:bg-dark-card dark:border-dark-border dark:hover:border-blue-400/40 bg-white border border-light-border hover:border-blue-400/40 rounded-card p-3 transition-colors group"
+        >
+          <div className="w-8 h-8 rounded-lg bg-blue-400/15 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-400/25 transition-colors">
+            <ClipboardListIcon size={15} className="text-blue-400" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-xs font-semibold dark:text-dark-text text-light-text">Review Tasks</p>
+            <p className="text-[10px] dark:text-dark-subtle text-light-subtle">Pending reviews</p>
+          </div>
+        </button>
+        <button
+          onClick={() => setCurrentPage('admin-budget')}
+          className="flex items-center gap-3 dark:bg-dark-card dark:border-dark-border dark:hover:border-yellow-400/40 bg-white border border-light-border hover:border-yellow-400/40 rounded-card p-3 transition-colors group"
+        >
+          <div className="w-8 h-8 rounded-lg bg-yellow-400/15 flex items-center justify-center flex-shrink-0 group-hover:bg-yellow-400/25 transition-colors">
+            <DollarSignIcon size={15} className="text-yellow-400" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-xs font-semibold dark:text-dark-text text-light-text">Budgets</p>
+            <p className="text-[10px] dark:text-dark-subtle text-light-subtle">Approve requests</p>
+          </div>
+        </button>
+        <button
+          onClick={() => setCurrentPage('admin-audit')}
+          className="flex items-center gap-3 dark:bg-dark-card dark:border-dark-border dark:hover:border-purple-400/40 bg-white border border-light-border hover:border-purple-400/40 rounded-card p-3 transition-colors group"
+        >
+          <div className="w-8 h-8 rounded-lg bg-purple-400/15 flex items-center justify-center flex-shrink-0 group-hover:bg-purple-400/25 transition-colors">
+            <ShieldCheckIcon size={15} className="text-purple-400" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-xs font-semibold dark:text-dark-text text-light-text">Audit Logs</p>
+            <p className="text-[10px] dark:text-dark-subtle text-light-subtle">Security & activity</p>
+          </div>
+        </button>
       </div>
 
       {/* Alerts row */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PlusIcon, DollarSignIcon, EditIcon, TrashIcon, RotateCcwIcon, MessageSquareIcon, InfoIcon } from 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { BudgetRequest } from '../../data/mockData';
@@ -6,13 +6,28 @@ import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { StatusBadge } from '../../components/ui/Badge';
+import { apiFetch } from '../../utils/apiFetch';
+import { parseApiError } from '../../utils/parseApiError';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 export function BudgetRequestPage() {
-  const { budgetRequests, setBudgetRequests, projects, refreshBudgetRequests } = useData();
+  const { budgetRequests, setBudgetRequests, projects, users, refreshBudgetRequests } = useData();
   const { currentUser } = useAuth();
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState<BudgetRequest | null>(null);
   const [reviseModal, setReviseModal] = useState<BudgetRequest | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
   const [form, setForm] = useState({
     projectId: projects[0]?.id || '',
     amount: '',
@@ -23,11 +38,11 @@ export function BudgetRequestPage() {
     (b) => String(b.requestedBy) === String(currentUser?.id)
   );
   const handleCreate = async () => {
+    setSubmitting(true);
+    setFormError(null);
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch('/api/budget-requests', {
+      const res = await apiFetch('/api/budget-requests', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({
           project_id: form.projectId,
           requested_by: currentUser?.id || '',
@@ -38,23 +53,29 @@ export function BudgetRequestPage() {
       });
       if (res.ok) {
         refreshBudgetRequests();
+        setCreateModal(false);
+        setForm({
+          projectId: projects[0]?.id || '',
+          amount: '',
+          type: 'spending',
+          purpose: ''
+        });
+      } else {
+        setFormError(await parseApiError(res, 'Failed to create budget request.'));
       }
-    } catch { /* ignore */ }
-    setCreateModal(false);
-    setForm({
-      projectId: projects[0]?.id || '',
-      amount: '',
-      type: 'spending',
-      purpose: ''
-    });
+    } catch {
+      setFormError('Network error. Please check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
   const handleEdit = async () => {
     if (!editModal) return;
+    setSubmitting(true);
+    setFormError(null);
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch(`/api/budget-requests/${editModal.id}`, {
+      const res = await apiFetch(`/api/budget-requests/${editModal.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({
           project_id: form.projectId,
           amount: Number(form.amount),
@@ -64,11 +85,18 @@ export function BudgetRequestPage() {
       });
       if (res.ok) {
         refreshBudgetRequests();
+        setEditModal(null);
+      } else {
+        setFormError(await parseApiError(res, 'Failed to update budget request.'));
       }
-    } catch { /* ignore */ }
-    setEditModal(null);
+    } catch {
+      setFormError('Network error. Please check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
   const openEdit = (req: BudgetRequest) => {
+    setFormError(null);
     setEditModal(req);
     setForm({
       projectId: req.projectId,
@@ -78,19 +106,28 @@ export function BudgetRequestPage() {
     });
   };
   const handleDelete = async (id: string) => {
+    setSubmitting(true);
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch(`/api/budget-requests/${id}`, {
+      const res = await apiFetch(`/api/budget-requests/${id}`, {
         method: 'DELETE',
-        headers: { 'X-CSRF-TOKEN': csrfToken },
       });
       if (res.ok) {
         refreshBudgetRequests();
+        setDeleteConfirm(null);
+      } else {
+        const msg = await parseApiError(res, 'Failed to delete budget request.');
+        alert(msg);
+        setDeleteConfirm(null);
       }
-    } catch { /* ignore */ }
-    setDeleteConfirm(null);
+    } catch {
+      alert('Network error. Please check your connection and try again.');
+      setDeleteConfirm(null);
+    } finally {
+      setSubmitting(false);
+    }
   };
   const openRevise = (req: BudgetRequest) => {
+    setFormError(null);
     setReviseModal(req);
     setForm({
       projectId: req.projectId,
@@ -101,14 +138,10 @@ export function BudgetRequestPage() {
   };
   const handleRevise = async () => {
     if (!reviseModal) return;
+    setSubmitting(true);
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch(`/api/budget-requests/${reviseModal.id}`, {
+      const res = await apiFetch(`/api/budget-requests/${reviseModal.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-        },
         body: JSON.stringify({
           amount: Number(form.amount),
           purpose: form.purpose,
@@ -117,15 +150,21 @@ export function BudgetRequestPage() {
       });
       if (res.ok) {
         refreshBudgetRequests();
+        setReviseModal(null);
+        setForm({
+          projectId: projects[0]?.id || '',
+          amount: '',
+          type: 'spending',
+          purpose: ''
+        });
+      } else {
+        setFormError(await parseApiError(res, 'Failed to resubmit budget request.'));
       }
-    } catch { /* ignore */ }
-    setReviseModal(null);
-    setForm({
-      projectId: projects[0]?.id || '',
-      amount: '',
-      type: 'spending',
-      purpose: ''
-    });
+    } catch {
+      setFormError('Network error. Please check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
   const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', {
@@ -150,6 +189,7 @@ export function BudgetRequestPage() {
   };
 
   const selectedBudgetInfo = getProjectBudgetInfo(form.projectId);
+  if (isLoading) return <LoadingSpinner message="Loading data..." />;
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -167,6 +207,7 @@ export function BudgetRequestPage() {
               type: 'spending',
               purpose: ''
             });
+            setFormError(null);
             setCreateModal(true);
           }}>
 
@@ -362,9 +403,9 @@ export function BudgetRequestPage() {
             <Button
             variant="primary"
             onClick={handleCreate}
-            disabled={!form.amount || !form.purpose}>
+            disabled={submitting || !form.amount || !form.purpose}>
 
-              Submit Request
+              {submitting ? 'Submitting...' : 'Submit Request'}
             </Button>
           </>
         }>
@@ -456,6 +497,7 @@ export function BudgetRequestPage() {
             }
             rows={4} />
 
+          {formError && <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded p-2">{formError}</div>}
         </div>
       </Modal>
 
@@ -470,8 +512,8 @@ export function BudgetRequestPage() {
             <Button variant="secondary" onClick={() => setEditModal(null)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleEdit}>
-              Save Changes
+            <Button variant="primary" onClick={handleEdit} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </>
         }>
@@ -530,6 +572,7 @@ export function BudgetRequestPage() {
             }
             rows={4} />
 
+          {formError && <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded p-2">{formError}</div>}
         </div>
       </Modal>
 
@@ -546,9 +589,10 @@ export function BudgetRequestPage() {
             </Button>
             <Button
             variant="danger"
-            onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>
+            onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+            disabled={submitting}>
 
-              Delete
+              {submitting ? 'Deleting...' : 'Delete'}
             </Button>
           </>
         }>
@@ -572,9 +616,9 @@ export function BudgetRequestPage() {
             <Button
             variant="primary"
             onClick={handleRevise}
-            disabled={!form.amount || !form.purpose}>
+            disabled={submitting || !form.amount || !form.purpose}>
 
-              Resubmit Request
+              {submitting ? 'Submitting...' : 'Resubmit Request'}
             </Button>
           </>
         }>
@@ -644,6 +688,7 @@ export function BudgetRequestPage() {
             }
             rows={4} />
 
+          {formError && <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded p-2">{formError}</div>}
         </div>
       </Modal>
     </div>);

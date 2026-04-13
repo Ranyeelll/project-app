@@ -1,8 +1,8 @@
 # MAPTECH Project Management System
 ## Complete System Documentation
 
-**Document Version:** 3.0  
-**Last Updated:** March 31, 2026  
+**Document Version:** 4.2  
+**Last Updated:** April 13, 2026  
 **Classification:** Internal Use Only  
 **Document Owner:** MAPTECH IT Department
 
@@ -51,6 +51,9 @@ The MAPTECH PMS is a web-based application that enables organizations to:
 - Visualize project timelines using Gantt charts
 - Maintain comprehensive audit trails for compliance
 - Control access through role-based and department-based permissions
+
+Current release note:
+- Chat and direct-messaging features are currently disabled in both SPA navigation and API routes.
 
 ### 1.3 Definitions and Key Terms
 
@@ -242,12 +245,28 @@ sequenceDiagram
 
 | Feature | Description |
 |---------|-------------|
-| Project Creation | Create projects with name, description, dates, budget, and team |
+| Project Creation | 5-step wizard: Project Info → Stakeholders → Timeline & Budget → Team Assignment → Review & Submit |
 | Serial Number | Auto-generated unique identifier (MAP-YYYY-XXXXXXXXXX format) |
 | Team Assignment | Assign manager, project leader, and team members |
 | Status Tracking | Track status: active, on-hold, completed, archived |
 | Progress Monitoring | Visual progress percentage based on task completion |
 | Budget Tracking | Monitor allocated budget vs. actual spending |
+
+**5-Step Project Creation Wizard:**
+
+Only **Supervisor** and **Superadmin** roles can create projects. The wizard guides through:
+
+| Step | Fields |
+|------|--------|
+| 1. Project Info | Name, Description, Category (development/maintenance/research/infrastructure/consultation), Priority, Risk Level (low/medium/high) |
+| 2. Stakeholders | Beneficiary Type (internal/external), Beneficiary Name, Contact Person, Contact Email, Contact Phone, Location/Address, Project Objectives |
+| 3. Timeline & Budget | Start Date, End Date, Budget (PHP) |
+| 4. Team Assignment | Team Members (multi-select), Project Leader (from selected members) |
+| 5. Review & Submit | Summary of all steps with inline Edit buttons to jump back |
+
+**Database Columns Added:** `category`, `risk_level`, `beneficiary_type`, `beneficiary_name`, `contact_person`, `contact_email`, `contact_phone`, `location`, `objectives`
+
+Per-step validation ensures all required fields are complete before advancing. The review step re-validates all steps before submission.
 
 **Project Approval Workflow:**
 Projects progress through a multi-stage approval process before becoming active:
@@ -282,7 +301,7 @@ stateDiagram-v2
 | Progress Updates | Track completion percentage with work description logs |
 | Time Logging | Log hours worked with date and description |
 | Completion Submission | Submit completion reports with deliverables and summary |
-| Review & Approval | Manager review with approve/reject/revision workflow |
+| Review & Approval | Department reviewer workflow (Admin/Technical/Accounting) with approve/reject/revision outcomes |
 | Blocker Reporting | Report issues blocking task completion |
 
 **Task Lifecycle:**
@@ -294,7 +313,7 @@ flowchart LR
     C --> D{Log Time & Progress}
     D --> C
     D --> E[Submit Completion]
-    E --> F{Manager Review}
+    E --> F{Reviewer Decision}
     F -->|Approve| G[Task Complete]
     F -->|Revision| C
     F -->|Reject| H[Task Rejected]
@@ -319,7 +338,7 @@ The **Gantt Chart** provides visual timeline representation of project items and
 | Feature | Description |
 |---------|-------------|
 | Request Submission | Submit requests with amount, purpose, and type |
-| Approval Workflow | Pending → Approved / Rejected / Revision Requested |
+| Approval Workflow | Pending → Accounting Approved → Supervisor Approved → Approved / Rejected / Revision Requested |
 | Revision Tracking | Track original amount and revision count |
 | Attachments | Support file attachments for documentation |
 | Reporting | Generate budget reports with PDF/Excel export |
@@ -509,7 +528,7 @@ project-app/
 
 | Controller | Purpose | Key Methods |
 |------------|---------|-------------|
-| `AuthController` | Authentication | login, logout, me, changePassword, verifyRecovery, resetPasswordOffline |
+| `AuthController` | Authentication | login, me, changePassword, verifyRecovery, resetPasswordOffline |
 | `UserController` | User management | index, store, update, destroy, uploadPhoto, regenerateRecovery |
 | `ProjectController` | Project CRUD | index, store, update, destroy |
 | `ProjectApprovalController` | Approval workflow | transition, history |
@@ -594,13 +613,35 @@ graph TB
     Data --> refresh
 ```
 
+#### 6.3.4 API Communication Layer
+
+All frontend-to-backend communication is handled through a centralized fetch wrapper:
+
+**`utils/apiFetch.ts`** — Centralized HTTP client that wraps the native `fetch()` API:
+- Automatically includes `credentials: 'include'` for session cookies
+- Reads the CSRF token from `<meta name="csrf-token">` and attaches it as `X-CSRF-TOKEN` header for POST/PUT/PATCH/DELETE requests
+- Sets `Content-Type: application/json` for non-FormData bodies; skips it for FormData to allow browser-set multipart boundaries
+- Sets `Accept: application/json` on all requests
+- On **401 Unauthorized** responses, triggers a global session-expiry handler that clears auth state and redirects to the login page
+
+**`utils/parseApiError.ts`** — Validation error parser for API responses:
+- Extracts field-level errors from Laravel 422 responses (`errors` object)
+- Falls back to `message` or `error` fields for generic error messages
+- Used by form submission handlers to display inline error messages in modals
+
+**Session Expiry Flow:**
+1. `AppContext` registers a callback via `setSessionExpiredHandler()` on mount
+2. Any `apiFetch` call that receives a 401 triggers this callback
+3. The handler clears `currentUser`, removes localStorage auth data, and navigates to the login page
+4. This provides global session-expiry detection across all API calls, including background polling
+
 #### 6.3.2 Page Components
 
 **Admin/Elevated Role Pages:**
 - AdminDashboard - Statistics overview
 - ProjectsPage - Project management
 - GanttPage - Gantt chart editing
-- CreateProjectPage - Project creation wizard
+- CreateProjectPage - 5-step project creation wizard (Info → Stakeholders → Timeline → Team → Review)
 - MonitorControlPage - Project monitoring
 - BudgetApprovalsPage - Budget approval workflow
 - BudgetReportPage - Financial reporting
@@ -623,20 +664,22 @@ graph TB
 
 ```
 App.tsx
-├── AppProvider (context wrapper)
-│   ├── LoginPage / ForgotPasswordPage (unauthenticated)
-│   └── AppLayout (authenticated)
-│       ├── Header
-│       │   ├── Notifications
-│       │   ├── ThemeToggle
-│       │   └── UserMenu
-│       ├── Sidebar (department-aware navigation)
-│       └── Content Area
-│           └── Page Component (role-based)
-│               ├── ProjectFormsPanel
-│               ├── GanttItemForm
-│               ├── Modal Components
-│               └── UI Components
+├── ErrorBoundary (catches runtime errors with recovery UI)
+│   └── AppProvider (context wrapper)
+│       ├── LoginPage / ForgotPasswordPage (unauthenticated)
+│       └── AppLayout (authenticated)
+│           ├── Header
+│           │   ├── Notifications
+│           │   ├── ThemeToggle
+│           │   └── UserMenu
+│           ├── Sidebar (department-aware navigation)
+│           └── Content Area
+│               └── Page Component (role-based)
+│                   ├── LoadingSpinner (shown during data fetch)
+│                   ├── ProjectFormsPanel
+│                   ├── GanttItemForm
+│                   ├── Modal Components
+│                   └── UI Components (Button, Input, Select, Badge, etc.)
 ```
 
 ---
@@ -677,7 +720,7 @@ sequenceDiagram
     participant Admin as Admin/Technical
     participant Employee
     participant System
-    participant Manager as Manager/Reviewer
+    participant Reviewer as Reviewer (Admin/Technical/Accounting)
     
     Admin->>System: Create Task
     System->>Employee: Assign Task
@@ -687,23 +730,23 @@ sequenceDiagram
         Employee->>System: Update Progress
         opt Blocker Encountered
             Employee->>System: Report Blocker
-            Manager->>System: Resolve Blocker
+            Reviewer->>System: Resolve Blocker
         end
     end
     
     Employee->>System: Submit Completion
-    System->>Manager: Request Review
+    System->>Reviewer: Request Review
     
     alt Approved
-        Manager->>System: Approve Task
+        Reviewer->>System: Approve Task
         System->>Employee: Notify Approved
         System->>System: Update Task Status = Completed
     else Revision Requested
-        Manager->>System: Request Revision
+        Reviewer->>System: Request Revision
         System->>Employee: Notify Revision Needed
         Employee->>System: Continue Work
     else Rejected
-        Manager->>System: Reject Task
+        Reviewer->>System: Reject Task
         System->>Employee: Notify Rejected
     end
 ```
@@ -714,11 +757,16 @@ sequenceDiagram
 flowchart LR
     A[Employee/User] -->|Submit Request| B{Budget Request}
     B -->|Status: Pending| C[Accounting Review]
-    C -->|Approve| D[Status: Approved]
-    C -->|Reject| E[Status: Rejected]
-    C -->|Request Revision| F[Status: Revision Requested]
-    F -->|Resubmit| B
-    D --> G[Update Project Spent]
+    C -->|Approve| D[Status: Accounting Approved]
+    D --> H[Supervisor Review]
+    H -->|Approve| I[Status: Supervisor Approved]
+    I --> J[Admin/Superadmin Final Review]
+    J -->|Approve| K[Status: Approved]
+    C -->|Reject/Revision| E[Rejected / Revision Requested]
+    H -->|Reject/Revision| E
+    J -->|Reject/Revision| E
+    E -->|Resubmit| B
+    K --> G[Update Project Spent/Budget]
 ```
 
 ### 7.4 Gantt Item Visibility Process
@@ -746,7 +794,7 @@ flowchart TD
 | FR-AUTH-02 | System must support password recovery via recovery code | `AuthController::verifyRecovery()` + `resetPasswordOffline()` |
 | FR-AUTH-03 | First-time users must change initial password | `must_change_password` flag with `ChangePasswordModal` |
 | FR-AUTH-04 | Deactivated accounts cannot access system | `EnsureApiAuthenticated` checks status |
-| FR-AUTH-05 | Sessions must be invalidated on logout | `Auth::guard('web')->logout()` |
+| FR-AUTH-05 | Sessions must be continuously validated client-to-server | `/api/me` session bootstrap and revalidation |
 
 ### 8.2 Project Management Requirements
 
@@ -756,7 +804,7 @@ flowchart TD
 | FR-PROJ-02 | Projects must have unique serial numbers | `ProjectSerialService` with concurrency locks |
 | FR-PROJ-03 | Projects must track budget vs spent | `budget` and `spent` fields with auto-calculation |
 | FR-PROJ-04 | Projects must support multi-stage approval | `ProjectApprovalService` state machine |
-| FR-PROJ-05 | All tasks must be 100% complete before project submission | Validated in `ProjectApprovalService::submit_for_review` |
+| FR-PROJ-05 | Project completion gates must enforce task completion before employee submit/resubmit/finish | Validated in `ProjectApprovalService` transition guards |
 
 ### 8.3 Task Management Requirements
 
@@ -773,7 +821,7 @@ flowchart TD
 | ID | Requirement | Implementation |
 |----|-------------|----------------|
 | FR-BUD-01 | All authenticated users can submit budget requests | Open route with `auth.api` middleware |
-| FR-BUD-02 | Only Accounting/Admin can approve requests | `department:Accounting` middleware |
+| FR-BUD-02 | Budget requests must support staged approvals | `BudgetRequestController::update` status flow (`pending` → `accounting_approved` → `supervisor_approved` → final) |
 | FR-BUD-03 | Budget reports can be exported as PDF/Excel | `BudgetRequestController::exportPdf/exportSheet` |
 | FR-BUD-04 | Revision requests preserve original amount | `original_amount` and `revision_count` fields |
 
@@ -783,7 +831,7 @@ flowchart TD
 |----|-------------|----------------|
 | FR-AUD-01 | All significant actions must be logged | `AuditService` with 42+ event types |
 | FR-AUD-02 | Audit logs must be immutable | `AuditLog` model prevents update/delete |
-| FR-AUD-03 | Only Superadmin can view audit logs | `role:superadmin` middleware |
+| FR-AUD-03 | Global audit log administration is Superadmin-only | `role:superadmin` middleware on `/api/audit-logs*` (project-scoped logs are separate) |
 | FR-AUD-04 | Audit logs must capture user, action, changes, context | Schema includes all required fields |
 
 ---
@@ -816,6 +864,9 @@ flowchart TD
 | NFR-SEC-03 | CSRF protection for state-changing requests | Laravel CSRF tokens |
 | NFR-SEC-04 | SQL injection prevention | Eloquent ORM parameterized queries |
 | NFR-SEC-05 | Session security | HTTP-only, secure cookies |
+| NFR-SEC-06 | Rate limiting on sensitive endpoints | Throttle middleware (10/min login, 5/15min password) |
+| NFR-SEC-07 | Media access authorization | Project membership check before file download/serve |
+| NFR-SEC-08 | Trusted proxy configuration | Environment-configurable via `TRUSTED_PROXIES` |
 
 ### 9.4 Scalability Requirements
 
@@ -946,6 +997,13 @@ erDiagram
 | `task_blockers` | Blocker tracking | task_id, issue_title, priority, resolved_at |
 | `task_activity_logs` | Activity timeline | task_id, action_type, description, metadata |
 
+#### System & Notification Tables
+
+| Table | Purpose |
+|-------|---------|
+| `system_settings` | Key-value configuration store (string PK `key`, nullable text `value`, timestamps) |
+| `notifications` | Laravel notification records (UUID PK, polymorphic notifiable, JSON data, read_at timestamp) |
+
 ### 10.4 Audit Log Schema
 
 The audit log table is designed for immutable compliance tracking:
@@ -976,6 +1034,13 @@ CREATE TABLE audit_logs (
 - Only INSERT operations allowed
 - No `updated_at` column
 
+**Changes Display (Frontend):**
+The audit log detail modal formats the `changes` JSON for readability:
+- Field names are humanized (e.g., `risk_level` → "Risk Level")
+- Transition values (`from`/`to` or `old`/`new`) display as styled pills: old value → new value
+- Non-transition values (arrays, booleans, strings) are formatted cleanly
+- Supports both `{ "from": "x", "to": "y" }` and `{ "old": "x", "new": "y" }` formats
+
 ### 10.5 Data Types
 
 | Type | Usage | Examples |
@@ -996,7 +1061,7 @@ CREATE TABLE audit_logs (
 **Purpose:** User authentication, session management, and password recovery
 
 **Components:**
-- `AuthController` - Login/logout endpoints
+- `AuthController` - Login/session/password recovery endpoints
 - `EnsureApiAuthenticated` middleware
 - `ChangePasswordModal` - Forced password change UI
 
@@ -1085,7 +1150,7 @@ CREATE TABLE audit_logs (
 
 **Key Features:**
 - Request submission with attachments
-- Approval workflow (pending → approved/rejected)
+- Staged approval workflow (pending → accounting approved → supervisor approved → approved/rejected/revision)
 - Revision tracking
 - PDF/Excel report export
 
@@ -1169,8 +1234,8 @@ graph TB
     Layout --> Sidebar
     Layout --> Content
     Content -->|Admin/Technical/Accounting| AdminDash
-    Content -->|Admin/Technical/Accounting| Projects
-    Content -->|Admin/Technical/Accounting| Gantt
+    Content -->|Admin/Technical| Projects
+    Content -->|Admin/Technical| Gantt
     Content -->|Accounting/Admin| Budget
     Content -->|Superadmin| Audit
     Content -->|Employee| EmpDash
@@ -1181,7 +1246,7 @@ graph TB
 
 ### 12.2 Navigation Structure
 
-**Admin/Technical/Accounting Users:**
+**Admin Users:**
 ```
 📊 Dashboard
 ├── Statistics Overview
@@ -1201,7 +1266,7 @@ graph TB
 ├── Dependencies
 └── Item Management
 
-💰 Budget (Accounting)
+💰 Budget
 ├── Budget Requests
 ├── Approvals
 └── Reports
@@ -1215,6 +1280,23 @@ graph TB
 ├── Log Viewer
 ├── Filters
 └── Export
+```
+
+**Technical Users:**
+```
+📊 Dashboard
+📁 Projects
+📋 Gantt Chart
+✅ Task Management
+🧾 Technical Review
+```
+
+**Accounting Users:**
+```
+📊 Dashboard
+💰 Budget Approvals
+📈 Budget Report
+🧾 Accounting Review
 ```
 
 **Employee Users:**
@@ -1256,6 +1338,8 @@ graph TB
 | `Badge` | Status and priority indicators |
 | `ProgressBar` | Visual progress display |
 | `UserAvatar` | User profile photos |
+| `LoadingSpinner` | Full-page loading indicator shown while data is being fetched |
+| `ErrorBoundary` | React error boundary catching runtime exceptions with a recovery UI |
 
 ### 12.4 Theme Support
 
@@ -1266,9 +1350,11 @@ The application supports light and dark themes:
 
 ### 12.5 Data Refresh
 
-- Automatic refresh every 15 seconds (when tab is visible)
+- Automatic polling every 15 seconds (when tab is visible via `document.visibilityState`)
+- Polling deduplication: a `useRef` guard (`isRefreshingRef`) prevents overlapping refresh cycles, with a 2-second cooldown before allowing the next poll
 - Manual refresh available via UI buttons
-- LocalStorage caching for offline resilience
+- All API calls use the centralized `apiFetch` wrapper (see §6.3.4)
+- Background polling skipped when the browser tab is hidden to reduce server load
 
 ---
 
@@ -1294,17 +1380,21 @@ GET    /api/me                             # Get current user (session validatio
 POST   /api/change-password                # Change user password
 ```
 
-### 13.3 User Management Endpoints (Superadmin Only)
+### 13.3 User and Profile Endpoints
 
 ```
-GET    /api/users                          # List all users
+GET    /api/users                          # List users (authenticated)
 POST   /api/users                          # Create user
 PUT    /api/users/{id}                     # Update user
 DELETE /api/users/{id}                     # Delete user
 POST   /api/users/{id}/regenerate-recovery # Regenerate recovery code
-POST   /api/users/{id}/profile-photo       # Upload profile photo
+POST   /api/users/{id}/profile-photo       # Upload profile photo (authenticated)
 GET    /api/users/{id}/photo               # Get profile photo
 ```
+
+Notes:
+- Create/update/delete/regenerate-recovery are Superadmin-only.
+- `/api/users` is available to authenticated users for assignee/team directory use cases.
 
 ### 13.4 Project Endpoints
 
@@ -1317,6 +1407,29 @@ POST   /api/projects/{id}/approval         # Transition approval state
 GET    /api/projects/{id}/approval-history # Get approval history
 GET    /api/projects/{id}/audit-logs       # Get project audit logs
 ```
+
+**POST /api/projects — Request Body:**
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| name | string | Yes | Max 255 |
+| description | string | Yes | |
+| category | string | Yes | development, maintenance, research, infrastructure, consultation |
+| priority | string | Yes | low, medium, high, critical |
+| risk_level | string | Yes | low, medium, high |
+| beneficiary_type | string | Yes | internal, external |
+| beneficiary_name | string | Yes | Max 255 |
+| contact_person | string | No | Max 255 |
+| contact_email | string | No | Valid email |
+| contact_phone | string | No | Max 50 |
+| location | string | No | Max 500 |
+| objectives | string | Yes | Max 5000 |
+| start_date | date | Yes | |
+| end_date | date | Yes | Must be ≥ start_date |
+| budget | number | Yes | 0–999,999,999 |
+| team_ids | array | Yes | Array of user IDs |
+| leader_id | string | No | Required if 2+ team members |
+
+**Response fields:** `id`, `serial`, `name`, `description`, `status`, `priority`, `category`, `riskLevel`, `beneficiaryType`, `beneficiaryName`, `contactPerson`, `contactEmail`, `contactPhone`, `location`, `objectives`, `startDate`, `endDate`, `budget`, `spent`, `progress`, `managerId`, `teamIds`, `leaderId`, `createdAt`, `updatedAt`, `approvalStatus`, `approvalNotes`, `submittedBy`, `reviewedBy`, `lastReviewedAt`
 
 ### 13.5 Task Endpoints
 
@@ -1375,12 +1488,20 @@ DELETE /api/projects/{id}/gantt-dependencies/{dep} # Delete dependency
 ```
 GET    /api/budget-requests                # List requests
 POST   /api/budget-requests                # Create request
-PUT    /api/budget-requests/{id}           # Update/approve (Accounting)
-DELETE /api/budget-requests/{id}           # Delete request (Accounting)
+PUT    /api/budget-requests/{id}           # Update/stage/finalize request status
+DELETE /api/budget-requests/{id}           # Delete request (Accounting; Superadmin bypass)
 GET    /api/budget-report                  # Generate report (Accounting)
 GET    /api/budget-report/export-pdf       # Export PDF (Accounting)
 GET    /api/budget-report/export-sheet     # Export Excel (Accounting)
 ```
+
+Status values used in workflow:
+- `pending`
+- `accounting_approved`
+- `supervisor_approved`
+- `approved`
+- `rejected`
+- `revision_requested`
 
 ### 13.8 Media Endpoints
 
@@ -1392,6 +1513,11 @@ GET    /api/media/{id}/download            # Download file
 GET    /api/media/{id}/serve               # Serve file inline
 ```
 
+**Media Download Authorization:** The `download` and `serve` endpoints enforce project-level access control:
+- Superadmins, Admin department, and Technical department have unrestricted access
+- Other users must be a member of the media's project team (`team_ids`), or be the project manager/leader
+- Unauthorized access returns 403 Forbidden
+
 ### 13.9 Audit Log Endpoints (Superadmin Only)
 
 ```
@@ -1400,7 +1526,33 @@ GET    /api/audit-logs/export-pdf          # Export PDF
 GET    /api/audit-logs/export-sheet        # Export Excel
 ```
 
-### 13.10 Response Format
+### 13.10 Notification Endpoints
+
+```
+GET    /api/notifications                   # List notifications (latest 50)
+PUT    /api/notifications/{id}/read         # Mark notification as read
+POST   /api/notifications/mark-all-read     # Mark all notifications as read
+```
+
+Notification types:
+- `BudgetApprovalNotification` — Sent when a budget request is approved/rejected
+- `TaskReviewNotification` — Sent when a task review is submitted
+- `BlockerReportedNotification` — Sent when a blocker is reported on a task
+- `OverdueTaskNotification` — Sent daily at 08:00 for tasks past their end date
+- `ProjectApprovalUpdate` — Sent when project approval status changes
+
+All notification classes implement `ShouldQueue` for asynchronous processing via the database queue driver.
+
+### 13.11 System Settings Endpoints (Superadmin Only)
+
+```
+GET    /api/settings/audit-log-retention    # Get audit log retention setting
+PUT    /api/settings/audit-log-retention    # Update audit log retention setting
+```
+
+System settings are stored in a dedicated `system_settings` table using the `SystemSetting` model (key-value store with `getValue()`/`setValue()` static helpers).
+
+### 13.12 Response Format
 
 **Success Response:**
 ```json
@@ -1444,6 +1596,11 @@ GET    /api/audit-logs/export-sheet        # Export Excel
 | Token Protection | CSRF tokens for state-changing requests |
 | Account Lockout | Inactive accounts blocked at middleware level |
 | Recovery Codes | Single-use codes for password reset |
+| Password Minimum Length | 12 characters minimum enforced on create and update |
+| Default Passwords | Random 32-character hex string (never static defaults) |
+| Rate Limiting | Login: 10 attempts/minute; Password change: 5 attempts/15 minutes |
+| Session Expiry Handling | Global 401 detection via `apiFetch` redirects to login |
+| Server-Side Logout | Session invalidated + CSRF token regenerated on logout |
 
 ### 14.2 Authorization Security
 
@@ -1469,9 +1626,15 @@ Route::middleware('department:Admin,Technical,Accounting') // Multiple departmen
 | Data | Protection |
 |------|------------|
 | Passwords | Bcrypt hashing, never stored plain |
-| Recovery Codes | Hidden in API responses |
+| Recovery Codes | Hashed at rest and only returned as one-time plain text during generation/reset flows |
 | Sensitive Fields | Excluded from JSON serialization |
 | Audit Logs | Immutable, sensitive operations flagged |
+| User Foreign Keys | `nullOnDelete` — user deletion preserves related records (budget requests, media, tasks, etc.) instead of cascading deletes |
+| Form Submissions | Double-submit protection via `submitting`/`deleting`/`restoring` state flags that disable buttons during API calls |
+| Validation Errors | 422 responses parsed and displayed inline in form modals via `parseApiError` utility |
+| Query Result Limits | Safety caps on unbounded endpoints: projects (500), tasks (1000), issues (500), media (500), time logs (1000) |
+| Budget Amounts | Maximum value validation: 99,999,999.99 |
+| Task Dates | End date must be on or after start date (`after_or_equal` validation) |
 
 ### 14.5 Request Security
 
@@ -1642,7 +1805,19 @@ FILESYSTEM_DISK=local
 | Audit | Database (`audit_logs` table) |
 | Web Server | Server-specific |
 
-### 18.3 Backup Strategy
+### 18.3 Scheduled Commands
+
+| Command | Schedule | Purpose |
+|---------|----------|---------|
+| `tasks:notify-overdue` | Daily at 08:00 | Sends notifications for tasks past their end date with deduplication (won't re-notify the same day) |
+
+**Queue Worker:** Notifications implement `ShouldQueue` and require a running queue worker:
+```bash
+php artisan queue:work --tries=3
+```
+The queue connection is configured as `database` in `.env` (`QUEUE_CONNECTION=database`).
+
+### 18.4 Backup Strategy
 
 | Data | Frequency | Retention |
 |------|-----------|-----------|
@@ -1776,6 +1951,8 @@ php artisan migrate:status
 - `rejected` - Rejected
 - `revision_requested` - Revision needed
 
+**Standardized Approval Status Enum** (`app/Enums/ApprovalStatus.php`): All approval workflows use a common set of status values defined in the `ApprovalStatus` PHP enum and mirrored in `constants/approvalStatuses.ts` on the frontend. This ensures consistency across projects, tasks, budgets, and forms.
+
 **Task Status:**
 - `todo` - Not started
 - `in-progress` - Work ongoing
@@ -1784,6 +1961,8 @@ php artisan migrate:status
 
 **Budget Request Status:**
 - `pending` - Awaiting approval
+- `accounting_approved` - Passed accounting review
+- `supervisor_approved` - Passed supervisor review
 - `approved` - Approved
 - `rejected` - Rejected
 - `revision_requested` - Revision needed
@@ -1853,7 +2032,7 @@ This User Manual provides step-by-step guidance for using the MAPTECH Project Ma
 
 **Steps:**
 1. On login page, click **Forgot Password?**
-2. Enter your **email address**
+2. Enter your **Employee ID**
 3. Enter your **recovery code** (provided by administrator)
 4. Click **Verify**
 5. If valid, enter **new password**
@@ -1883,15 +2062,28 @@ The Dashboard displays:
 
 #### 23.4.2 Sidebar Navigation
 
-The sidebar shows different options based on your role:
+The sidebar shows different options based on your role and department:
 
-**Admin/Technical/Accounting Users:**
+**Admin Users:**
 - Dashboard
 - Projects
 - Gantt Charts
-- Budget (Accounting only)
+- Budget
 - Team Management (Superadmin only)
 - Audit Logs (Superadmin only)
+
+**Technical Users:**
+- Dashboard
+- Projects
+- Gantt Chart
+- Task Management
+- Technical Review
+
+**Accounting Users:**
+- Dashboard
+- Budget Approvals
+- Budget Report
+- Accounting Review
 
 **Employee Users:**
 - My Dashboard
@@ -1910,46 +2102,51 @@ The sidebar shows different options based on your role:
 
 **Steps:**
 1. Click **Projects** in sidebar
-2. View project list with columns: Name, Status, Progress, Priority, Due Date
-3. Use **Search** to find specific projects
-4. Use **Filters** to narrow by status or priority
-5. Click a **project row** to view details
+2. View project cards showing: Name, Status, Priority, Approval Status, Progress bar, Task/Member/Budget stats
+3. Each card displays **Created date** and **Updated date** (if different)
+4. Use **Search** to find specific projects
+5. Use **Status** and **Approval** filters to narrow results
+6. Click the **eye icon** to view project details (including stakeholder info, timeline, budget, tasks)
+7. Click the **edit icon** to modify project fields
 
 **System Response:**
 - Displays projects based on your department access
 - Employees see only projects they're assigned to
+- Project Details modal shows: status badges, category, risk level, beneficiary info, contact details, location, objectives, timeline, budget, progress, and task list
 
 #### 23.5.2 Creating a Project (Supervisor/Superadmin)
 
-**User Action:** Create a new project.
+**User Action:** Create a new project using the 5-step wizard.
 
 **Steps:**
 1. Navigate to **Projects** page
-2. Click **+ Create Project** button
-3. Fill in the form:
-   - **Project Name**: Descriptive name
-   - **Description**: Project details and objectives
-   - **Start Date**: When project begins
-   - **End Date**: Project deadline
-   - **Priority**: Low / Medium / High / Critical
-   - **Budget**: Allocated budget amount
-   - **Manager**: Select project manager
-   - **Project Leader**: Select project leader
-   - **Team Members**: Select team members
-4. Click **Create Project**
+2. Click **+ New Project** button
+3. Complete the 5-step wizard:
+
+| Step | Fields |
+|------|--------|
+| **1. Project Info** | Project Name, Description, Category (development/maintenance/research/infrastructure/consultation), Priority (low/medium/high/critical), Risk Level (low/medium/high) |
+| **2. Stakeholders** | Beneficiary Type (internal/external), Beneficiary Name, Contact Person, Contact Email, Contact Phone, Location/Address, Objectives |
+| **3. Timeline & Budget** | Start Date, End Date, Budget (PHP) |
+| **4. Team Assignment** | Team Members (multi-select), Project Leader (from selected members, required if 2+ members) |
+| **5. Review & Submit** | Summary of all steps with Edit buttons to go back and modify |
+
+4. Review all information on Step 5, then click **Submit Project**
 
 **System Response:**
-- Project created with status "Draft"
+- Per-step validation ensures all required fields are complete before advancing
+- All steps are re-validated before final submission
+- Project created with status "active"
 - Unique serial number generated (MAP-YYYY-XXXXXXXXXX)
-- Success message displayed
+- Success message displayed, user redirected to Projects page
 
 #### 23.5.3 Submitting Project for Approval
 
 **User Action:** Submit project for review workflow.
 
 **Prerequisites:**
-- All tasks must be 100% complete
-- User must have appropriate permissions
+- Employee submit/resubmit paths require all project tasks to be 100% complete
+- Reviewer transitions require appropriate permissions for each approval stage
 
 **Steps:**
 1. Open project in "Draft" status
@@ -2201,7 +2398,7 @@ The sidebar shows different options based on your role:
 3. Fill in form:
    - **Project**: Select related project
    - **Amount**: Requested amount
-   - **Type**: Spending / Other
+    - **Type**: Spending / Additional Budget
    - **Purpose**: Describe what budget is for
    - **Attachment**: Optional supporting document
 4. Click **Submit Request**
@@ -2210,21 +2407,21 @@ The sidebar shows different options based on your role:
 - Request created with "Pending" status
 - Accounting department can review
 
-#### 23.8.2 Approving Budget Requests (Accounting)
+#### 23.8.2 Reviewing and Approving Budget Requests (Staged)
 
-**User Action:** Review and approve/reject request.
+**User Action:** Review requests in staged approval queues.
 
 **Steps:**
-1. Navigate to **Budget Approvals**
-2. Review pending requests
-3. Click on a request to view details
-4. Click **Approve**, **Reject**, or **Request Revision**
-5. Add **review comments**
-6. Click **Confirm**
+1. Accounting reviews **Pending** requests and sets outcome.
+2. Supervisor reviews **Accounting Approved** requests.
+3. Admin/Superadmin reviews **Supervisor Approved** requests for final decision.
+4. At each stage, reviewer can **Approve**, **Reject**, or **Request Revision**.
+5. Add **review comments**.
+6. Click **Confirm**.
 
 **System Response:**
-- Request status updated
-- If approved: Project `spent` updated
+- Request status updated to the next workflow stage or terminal state
+- If final approved: Project `spent` and/or `budget` recalculated (based on request type)
 - Requester notified
 - Audit log entry created
 
@@ -2404,7 +2601,7 @@ The sidebar shows different options based on your role:
 | Cannot create tasks | Only Admin/Technical departments can create tasks. |
 | File upload fails | Check file size (max 10MB) and allowed types. |
 | Session expired | Re-login. Sessions expire after inactivity. |
-| Cannot submit project | Ensure all tasks are 100% complete first. |
+| Cannot submit project | Ensure project completion prerequisites are met for your approval action (employee submit/resubmit requires all tasks complete). |
 | Missing navigation options | Check your role and department permissions. |
 
 ### 23.14 Getting Help
@@ -2423,6 +2620,10 @@ For additional assistance:
 | 1.0 | 2026-03-01 | IT Team | Initial draft |
 | 2.0 | 2026-03-15 | IT Team | Added task forms, audit system |
 | 3.0 | 2026-03-31 | IT Team | Complete rewrite with code analysis |
+| 3.1 | 2026-04-13 | IT Team | Updated workflows and permissions to match current routes/controllers (chat disabled, staged budget approvals, auth/user endpoint clarifications) |
+| 4.0 | 2026-04-13 | IT Team | API-backed state, security hardening, apiFetch, ShouldQueue notifications, FK cascade fixes |
+| 4.1 | 2026-04-14 | IT Team | 5-step project creation wizard, 9 new project fields, stakeholder tracking |
+| 4.2 | 2026-04-14 | IT Team | Edit modal with wizard fields, project timestamps, audit log formatting, API request/response docs |
 
 ---
 

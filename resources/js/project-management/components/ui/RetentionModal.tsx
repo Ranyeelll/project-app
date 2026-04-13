@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X as XIcon } from 'lucide-react';
+import { apiFetch } from '../../utils/apiFetch';
 
 export function RetentionModal({
   isOpen,
@@ -89,10 +90,8 @@ export function RetentionModal({
                     setSaving(true);
                     setError(null);
                     try {
-                      const res = await fetch('/api/settings/audit-log-retention', {
+                      const res = await apiFetch('/api/settings/audit-log-retention', {
                         method: 'PUT',
-                        credentials: 'include',
-                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ days }),
                       });
                       if (!res.ok) throw new Error('save failed');

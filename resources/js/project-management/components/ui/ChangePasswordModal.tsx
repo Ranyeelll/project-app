@@ -10,6 +10,7 @@ import {
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { useAuth } from '../../context/AppContext';
+import { apiFetch } from '../../utils/apiFetch';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -73,16 +74,8 @@ export function ChangePasswordModal({ isOpen, onClose, forced }: ChangePasswordM
     setError('');
     setLoading(true);
     try {
-      const csrfToken =
-        document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch('/api/change-password', {
+      const res = await apiFetch('/api/change-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-        },
-        credentials: 'include',
         body: JSON.stringify({
           user_id: currentUser?.id ? Number(currentUser.id) : 0,
           old_password: oldPassword,

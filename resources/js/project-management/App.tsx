@@ -30,7 +30,10 @@ import { BudgetRequestPage } from './pages/employee/BudgetRequestPage';
 import { LogTimePage } from './pages/employee/LogTimePage';
 import { ReportIssuePage } from './pages/employee/ReportIssuePage';
 import { ResourcesPage } from './pages/employee/ResourcesPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { CalendarPage } from './pages/CalendarPage';
 import { isElevatedRole, isEmployeeRole, isSuperadmin, isSupervisor } from './utils/roles';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 function AppContent() {
   const { currentUser } = useAuth();
   const { currentPage } = useNavigation();
@@ -103,6 +106,10 @@ function AppContent() {
           return { page: <TaskReviewsPage />, routeNotice: null };
         case 'admin-chat':
           return { page: <AdminDashboard />, routeNotice: chatNotice };
+        case 'settings':
+          return { page: <SettingsPage />, routeNotice: null };
+        case 'calendar':
+          return { page: <CalendarPage />, routeNotice: null };
         default:
           return { page: <AdminDashboard />, routeNotice: redirectedNotice };
       }
@@ -138,6 +145,10 @@ function AppContent() {
         // chat removed -> fall back to dashboard
         case 'admin-chat':
           return { page: <AdminDashboard />, routeNotice: chatNotice };
+        case 'settings':
+          return { page: <SettingsPage />, routeNotice: null };
+        case 'calendar':
+          return { page: <CalendarPage />, routeNotice: null };
         default:
           return { page: <AdminDashboard />, routeNotice: redirectedNotice };
       }
@@ -157,6 +168,10 @@ function AppContent() {
         // chat removed -> fall back to dashboard
         case 'admin-chat':
           return { page: <AdminDashboard />, routeNotice: chatNotice };
+        case 'settings':
+          return { page: <SettingsPage />, routeNotice: null };
+        case 'calendar':
+          return { page: <CalendarPage />, routeNotice: null };
         default:
           return { page: <AdminDashboard />, routeNotice: redirectedNotice };
       }
@@ -178,6 +193,10 @@ function AppContent() {
         // chat removed -> fall back to dashboard
         case 'admin-chat':
           return { page: <AdminDashboard />, routeNotice: chatNotice };
+        case 'settings':
+          return { page: <SettingsPage />, routeNotice: null };
+        case 'calendar':
+          return { page: <CalendarPage />, routeNotice: null };
         default:
           return { page: <AdminDashboard />, routeNotice: redirectedNotice };
       }
@@ -204,6 +223,10 @@ function AppContent() {
         // chat removed -> fall back to employee dashboard
         case 'employee-chat':
           return { page: <EmployeeDashboard />, routeNotice: chatNotice };
+        case 'settings':
+          return { page: <SettingsPage />, routeNotice: null };
+        case 'calendar':
+          return { page: <CalendarPage />, routeNotice: null };
         default:
           return { page: <EmployeeDashboard />, routeNotice: redirectedNotice };
       }
@@ -235,6 +258,10 @@ function AppContent() {
         // chat removed -> fall back to dashboard
         case 'admin-chat':
           return { page: <AdminDashboard />, routeNotice: chatNotice };
+        case 'settings':
+          return { page: <SettingsPage />, routeNotice: null };
+        case 'calendar':
+          return { page: <CalendarPage />, routeNotice: null };
         default:
           return { page: <AdminDashboard />, routeNotice: redirectedNotice };
       }
@@ -274,8 +301,10 @@ function AppContent() {
 }
 export function App() {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>);
-
+    <ErrorBoundary>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </ErrorBoundary>
+  );
 }

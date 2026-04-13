@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
@@ -6,29 +6,36 @@ import {
   SearchIcon } from
 'lucide-react';
 import { useData } from '../../context/AppContext';
+import { apiFetch } from '../../utils/apiFetch';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { Badge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 export function ArchivePage() {
-  const { projects, setProjects, tasks, refreshProjects } = useData();
+  const { projects, setProjects, tasks, users, refreshProjects } = useData();
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
   const [search, setSearch] = useState('');
+  const [restoring, setRestoring] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const archived = projects.
   filter((p) => p.status === 'archived' || p.status === 'completed').
   filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const handleRestore = async (id: string) => {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-
+    setRestoring(true);
     try {
-      const res = await fetch(`/api/projects/${id}`, {
+      const res = await apiFetch(`/api/projects/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-        },
         body: JSON.stringify({ status: 'active' }),
       });
 
@@ -40,6 +47,8 @@ export function ArchivePage() {
       }
     } catch {
       // Fallback to local update below when request fails.
+    } finally {
+      setRestoring(false);
     }
 
     setProjects((prev) =>
@@ -63,6 +72,9 @@ export function ArchivePage() {
     currency: 'PHP',
     maximumFractionDigits: 0
   }).format(n);
+
+  if (isLoading) return <LoadingSpinner message="Loading archive..." />;
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -135,9 +147,10 @@ export function ArchivePage() {
                   variant="secondary"
                   size="sm"
                   icon={<ArchiveRestoreIcon size={13} />}
-                  onClick={() => handleRestore(project.id)}>
+                  onClick={() => handleRestore(project.id)}
+                  disabled={restoring}>
 
-                  Restore
+                  {restoring ? 'Restoring...' : 'Restore'}
                 </Button>
                 <button
                   onClick={() => setDeleteConfirm(project.id)}

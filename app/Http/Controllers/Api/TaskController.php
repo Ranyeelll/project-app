@@ -38,6 +38,7 @@ class TaskController extends Controller
         }
 
         $tasks = $query->orderByDesc('created_at')
+            ->limit(1000)
             ->get()
             ->map(fn ($t) => $this->formatTask($t));
 
@@ -50,20 +51,20 @@ class TaskController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'project_id'      => 'required|exists:projects,id',
-            'title'           => 'required|string|max:255',
-            'description'     => 'nullable|string',
-            'status'          => 'sometimes|in:todo,in-progress,review,completed',
-            'priority'        => 'sometimes|in:low,medium,high,critical',
-            'assigned_to'     => 'nullable|exists:users,id',
-            'start_date'      => 'nullable|date',
-            'end_date'        => 'nullable|date',
+            'project_id' => 'required|exists:projects,id',
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'status' => 'sometimes|in:todo,in-progress,review,completed',
+            'priority' => 'sometimes|in:low,medium,high,critical',
+            'assigned_to' => 'nullable|exists:users,id',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
             'estimated_hours' => 'nullable|numeric|min:0',
         ]);
 
-        $data['progress']                 = 0;
-        $data['logged_hours']             = 0;
-        $data['allow_employee_edit']      = false;
+        $data['progress'] = 0;
+        $data['logged_hours'] = 0;
+        $data['allow_employee_edit'] = false;
         $data['completion_report_status'] = 'none';
 
         $task = Task::create($data);
@@ -101,28 +102,28 @@ class TaskController extends Controller
 
             // Employees can only update limited fields
             $data = $request->validate([
-                'status'                   => 'sometimes|in:todo,in-progress,review,completed',
-                'progress'                 => 'nullable|integer|min:0|max:100',
-                'logged_hours'             => 'nullable|numeric|min:0',
+                'status' => 'sometimes|in:todo,in-progress,review,completed',
+                'progress' => 'nullable|integer|min:0|max:100',
+                'logged_hours' => 'nullable|numeric|min:0',
                 'completion_report_status' => 'sometimes|in:none,pending',
-                'report_cost'              => 'nullable|numeric|min:0',
+                'report_cost' => 'nullable|numeric|min:0',
             ]);
         } else {
             // Admin/Technical - full update access
             $data = $request->validate([
-                'title'                    => 'sometimes|string|max:255',
-                'description'              => 'nullable|string',
-                'status'                   => 'sometimes|in:todo,in-progress,review,completed',
-                'priority'                 => 'sometimes|in:low,medium,high,critical',
-                'assigned_to'              => 'nullable|exists:users,id',
-                'start_date'               => 'nullable|date',
-                'end_date'                 => 'nullable|date',
-                'progress'                 => 'nullable|integer|min:0|max:100',
-                'estimated_hours'          => 'nullable|numeric|min:0',
-                'logged_hours'             => 'nullable|numeric|min:0',
-                'allow_employee_edit'      => 'nullable|boolean',
+                'title' => 'sometimes|string|max:255',
+                'description' => 'nullable|string',
+                'status' => 'sometimes|in:todo,in-progress,review,completed',
+                'priority' => 'sometimes|in:low,medium,high,critical',
+                'assigned_to' => 'nullable|exists:users,id',
+                'start_date' => 'nullable|date',
+                'end_date' => 'nullable|date|after_or_equal:start_date',
+                'progress' => 'nullable|integer|min:0|max:100',
+                'estimated_hours' => 'nullable|numeric|min:0',
+                'logged_hours' => 'nullable|numeric|min:0',
+                'allow_employee_edit' => 'nullable|boolean',
                 'completion_report_status' => 'sometimes|in:none,pending,approved,rejected',
-                'report_cost'              => 'nullable|numeric|min:0',
+                'report_cost' => 'nullable|numeric|min:0',
             ]);
         }
 
@@ -149,12 +150,10 @@ class TaskController extends Controller
         // 2. Assignment changes (reassigned or newly assigned)
         if (isset($data['assigned_to']) && $data['assigned_to'] !== $oldAssignedTo) {
             if ($oldAssignedTo) {
-                // Reassigned from one user to another
                 $oldUser = \App\Models\User::find($oldAssignedTo);
                 $newUser = \App\Models\User::find($data['assigned_to']);
                 TaskActivityLogger::taskReassigned($task->id, $oldUser?->name, $newUser?->name);
             } else {
-                // First assignment
                 $newUser = \App\Models\User::find($data['assigned_to']);
                 TaskActivityLogger::taskAssigned($task->id, $newUser?->name);
             }
@@ -192,21 +191,21 @@ class TaskController extends Controller
     private function formatTask(Task $t): array
     {
         return [
-            'id'                     => (string) $t->id,
-            'projectId'              => (string) $t->project_id,
-            'title'                  => $t->title,
-            'description'            => $t->description ?? '',
-            'status'                 => $t->status,
-            'priority'               => $t->priority,
-            'assignedTo'             => (string) ($t->assigned_to ?? ''),
-            'startDate'              => $t->start_date?->toIso8601String() ?? '',
-            'endDate'                => $t->end_date?->toIso8601String() ?? '',
-            'progress'               => (int) $t->progress,
-            'estimatedHours'         => (float) $t->estimated_hours,
-            'loggedHours'            => (float) $t->logged_hours,
-            'allowEmployeeEdit'      => (bool) $t->allow_employee_edit,
+            'id' => (string) $t->id,
+            'projectId' => (string) $t->project_id,
+            'title' => $t->title,
+            'description' => $t->description ?? '',
+            'status' => $t->status,
+            'priority' => $t->priority,
+            'assignedTo' => (string) ($t->assigned_to ?? ''),
+            'startDate' => $t->start_date?->toIso8601String() ?? '',
+            'endDate' => $t->end_date?->toIso8601String() ?? '',
+            'progress' => (int) $t->progress,
+            'estimatedHours' => (float) $t->estimated_hours,
+            'loggedHours' => (float) $t->logged_hours,
+            'allowEmployeeEdit' => (bool) $t->allow_employee_edit,
             'completionReportStatus' => $t->completion_report_status,
-            'reportCost'             => (float) $t->report_cost,
+            'reportCost' => (float) $t->report_cost,
         ];
     }
 

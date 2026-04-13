@@ -134,6 +134,31 @@ class AuthController extends Controller
     }
 
     /* ================================================================== */
+    /*  POST /api/logout                                                   */
+    /*  Invalidate the server session and log the event.                   */
+    /* ================================================================== */
+    public function logout(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($user) {
+            $this->audit->log(
+                action: 'auth.logout',
+                resourceType: 'user',
+                resourceId: $user->id,
+                context: ['email' => $user->email],
+                userId: $user->id,
+            );
+        }
+
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return response()->json(['success' => true]);
+    }
+
+    /* ================================================================== */
     /*  POST /api/change-password                                         */
     /*  Used on first login (must_change_password) or voluntary change.   */
     /*  Returns a NEW recovery code (shown once) after success.           */

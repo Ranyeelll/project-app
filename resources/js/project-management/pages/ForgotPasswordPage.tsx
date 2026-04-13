@@ -15,6 +15,7 @@ import {
 import { useTheme, useNavigation } from '../context/AppContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { apiFetch } from '../utils/apiFetch';
 
 type Step = 'verify' | 'reset' | 'success';
 
@@ -53,11 +54,8 @@ export function ForgotPasswordPage() {
     setVerifyError('');
     setVerifyLoading(true);
     try {
-      const csrfToken =
-        document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch('/api/verify-recovery', {
+      const res = await apiFetch('/api/verify-recovery', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({ employee_id: employeeId.trim(), recovery_code: recoveryCode.trim() }),
       });
       const data = await res.json();
@@ -92,11 +90,8 @@ export function ForgotPasswordPage() {
     setResetError('');
     setResetLoading(true);
     try {
-      const csrfToken =
-        document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch('/api/reset-password-offline', {
+      const res = await apiFetch('/api/reset-password-offline', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({
           employee_id: employeeId.trim(),
           recovery_code: recoveryCode.trim(),

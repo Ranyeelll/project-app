@@ -12,7 +12,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->trustProxies(at: '*');
+        $middleware->trustProxies(
+            at: env('TRUSTED_PROXIES', ''),
+            headers: \Illuminate\Http\Request::HEADER_X_FORWARDED_FOR |
+                     \Illuminate\Http\Request::HEADER_X_FORWARDED_HOST |
+                     \Illuminate\Http\Request::HEADER_X_FORWARDED_PORT |
+                     \Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO,
+        );
 
         $middleware->validateCsrfTokens(except: [
             'api/*',
@@ -32,5 +38,12 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->report(function (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Unhandled exception', [
+                'exception' => get_class($e),
+                'message'   => $e->getMessage(),
+                'file'      => $e->getFile() . ':' . $e->getLine(),
+                'trace'     => collect($e->getTrace())->take(5)->toArray(),
+            ]);
+        });
     })->create();

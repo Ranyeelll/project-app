@@ -213,6 +213,110 @@ class AuditService
     }
 
     /**
+     * Log: User created by admin.
+     */
+    public static function logUserCreated(int $userId, array $userData, ?int $adminId = null): AuditLog
+    {
+        return AuditLog::log(
+            action: 'user.created',
+            resourceType: 'user',
+            resourceId: $userId,
+            snapshot: $userData,
+            userId: $adminId,
+            sensitiveFlag: true
+        );
+    }
+
+    /**
+     * Log: User updated by admin.
+     */
+    public static function logUserUpdated(int $userId, array $changes, ?int $adminId = null): AuditLog
+    {
+        return AuditLog::log(
+            action: 'user.updated',
+            resourceType: 'user',
+            resourceId: $userId,
+            changes: $changes,
+            userId: $adminId,
+            sensitiveFlag: true
+        );
+    }
+
+    /**
+     * Log: User deleted by admin.
+     */
+    public static function logUserDeleted(int $userId, array $snapshot, ?int $adminId = null): AuditLog
+    {
+        return AuditLog::log(
+            action: 'user.deleted',
+            resourceType: 'user',
+            resourceId: $userId,
+            snapshot: $snapshot,
+            userId: $adminId,
+            sensitiveFlag: true
+        );
+    }
+
+    /**
+     * Log: User role changed.
+     */
+    public static function logRoleChanged(int $userId, string $oldRole, string $newRole, ?int $adminId = null): AuditLog
+    {
+        return AuditLog::log(
+            action: 'user.role_changed',
+            resourceType: 'user',
+            resourceId: $userId,
+            changes: ['role' => ['from' => $oldRole, 'to' => $newRole]],
+            userId: $adminId,
+            sensitiveFlag: true
+        );
+    }
+
+    /**
+     * Log: User department changed.
+     */
+    public static function logDepartmentChanged(int $userId, string $oldDept, string $newDept, ?int $adminId = null): AuditLog
+    {
+        return AuditLog::log(
+            action: 'user.department_changed',
+            resourceType: 'user',
+            resourceId: $userId,
+            changes: ['department' => ['from' => $oldDept, 'to' => $newDept]],
+            userId: $adminId,
+            sensitiveFlag: true
+        );
+    }
+
+    /**
+     * Log: System configuration updated.
+     */
+    public static function logConfigUpdated(string $settingKey, mixed $oldValue, mixed $newValue, ?int $userId = null): AuditLog
+    {
+        return AuditLog::log(
+            action: 'settings.updated',
+            resourceType: 'system_setting',
+            resourceId: 0,
+            changes: [$settingKey => ['from' => $oldValue, 'to' => $newValue]],
+            userId: $userId,
+            sensitiveFlag: true
+        );
+    }
+
+    /**
+     * Log: Data export performed.
+     */
+    public static function logDataExport(string $exportType, string $format, ?array $context = null, ?int $userId = null): AuditLog
+    {
+        return AuditLog::log(
+            action: "{$exportType}.exported",
+            resourceType: $exportType,
+            resourceId: 0,
+            context: array_merge(['format' => $format], $context ?? []),
+            userId: $userId
+        );
+    }
+
+    /**
      * Generic audit logging for any action.
      */
     public static function log(

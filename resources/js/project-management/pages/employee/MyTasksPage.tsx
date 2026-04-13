@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   SearchIcon,
   UploadIcon,
@@ -12,7 +12,8 @@ import {
   UsersIcon,
   AlertTriangleIcon,
   EyeIcon,
-  DownloadIcon } from
+  DownloadIcon,
+  ActivityIcon } from
 'lucide-react';
 import { useData, useAuth, useNavigation } from '../../context/AppContext';
 import { Task, MediaUpload } from '../../data/mockData';
@@ -22,6 +23,10 @@ import { Modal } from '../../components/ui/Modal';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { isElevatedRole } from '../../utils/roles';
+import { apiFetch } from '../../utils/apiFetch';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { TaskActivityTimeline } from '../../components/projects/TaskActivityTimeline';
+import { downloadCsv } from '../../utils/exportCsv';
 export function MyTasksPage() {
   const { tasks, setTasks, projects, users, media, refreshMedia, refreshProjects, refreshTasks, refreshAll } = useData();
   const { currentUser } = useAuth();
@@ -43,8 +48,19 @@ export function MyTasksPage() {
   const [reportFile, setReportFile] = useState<File | null>(null);
   const [submittingReport, setSubmittingReport] = useState(false);
   const [teamModal, setTeamModal] = useState<string | null>(null); // project id
+  const [activityModal, setActivityModal] = useState<Task | null>(null);
   const [submittingProjectId, setSubmittingProjectId] = useState<string | null>(null);
   const [notifyFeedback, setNotifyFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
   const myProjects = projects.filter((p) => (p.teamIds || []).map(String).includes(String(currentUser?.id)));
   const myProjectIds = myProjects.map((p) => p.id);
 
@@ -68,11 +84,9 @@ export function MyTasksPage() {
   };
   const handleProgressSave = async () => {
     if (!progressModal) return;
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      const response = await fetch(`/api/tasks/${progressModal.id}/progress`, {
+      const response = await apiFetch(`/api/tasks/${progressModal.id}/progress`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({ percentage_completed: newProgress }),
       });
       
@@ -114,22 +128,15 @@ export function MyTasksPage() {
         formData.append('file', reportFile);
       }
 
-      const res = await fetch('/api/media', {
+      const res = await apiFetch('/api/media', {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-        },
         body: formData,
       });
 
       if (res.ok) {
         // Update task completion report status and cost via API
-        const taskRes = await fetch(`/api/tasks/${reportModal.id}`, {
+        const taskRes = await apiFetch(`/api/tasks/${reportModal.id}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
           body: JSON.stringify({
             completion_report_status: 'pending',
             report_cost: Number(reportForm.cost) || 0,
@@ -163,18 +170,11 @@ export function MyTasksPage() {
   };
 
   const handleFinishProject = async (projectId: string) => {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     setNotifyFeedback(null);
     setSubmittingProjectId(projectId);
     try {
-      const res = await fetch(`/api/projects/${projectId}/approval`, {
+      const res = await apiFetch(`/api/projects/${projectId}/approval`, {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-        },
         body: JSON.stringify({ action: 'finish_project', notes: 'Project marked as complete by project member.' }),
       });
 
@@ -231,6 +231,7 @@ export function MyTasksPage() {
 
   const finishableProjects = projectFinishStates.filter((entry) => entry.canFinish);
 
+  if (isLoading) return <LoadingSpinner message="Loading data..." />;
   return (
     <div className="space-y-5">
       {/* My Projects Summary */}
@@ -373,6 +374,22 @@ export function MyTasksPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
           className="w-40" />
 
+        <Button
+          variant="outline"
+          size="sm"
+          icon={<DownloadIcon size={14} />}
+          onClick={() => {
+            const headers = ['Task', 'Project', 'Status', 'Priority', 'Progress', 'Start Date', 'End Date', 'Assigned To'];
+            const rows = filtered.map((t) => {
+              const proj = projects.find((p) => p.id === t.projectId);
+              const assignee = users.find((u) => u.id === t.assignedTo);
+              return [t.title, proj?.name || '', t.status, t.priority, String(t.progress), t.startDate || '', t.endDate || '', assignee?.name || ''];
+            });
+            downloadCsv('my-tasks', headers, rows);
+          }}
+        >
+          Export
+        </Button>
       </div>
 
       {/* Task list */}
@@ -575,6 +592,14 @@ export function MyTasksPage() {
 
                       {task.completionReportStatus !== 'none' ? 'Resubmit Report' : 'Submit Report'}
                     </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={<ActivityIcon size={12} />}
+                  onClick={() => setActivityModal(task)}
+                >
+                  Activity
+                </Button>
               </div>
             </div>);
 
@@ -914,6 +939,24 @@ export function MyTasksPage() {
             </div>
           );
         })()}
+      </Modal>
+
+      {/* Task Activity Timeline Modal */}
+      <Modal
+        isOpen={!!activityModal}
+        onClose={() => setActivityModal(null)}
+        title={activityModal ? `Activity — ${activityModal.title}` : 'Task Activity'}
+        size="md"
+        footer={
+          <Button variant="secondary" onClick={() => setActivityModal(null)}>
+            Close
+          </Button>
+        }>
+        {activityModal && (
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <TaskActivityTimeline taskId={activityModal.id} />
+          </div>
+        )}
       </Modal>
     </div>);
 

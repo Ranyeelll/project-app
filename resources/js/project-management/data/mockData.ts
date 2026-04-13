@@ -22,6 +22,15 @@ export interface Project {
   description: string;
   status: 'active' | 'on-hold' | 'completed' | 'archived';
   priority: 'low' | 'medium' | 'high' | 'critical';
+  category?: string;
+  riskLevel?: string;
+  beneficiaryType?: string;
+  beneficiaryName?: string;
+  contactPerson?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  location?: string | null;
+  objectives?: string;
   startDate: string;
   endDate: string;
   budget: number;
@@ -31,6 +40,7 @@ export interface Project {
   teamIds: string[];
   leaderId?: string | null;
   createdAt: string;
+  updatedAt?: string;
   approvalStatus?: ApprovalStatus;
   approvalNotes?: string | null;
   submittedBy?: string | null;
@@ -121,7 +131,7 @@ export interface Task {
   estimatedHours: number;
   loggedHours: number;
   allowEmployeeEdit: boolean;
-  completionReportStatus: 'none' | 'pending' | 'approved' | 'rejected';
+  completionReportStatus: 'none' | 'pending' | 'approved' | 'rejected' | 'revision_requested';
   reportCost: number;
 }
 

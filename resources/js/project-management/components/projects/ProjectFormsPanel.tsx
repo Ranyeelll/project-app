@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from '../ui/Modal';
 import { Project, ProjectFormType, ProjectFormSubmission, User } from '../../data/mockData';
 import { useAuth, useData } from '../../context/AppContext';
+import { apiFetch } from '../../utils/apiFetch';
 import { ProjectDetailsForm } from './forms/ProjectDetailsForm';
 import { ProjectPlanningForm } from './forms/ProjectPlanningForm';
 import { ProgressUpdateForm } from './forms/ProgressUpdateForm';
@@ -46,14 +47,11 @@ export function ProjectFormsPanel({ project, isOpen, onClose }: ProjectFormsPane
     loadSubmissions();
   }, [loadSubmissions]);
 
-  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-
   const handleSubmit = async (data: Record<string, any>) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/projects/${project.id}/form-submissions`, {
+      const res = await apiFetch(`/api/projects/${project.id}/form-submissions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({ form_type: activeTab, data }),
       });
       const json = await res.json();
@@ -72,9 +70,8 @@ export function ProjectFormsPanel({ project, isOpen, onClose }: ProjectFormsPane
   };
 
   const handleReview = async (submissionId: string, status: string, notes: string) => {
-    const res = await fetch(`/api/projects/${project.id}/form-submissions/${submissionId}`, {
+    const res = await apiFetch(`/api/projects/${project.id}/form-submissions/${submissionId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
       body: JSON.stringify({ status, notes }),
     });
     if (!res.ok) throw new Error('Review failed.');

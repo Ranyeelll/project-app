@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PlusIcon, ClockIcon, TrashIcon } from 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
+import { apiFetch } from '../../utils/apiFetch';
+import { parseApiError } from '../../utils/parseApiError';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 export function LogTimePage() {
-  const { tasks, projects, timeLogs, setTimeLogs, refreshTimeLogs, refreshTasks } = useData();
+  const { tasks, projects, users, timeLogs, setTimeLogs, refreshTimeLogs, refreshTasks } = useData();
   const { currentUser } = useAuth();
   const [createModal, setCreateModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -27,17 +30,23 @@ export function LogTimePage() {
   });
   const weekHours = thisWeekLogs.reduce((s, l) => s + l.hours, 0);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
+
   const handleCreate = async () => {
     setSubmitting(true);
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    setFormError(null);
     try {
-      const res = await fetch('/api/time-logs', {
+      const res = await apiFetch('/api/time-logs', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-        },
         body: JSON.stringify({
           task_id: form.taskId,
           user_id: currentUser?.id || '',
@@ -48,34 +57,41 @@ export function LogTimePage() {
       });
       if (res.ok) {
         refreshTimeLogs();
-        refreshTasks(); // updates loggedHours on the task
+        refreshTasks();
+        setCreateModal(false);
+        setForm({
+          taskId: '',
+          hours: '',
+          description: '',
+          date: new Date().toISOString().split('T')[0]
+        });
+      } else {
+        setFormError(await parseApiError(res, 'Failed to log time.'));
       }
-    } catch { /* ignore */ } finally {
+    } catch {
+      setFormError('Network error. Please check your connection and try again.');
+    } finally {
       setSubmitting(false);
-      setCreateModal(false);
-      setForm({
-        taskId: '',
-        hours: '',
-        description: '',
-        date: new Date().toISOString().split('T')[0]
-      });
     }
   };
   const handleDelete = async (id: string) => {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     try {
-      await fetch(`/api/time-logs/${id}`, {
+      const res = await apiFetch(`/api/time-logs/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-        },
       });
-      refreshTimeLogs();
-      refreshTasks();
-    } catch { /* ignore */ }
+      if (res.ok) {
+        refreshTimeLogs();
+        refreshTasks();
+      } else {
+        const msg = await parseApiError(res, 'Failed to delete time log.');
+        alert(msg);
+      }
+    } catch {
+      alert('Network error. Please check your connection and try again.');
+    }
     setDeleteConfirm(null);
   };
+  if (isLoading) return <LoadingSpinner message="Loading data..." />;
   return (
     <div className="space-y-5">
       {/* Stats */}
@@ -114,7 +130,7 @@ export function LogTimePage() {
         <Button
           variant="primary"
           icon={<PlusIcon size={14} />}
-          onClick={() => setCreateModal(true)}>
+          onClick={() => { setFormError(null); setCreateModal(true); }}>
 
           Log Time
         </Button>
@@ -275,6 +291,7 @@ export function LogTimePage() {
             }
             rows={3} />
 
+          {formError && <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded p-2">{formError}</div>}
         </div>
       </Modal>
 

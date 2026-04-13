@@ -40,10 +40,50 @@ class ProjectController extends Controller
         }
 
         $projects = $query->orderByDesc('created_at')
-            ->get()
-            ->map(fn ($p) => $this->formatProject($p));
+            ->limit(500)
+            ->get();
 
-        return response()->json($projects);
+        // Pre-load aggregates to avoid N+1 queries in formatProject
+        $projectIds = $projects->pluck('id');
+
+        $taskAvgByProject = Task::whereIn('project_id', $projectIds)
+            ->groupBy('project_id')
+            ->selectRaw('project_id, AVG(progress) as avg_progress')
+            ->pluck('avg_progress', 'project_id');
+
+        $taskExistsByProject = Task::whereIn('project_id', $projectIds)
+            ->groupBy('project_id')
+            ->selectRaw('project_id, COUNT(*) as cnt')
+            ->pluck('cnt', 'project_id');
+
+        $approvedSpentByProject = BudgetRequest::whereIn('project_id', $projectIds)
+            ->where('status', 'approved')
+            ->where('type', 'spending')
+            ->groupBy('project_id')
+            ->selectRaw('project_id, SUM(amount) as total')
+            ->pluck('total', 'project_id');
+
+        $reportCostsByProject = Task::whereIn('project_id', $projectIds)
+            ->where('completion_report_status', 'approved')
+            ->groupBy('project_id')
+            ->selectRaw('project_id, SUM(report_cost) as total')
+            ->pluck('total', 'project_id');
+
+        // Team-specific task averages
+        $teamTaskAvgByProject = [];
+        foreach ($projects as $p) {
+            $teamIds = array_values(array_filter(array_map('intval', $p->team_ids ?? []), static fn ($id) => $id > 0));
+            if (!empty($teamIds)) {
+                $teamTaskAvgByProject[$p->id] = Task::where('project_id', $p->id)
+                    ->whereIn('assigned_to', $teamIds)
+                    ->avg('progress');
+            }
+        }
+
+        $preloaded = compact('taskAvgByProject', 'taskExistsByProject', 'approvedSpentByProject', 'reportCostsByProject', 'teamTaskAvgByProject');
+        $result = $projects->map(fn ($p) => $this->formatProject($p, $preloaded));
+
+        return response()->json($result);
     }
 
     /**
@@ -56,6 +96,15 @@ class ProjectController extends Controller
             'description' => 'required|string|max:5000',
             'status'      => 'required|in:active,on-hold,completed,archived',
             'priority'    => 'required|in:low,medium,high,critical',
+            'category'         => 'required|in:development,maintenance,research,infrastructure,consultation',
+            'risk_level'       => 'required|in:low,medium,high',
+            'beneficiary_type' => 'required|in:internal,external',
+            'beneficiary_name' => 'required|string|max:255',
+            'contact_person'   => 'nullable|string|max:255',
+            'contact_email'    => 'nullable|email|max:255',
+            'contact_phone'    => 'nullable|string|max:50',
+            'location'         => 'nullable|string|max:500',
+            'objectives'       => 'required|string|max:5000',
             'start_date'  => 'required|date',
             'end_date'    => 'required|date|after_or_equal:start_date',
             'budget'      => 'nullable|numeric|min:0',
@@ -122,6 +171,15 @@ class ProjectController extends Controller
             'description' => 'nullable|string',
             'status'      => 'sometimes|in:active,on-hold,completed,archived',
             'priority'    => 'sometimes|in:low,medium,high,critical',
+            'category'         => 'sometimes|in:development,maintenance,research,infrastructure,consultation',
+            'risk_level'       => 'sometimes|in:low,medium,high',
+            'beneficiary_type' => 'sometimes|in:internal,external',
+            'beneficiary_name' => 'sometimes|string|max:255',
+            'contact_person'   => 'nullable|string|max:255',
+            'contact_email'    => 'nullable|email|max:255',
+            'contact_phone'    => 'nullable|string|max:50',
+            'location'         => 'nullable|string|max:500',
+            'objectives'       => 'sometimes|string|max:5000',
             'start_date'  => 'nullable|date',
             'end_date'    => 'nullable|date',
             'budget'      => 'nullable|numeric|min:0',
@@ -206,33 +264,32 @@ class ProjectController extends Controller
     /**
      * Format a project model into the JSON shape the frontend expects.
      */
-    private function formatProject(Project $p): array
+    private function formatProject(Project $p, array $preloaded = []): array
     {
-        // Keep persisted project progress as source of truth.
-        // Derive task-based progress from assigned team-member tasks first,
-        // then fallback to all project tasks when needed.
         $teamIds = array_values(array_filter(array_map('intval', $p->team_ids ?? []), static fn ($id) => $id > 0));
-        $teamTaskAvg = null;
-        if (!empty($teamIds)) {
-            $teamTaskAvg = Task::where('project_id', $p->id)
-                ->whereIn('assigned_to', $teamIds)
-                ->avg('progress');
+
+        if (!empty($preloaded)) {
+            $teamTaskAvg = $preloaded['teamTaskAvgByProject'][$p->id] ?? null;
+            $allTaskAvg = $preloaded['taskAvgByProject'][$p->id] ?? null;
+            $hasProjectTasks = ($preloaded['taskExistsByProject'][$p->id] ?? 0) > 0;
+            $approvedSpent = (float) ($preloaded['approvedSpentByProject'][$p->id] ?? 0);
+            $reportCosts = (float) ($preloaded['reportCostsByProject'][$p->id] ?? 0);
+        } else {
+            $teamTaskAvg = !empty($teamIds)
+                ? Task::where('project_id', $p->id)->whereIn('assigned_to', $teamIds)->avg('progress')
+                : null;
+            $allTaskAvg = Task::where('project_id', $p->id)->avg('progress');
+            $hasProjectTasks = Task::where('project_id', $p->id)->exists();
+            $approvedSpent = (float) BudgetRequest::where('project_id', $p->id)
+                ->where('status', 'approved')->where('type', 'spending')->sum('amount');
+            $reportCosts = (float) Task::where('project_id', $p->id)
+                ->where('completion_report_status', 'approved')->sum('report_cost');
         }
-        $allTaskAvg = Task::where('project_id', $p->id)->avg('progress');
+
         $taskAverageProgress = (int) round($teamTaskAvg ?? $allTaskAvg ?? 0);
         $storedProgress = (int) ($p->progress ?? 0);
-        $hasProjectTasks = Task::where('project_id', $p->id)->exists();
         $computedProgress = $hasProjectTasks ? $taskAverageProgress : $storedProgress;
-
-        // Compute spent from approved spending budget requests + approved task report costs
-        $approvedSpent = BudgetRequest::where('project_id', $p->id)
-            ->where('status', 'approved')
-            ->where('type', 'spending')
-            ->sum('amount');
-        $reportCosts = Task::where('project_id', $p->id)
-            ->where('completion_report_status', 'approved')
-            ->sum('report_cost');
-        $computedSpent = (float) ($approvedSpent + $reportCosts);
+        $computedSpent = $approvedSpent + $reportCosts;
 
         return [
             'id'             => (string) $p->id,
@@ -241,6 +298,15 @@ class ProjectController extends Controller
             'description'    => $p->description ?? '',
             'status'         => $p->status,
             'priority'       => $p->priority,
+            'category'        => $p->category ?? 'development',
+            'riskLevel'       => $p->risk_level ?? 'low',
+            'beneficiaryType' => $p->beneficiary_type ?? 'internal',
+            'beneficiaryName' => $p->beneficiary_name ?? '',
+            'contactPerson'   => $p->contact_person,
+            'contactEmail'    => $p->contact_email,
+            'contactPhone'    => $p->contact_phone,
+            'location'        => $p->location,
+            'objectives'      => $p->objectives ?? '',
             'startDate'      => $p->start_date?->toIso8601String() ?? '',
             'endDate'        => $p->end_date?->toIso8601String() ?? '',
             'budget'         => (float) $p->budget,
@@ -250,6 +316,7 @@ class ProjectController extends Controller
             'teamIds'        => array_values(array_filter(array_map('strval', $p->team_ids ?? []))),
             'leaderId'       => $p->project_leader_id ? (string) $p->project_leader_id : null,
             'createdAt'      => $p->created_at?->toIso8601String() ?? '',
+            'updatedAt'      => $p->updated_at?->toIso8601String() ?? '',
             'approvalStatus' => $p->approval_status ?? 'draft',
             'approvalNotes'  => $p->approval_notes,
             'submittedBy'    => $p->submitted_by ? (string) $p->submitted_by : null,

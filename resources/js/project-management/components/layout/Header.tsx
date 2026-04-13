@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { apiFetch } from '../../utils/apiFetch';
 import {
   SunIcon,
   MoonIcon,
@@ -18,6 +19,11 @@ import {
   UserIcon,
   KeyIcon,
   MenuIcon,
+  SearchIcon,
+  FolderKanbanIcon,
+  ListTodoIcon,
+  UsersIcon,
+  SettingsIcon,
 } from 'lucide-react';
 import { ChangePasswordModal } from '../ui/ChangePasswordModal';
 import { ProfilePhotoModal } from '../ui/ProfilePhotoModal';
@@ -35,6 +41,7 @@ interface Notification {
   navigateTo?: string;
   read: boolean;
   meta?: any;
+  category?: 'tasks' | 'budget' | 'issues' | 'system';
 }
 
 export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
@@ -54,6 +61,48 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const dropdownRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  // Global search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+
+  // Search results computed from local data
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (q.length < 2) return { projects: [], tasks: [], users: [] };
+
+    const matchedProjects = projects
+      .filter((p) => p.name.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q))
+      .slice(0, 5)
+      .map((p) => ({ id: p.id, title: p.name, subtitle: `${p.status} · ${p.category || 'General'}`, type: 'project' as const }));
+
+    const matchedTasks = tasks
+      .filter((t) => t.title.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q))
+      .slice(0, 5)
+      .map((t) => {
+        const proj = projects.find((p) => p.id === t.projectId);
+        return { id: t.id, title: t.title, subtitle: proj?.name || 'No project', type: 'task' as const };
+      });
+
+    const matchedUsers = users
+      .filter((u) => u.name.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q))
+      .slice(0, 5)
+      .map((u) => ({ id: u.id, title: u.name, subtitle: `${u.department || ''} · ${u.email || ''}`, type: 'user' as const }));
+
+    return { projects: matchedProjects, tasks: matchedTasks, users: matchedUsers };
+  }, [searchQuery, projects, tasks, users]);
+
+  const hasSearchResults = searchResults.projects.length > 0 || searchResults.tasks.length > 0 || searchResults.users.length > 0;
+
+  function handleSearchNavigate(type: string) {
+    const isAdmin = isElevatedRole(currentUser?.role);
+    if (type === 'project') setCurrentPage(isAdmin ? 'admin-projects' : 'employee-dashboard');
+    else if (type === 'task') setCurrentPage(isAdmin ? 'admin-projects' : 'employee-tasks');
+    else if (type === 'user') setCurrentPage(isAdmin ? 'admin-team' : 'employee-dashboard');
+    setSearchQuery('');
+    setShowSearch(false);
+  }
 
   const cachedProfilePhoto = useMemo(() => {
     if (!currentUser?.profilePhoto) return null;
@@ -70,10 +119,13 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setShowProfileMenu(false);
       }
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSearch(false);
+      }
     }
-    if (showNotifications || showProfileMenu) document.addEventListener('mousedown', handleClick);
+    if (showNotifications || showProfileMenu || showSearch) document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [showNotifications, showProfileMenu]);
+  }, [showNotifications, showProfileMenu, showSearch]);
 
   // Load dismissed IDs from localStorage (user-specific)
   useEffect(() => {
@@ -387,16 +439,32 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       }
     }
 
-    // Mark notifications as read if they've been dismissed
-    return notifs.map((n) => ({
-      ...n,
-      read: dismissedIds.has(n.id),
-    }));
+    // Mark notifications as read if they've been dismissed, and auto-assign categories
+    return notifs.map((n) => {
+      let category: Notification['category'] = 'system';
+      if (n.id.includes('review') || n.id.includes('task') || n.id.includes('overdue') || n.id.includes('deadline') || n.id.includes('assigned') || n.id.includes('editable')) category = 'tasks';
+      else if (n.id.includes('budget') || n.id.includes('revision')) category = 'budget';
+      else if (n.id.includes('issue') || n.id.includes('blocker')) category = 'issues';
+      else if (n.id.includes('project') || n.id.includes('approval')) category = 'tasks';
+      return { ...n, category, read: dismissedIds.has(n.id) };
+    });
   }, [currentUser, tasks, projects, budgetRequests, issues, users, todayStr, dismissedIds]);
 
   // No DB chat notifications — chat feature removed
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // Notification category filter
+  const [notifFilter, setNotifFilter] = useState<'all' | 'tasks' | 'budget' | 'issues' | 'system'>('all');
+  const filteredNotifications = notifFilter === 'all'
+    ? notifications
+    : notifications.filter((n) => n.category === notifFilter);
+
+  // Browser tab badge for unread notifications
+  useEffect(() => {
+    const baseTitle = 'MAPTECH PMS';
+    document.title = unreadCount > 0 ? `(${unreadCount}) ${baseTitle}` : baseTitle;
+  }, [unreadCount]);
 
   const markAllRead = () => {
     const newDismissed = new Set(dismissedIds);
@@ -434,6 +502,9 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
     'employee-time': 'Log Time',
     'employee-issues': 'Report Issue',
     'employee-resources': 'Resources',
+    'settings': 'Settings',
+    'calendar': 'Calendar',
+    'admin-audit-logs': 'Audit Logs',
   };
   const title = pageTitles[currentPage] || 'Project Management System';
 
@@ -461,6 +532,106 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                 : `Employee${currentUser?.department ? ` · ${currentUser.department}` : ''}`)}
           </p>
         </div>
+      </div>
+
+      {/* Global Search Bar */}
+      <div className="hidden md:flex flex-1 max-w-md mx-4 relative" ref={searchRef}>
+        <div className="relative w-full">
+          <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 dark:text-dark-subtle text-light-subtle pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setShowSearch(true); }}
+            onFocus={() => setShowSearch(true)}
+            placeholder="Search projects, tasks, people…"
+            className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg dark:bg-dark-card2 bg-light-card2 dark:text-dark-text text-light-text dark:placeholder-dark-subtle placeholder-light-subtle border dark:border-dark-border border-light-border focus:outline-none focus:ring-1 focus:ring-green-primary/50 transition-colors"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchQuery(''); setShowSearch(false); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded dark:text-dark-subtle dark:hover:text-dark-text text-light-subtle hover:text-light-text"
+            >
+              <XCircleIcon size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Search Results Dropdown */}
+        {showSearch && searchQuery.length >= 2 && (
+          <div className="absolute top-full left-0 right-0 mt-1 dark:bg-dark-card bg-white rounded-lg shadow-xl border dark:border-dark-border border-light-border overflow-hidden z-50 max-h-[400px] overflow-y-auto">
+            {!hasSearchResults ? (
+              <div className="px-4 py-6 text-center">
+                <SearchIcon size={20} className="mx-auto mb-2 dark:text-dark-subtle text-light-subtle opacity-40" />
+                <p className="text-sm dark:text-dark-muted text-light-muted">No results for "{searchQuery}"</p>
+              </div>
+            ) : (
+              <>
+                {searchResults.projects.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-subtle text-light-subtle dark:bg-dark-bg bg-light-bg">
+                      Projects ({searchResults.projects.length})
+                    </div>
+                    {searchResults.projects.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => handleSearchNavigate(r.type)}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-left dark:hover:bg-dark-card2 hover:bg-light-card2 transition-colors"
+                      >
+                        <FolderKanbanIcon size={14} className="text-blue-400 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm dark:text-dark-text text-light-text truncate">{r.title}</p>
+                          <p className="text-[11px] dark:text-dark-subtle text-light-subtle truncate">{r.subtitle}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {searchResults.tasks.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-subtle text-light-subtle dark:bg-dark-bg bg-light-bg">
+                      Tasks ({searchResults.tasks.length})
+                    </div>
+                    {searchResults.tasks.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => handleSearchNavigate(r.type)}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-left dark:hover:bg-dark-card2 hover:bg-light-card2 transition-colors"
+                      >
+                        <ListTodoIcon size={14} className="text-green-400 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm dark:text-dark-text text-light-text truncate">{r.title}</p>
+                          <p className="text-[11px] dark:text-dark-subtle text-light-subtle truncate">{r.subtitle}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {searchResults.users.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider dark:text-dark-subtle text-light-subtle dark:bg-dark-bg bg-light-bg">
+                      People ({searchResults.users.length})
+                    </div>
+                    {searchResults.users.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => handleSearchNavigate(r.type)}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-left dark:hover:bg-dark-card2 hover:bg-light-card2 transition-colors"
+                      >
+                        <UsersIcon size={14} className="text-purple-400 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm dark:text-dark-text text-light-text truncate">{r.title}</p>
+                          <p className="text-[11px] dark:text-dark-subtle text-light-subtle truncate">{r.subtitle}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Right actions */}
@@ -505,15 +676,42 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                 )}
               </div>
 
+              {/* Category Filter Tabs */}
+              {notifications.length > 0 && (
+                <div className="flex gap-0.5 px-2 py-1.5 dark:border-dark-border border-b border-light-border overflow-x-auto">
+                  {([['all', 'All'], ['tasks', 'Tasks'], ['budget', 'Budget'], ['issues', 'Issues']] as const).map(([key, label]) => {
+                    const count = key === 'all'
+                      ? notifications.filter((n) => !n.read).length
+                      : notifications.filter((n) => n.category === key && !n.read).length;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setNotifFilter(key)}
+                        className={`px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap transition-colors ${
+                          notifFilter === key
+                            ? 'bg-green-primary/15 text-green-primary'
+                            : 'dark:text-dark-subtle text-light-subtle dark:hover:bg-dark-card2 hover:bg-light-card2'
+                        }`}
+                      >
+                        {label}
+                        {count > 0 && (
+                          <span className="ml-1 text-[9px] opacity-70">{count}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Notification List */}
               <div className="max-h-[380px] overflow-y-auto">
-                {notifications.length === 0 ? (
+                {filteredNotifications.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10">
                     <BellIcon size={28} className="dark:text-dark-subtle text-light-subtle opacity-30 mb-2" />
                     <p className="text-xs dark:text-dark-subtle text-light-subtle">No notifications</p>
                   </div>
                 ) : (
-                  notifications.map((notif) => (
+                  filteredNotifications.map((notif) => (
                     <button
                       key={notif.id}
                       onClick={() => handleNotifClick(notif)}
@@ -687,6 +885,15 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                   </span>
                   <span className="leading-5">Change Password</span>
                 </button>
+                <button
+                  onClick={() => { setShowProfileMenu(false); setCurrentPage('settings'); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium dark:text-dark-muted dark:hover:bg-dark-card2 dark:hover:text-dark-text text-light-muted hover:bg-light-card2 hover:text-light-text transition-colors"
+                >
+                  <span className="h-4 w-4 flex items-center justify-center shrink-0">
+                    <SettingsIcon size={14} />
+                  </span>
+                  <span className="leading-5">Settings</span>
+                </button>
               {/* Edit Retention (superadmin only) */}
               {String(currentUser?.role).toLowerCase() === 'superadmin' && (
                 <div className="px-2 py-2 dark:border-dark-border border-b border-light-border">
@@ -695,7 +902,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
                       setShowProfileMenu(false);
                       // load current value then open modal
                       try {
-                        const res = await fetch('/api/settings/audit-log-retention', { credentials: 'include' });
+                        const res = await apiFetch('/api/settings/audit-log-retention');
                         if (res.ok) {
                           const data = await res.json();
                           setRetentionValue(data.audit_log_retention_days ?? 365);

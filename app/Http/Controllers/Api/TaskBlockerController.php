@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\Department;
 use App\Http\Controllers\Controller;
+use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskBlocker;
+use App\Models\User;
+use App\Notifications\BlockerReportedNotification;
 use App\Services\AuditService;
 use App\Services\TaskActivityLogger;
 use Illuminate\Http\JsonResponse;
@@ -88,6 +91,29 @@ class TaskBlockerController extends Controller
 
         // Activity log
         TaskActivityLogger::issueReported($task->id, $data['issue_title'], $data['priority']);
+
+        // Notify the project manager about the blocker
+        try {
+            $project = Project::find($task->project_id);
+            if ($project && $project->manager_id) {
+                $manager = User::find($project->manager_id);
+                if ($manager && $manager->id !== $user->id) {
+                    $manager->notify(new BlockerReportedNotification([
+                        'type'         => 'blocker_reported',
+                        'task_id'      => $task->id,
+                        'task_title'   => $task->title,
+                        'project_id'   => $project->id,
+                        'project_name' => $project->name,
+                        'blocker_title' => $data['issue_title'],
+                        'priority'     => $data['priority'],
+                        'reporter'     => $user->name,
+                        'message'      => "A {$data['priority']} priority blocker was reported on \"{$task->title}\": {$data['issue_title']}",
+                    ]));
+                }
+            }
+        } catch (\Throwable $e) {
+            // Don't block blocker reporting for notification failures
+        }
 
         return response()->json([
             'message' => 'Blocker reported successfully',

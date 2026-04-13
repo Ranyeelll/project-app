@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 interface AppLayoutProps {
@@ -7,21 +7,38 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile toggle
   const [sidebarExpanded, setSidebarExpanded] = useState(false); // Desktop hover expand
+  const HOVER_EXPAND_DELAY_MS = 90;
+  const HOVER_COLLAPSE_DELAY_MS = 180;
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleSidebarMouseEnter = useCallback(() => {
+  const clearHoverTimer = useCallback(() => {
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
     }
-    setSidebarExpanded(true);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      clearHoverTimer();
+    };
+  }, [clearHoverTimer]);
+
+  const handleSidebarMouseEnter = useCallback(() => {
+    clearHoverTimer();
+    hoverTimeoutRef.current = setTimeout(() => {
+      setSidebarExpanded(true);
+      hoverTimeoutRef.current = null;
+    }, HOVER_EXPAND_DELAY_MS);
+  }, [clearHoverTimer]);
+
   const handleSidebarMouseLeave = useCallback(() => {
+    clearHoverTimer();
     hoverTimeoutRef.current = setTimeout(() => {
       setSidebarExpanded(false);
-    }, 150);
-  }, []);
+      hoverTimeoutRef.current = null;
+    }, HOVER_COLLAPSE_DELAY_MS);
+  }, [clearHoverTimer]);
 
   return (
     <div className="flex h-screen w-full overflow-hidden dark:bg-dark-bg bg-light-bg">
@@ -40,8 +57,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         onMouseEnter={handleSidebarMouseEnter}
         onMouseLeave={handleSidebarMouseLeave}
       />
-      {/* Main content shifts when sidebar expands */}
-      <div className={`flex-1 flex flex-col min-w-0 overflow-hidden transition-[margin] duration-200 ease-out ${sidebarExpanded ? 'lg:ml-64' : 'lg:ml-16'}`}>
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header onMenuToggle={() => setSidebarOpen((o) => !o)} />
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-6">{children}</main>
       </div>

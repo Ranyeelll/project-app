@@ -16,8 +16,10 @@ import {
   TableIcon,
 } from 'lucide-react';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useAuth } from '../../context/AppContext';
 import { isSuperadmin } from '../../utils/roles';
+import { apiFetch } from '../../utils/apiFetch';
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 interface CategoryItem {
@@ -86,16 +88,6 @@ export function BudgetReportPage() {
   const { currentUser } = useAuth();
 
   const canViewBudget = isSuperadmin(currentUser?.role) || currentUser?.department === 'Accounting';
-  if (!canViewBudget) {
-    return (
-      <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-6">
-        <p className="text-sm dark:text-dark-text text-light-text font-medium">Access denied.</p>
-        <p className="text-xs dark:text-dark-subtle text-light-subtle mt-1">
-          Budget reports are limited to Accounting and Superadmin.
-        </p>
-      </div>
-    );
-  }
 
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,10 +103,7 @@ export function BudgetReportPage() {
   const fetchReport = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/budget-report', {
-        headers: { Accept: 'application/json' },
-        credentials: 'include',
-      });
+      const res = await apiFetch('/api/budget-report');
       if (!res.ok) {
         if (res.status === 401) {
           localStorage.removeItem('maptech-current-user');
@@ -135,8 +124,19 @@ export function BudgetReportPage() {
   };
 
   useEffect(() => {
-    fetchReport();
+    if (canViewBudget) fetchReport();
   }, []);
+
+  if (!canViewBudget) {
+    return (
+      <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-6">
+        <p className="text-sm dark:text-dark-text text-light-text font-medium">Access denied.</p>
+        <p className="text-xs dark:text-dark-subtle text-light-subtle mt-1">
+          Budget reports are limited to Accounting and Superadmin.
+        </p>
+      </div>
+    );
+  }
 
   const handleExportPdf = async (period: 'weekly' | 'monthly' | 'yearly') => {
     setExporting(true);
@@ -144,9 +144,8 @@ export function BudgetReportPage() {
     setExportError(null);
     const url = `/api/budget-report/export-pdf?period=${period}`;
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         headers: { Accept: 'application/pdf' },
-        credentials: 'include',
       });
       if (res.ok && res.headers.get('content-type')?.includes('pdf')) {
         const blob = await res.blob();
@@ -176,7 +175,7 @@ export function BudgetReportPage() {
     setExportError(null);
     const url = `/api/budget-report/export-sheet?period=${period}`;
     try {
-      const res = await fetch(url, { credentials: 'include' });
+      const res = await apiFetch(url);
       if (res.ok) {
         const blob = await res.blob();
         const objectUrl = window.URL.createObjectURL(blob);
@@ -236,11 +235,7 @@ export function BudgetReportPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCwIcon size={24} className="animate-spin dark:text-dark-muted text-light-muted" />
-      </div>
-    );
+    return <LoadingSpinner message="Loading budget report..." />;
   }
 
   if (!report) {

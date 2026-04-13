@@ -6,6 +6,8 @@ use App\Enums\Department;
 use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\TaskReview;
+use App\Models\User;
+use App\Notifications\TaskReviewNotification;
 use App\Services\AuditService;
 use App\Services\TaskActivityLogger;
 use Illuminate\Http\JsonResponse;
@@ -91,6 +93,24 @@ class TaskReviewController extends Controller
 
         // Activity log
         TaskActivityLogger::reviewSubmitted($task->id, $data['approval_status'], $user->name);
+
+        // Notify the task assignee
+        try {
+            $assignee = User::find($task->assigned_to);
+            if ($assignee && $assignee->id !== $user->id) {
+                $assignee->notify(new TaskReviewNotification([
+                    'type'       => 'task_review',
+                    'task_id'    => $task->id,
+                    'task_title' => $task->title,
+                    'status'     => $data['approval_status'],
+                    'reviewer'   => $user->name,
+                    'message'    => "Your task \"{$task->title}\" has been {$data['approval_status']} by {$user->name}.",
+                    'comments'   => $data['comments'] ?? null,
+                ]));
+            }
+        } catch (\Throwable $e) {
+            // Don't block review flow for notification failures
+        }
 
         return response()->json([
             'message' => "Task review {$data['approval_status']} successfully",

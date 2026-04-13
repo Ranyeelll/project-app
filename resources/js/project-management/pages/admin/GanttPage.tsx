@@ -16,6 +16,8 @@ import { GanttItem, GanttDependency, User } from '../../data/mockData';
 import { GanttItemForm } from '../../components/gantt/GanttItemForm';
 import { GanttCalendarView } from '../../components/gantt/GanttCalendarView';
 import { UserAvatar } from '../../components/ui/UserAvatar';
+import { apiFetch } from '../../utils/apiFetch';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ZoomLevel = 'week' | 'month' | 'quarter';
@@ -131,13 +133,21 @@ export function GanttPage() {
   const [editItem, setEditItem] = useState<GanttItem | null>(null);
   const [addParent, setAddParent] = useState<GanttItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [stateOverrides, setStateOverrides] = useState<Record<string, ItemState>>({});
   const [stateSavingIds, setStateSavingIds] = useState<Set<string>>(new Set());
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
 
   const treeScrollRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
-
-  const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
   // Auto-select first project
   useEffect(() => {
@@ -468,9 +478,8 @@ export function GanttPage() {
         : `/api/projects/${selectedProject}/gantt-items`;
       const method = editItem ? 'PUT' : 'POST';
 
-      const res = await fetch(endpoint, {
+      const res = await apiFetch(endpoint, {
         method,
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
         body: JSON.stringify(payload),
       });
 
@@ -496,10 +505,10 @@ export function GanttPage() {
 
   const handleDelete = async (item: GanttItem) => {
     if (!confirm(`Delete "${item.name}" and all its children?`)) return;
+    setDeleting(true);
     try {
-      const res = await fetch(`/api/projects/${selectedProject}/gantt-items/${item.id}`, {
+      const res = await apiFetch(`/api/projects/${selectedProject}/gantt-items/${item.id}`, {
         method: 'DELETE',
-        headers: { 'X-CSRF-TOKEN': csrfToken() },
       });
 
       if (!res.ok) {
@@ -511,6 +520,8 @@ export function GanttPage() {
       await refreshGanttDependencies(selectedProject);
     } catch (e: any) {
       alert(e?.message || 'Failed to delete gantt item.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -538,9 +549,8 @@ export function GanttPage() {
     };
 
     try {
-      const res = await fetch(`/api/projects/${selectedProject}/gantt-items/${item.id}`, {
+      const res = await apiFetch(`/api/projects/${selectedProject}/gantt-items/${item.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
         body: JSON.stringify(payload),
       });
 
@@ -571,6 +581,7 @@ export function GanttPage() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
+  if (isLoading) return <LoadingSpinner message="Loading data..." />;
   return (
     <div className="space-y-4">
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
@@ -772,7 +783,8 @@ export function GanttPage() {
                             </button>
                             <button
                               onClick={() => handleDelete(item)}
-                              className="p-0.5 rounded dark:text-dark-muted dark:hover:text-red-400 text-light-muted hover:text-red-500 transition-colors focus:outline-none"
+                              disabled={deleting}
+                              className="p-0.5 rounded dark:text-dark-muted dark:hover:text-red-400 text-light-muted hover:text-red-500 transition-colors focus:outline-none disabled:opacity-50"
                               title="Delete"
                             >
                               <TrashIcon size={12} className="dark:text-dark-muted text-light-muted" />

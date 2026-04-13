@@ -27,6 +27,7 @@ class TimeLogController extends Controller
 
         $logs = $query->orderByDesc('date')
             ->orderByDesc('created_at')
+            ->limit(1000)
             ->get()
             ->map(fn ($l) => $this->formatTimeLog($l));
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   CheckIcon,
   XIcon,
@@ -14,12 +14,15 @@ import {
   AlertTriangleIcon } from
 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
+import { apiFetch } from '../../utils/apiFetch';
+import { parseApiError } from '../../utils/parseApiError';
 import { Task } from '../../data/mockData';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Textarea } from '../../components/ui/Input';
 import { Badge, StatusBadge, PriorityBadge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
 export function TaskReviewsPage() {
   const { tasks, setTasks, refreshTasks, projects, users, media } = useData();
@@ -30,7 +33,18 @@ export function TaskReviewsPage() {
     action: 'approve' | 'reject';
   } | null>(null);
   const [reviewComment, setReviewComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [previewItem, setPreviewItem] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
 
   // Tasks with completion reports
   const reviewableTasks = tasks.filter(
@@ -47,33 +61,26 @@ export function TaskReviewsPage() {
 
   const handleReview = async () => {
     if (!reviewModal) return;
+    setSubmitting(true);
+    setFormError(null);
     const newStatus = reviewModal.action === 'approve' ? 'approved' : 'rejected';
     try {
-      const res = await fetch(`/api/tasks/${reviewModal.task.id}`, {
+      const res = await apiFetch(`/api/tasks/${reviewModal.task.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
         body: JSON.stringify({ completion_report_status: newStatus }),
       });
       if (res.ok) {
         refreshTasks();
+        setReviewModal(null);
+        setReviewComment('');
       } else {
-        alert('Failed to update task review status.');
+        setFormError(await parseApiError(res, 'Failed to update task review status.'));
       }
     } catch {
-      // Fallback to local update
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === reviewModal.task.id
-            ? { ...t, completionReportStatus: newStatus as any }
-            : t
-        )
-      );
+      setFormError('Network error. Please check your connection and try again.');
+    } finally {
+      setSubmitting(false);
     }
-    setReviewModal(null);
-    setReviewComment('');
   };
 
   const getFileIcon = (type: string) => {
@@ -87,6 +94,8 @@ export function TaskReviewsPage() {
     const ext = item.originalFilename?.split('.').pop()?.toLowerCase() || '';
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'mp4', 'webm', 'ogg', 'pdf'].includes(ext);
   };
+
+  if (isLoading) return <LoadingSpinner message="Loading data..." />;
 
   return (
     <div className="space-y-5">
@@ -308,6 +317,7 @@ export function TaskReviewsPage() {
                         size="sm"
                         icon={<XIcon size={12} />}
                         onClick={() => {
+                          setFormError(null);
                           setReviewModal({ task, action: 'reject' });
                           setReviewComment('');
                         }}
@@ -319,6 +329,7 @@ export function TaskReviewsPage() {
                         size="sm"
                         icon={<CheckIcon size={12} />}
                         onClick={() => {
+                          setFormError(null);
                           setReviewModal({ task, action: 'approve' });
                           setReviewComment('');
                         }}
@@ -363,10 +374,11 @@ export function TaskReviewsPage() {
             <Button
               variant={reviewModal?.action === 'approve' ? 'primary' : 'danger'}
               onClick={handleReview}
+              disabled={submitting}
             >
-              {reviewModal?.action === 'approve'
+              {submitting ? 'Submitting...' : (reviewModal?.action === 'approve'
                 ? 'Confirm Approval'
-                : 'Confirm Rejection'}
+                : 'Confirm Rejection')}
             </Button>
           </>
         }
@@ -399,6 +411,7 @@ export function TaskReviewsPage() {
             }
             rows={3}
           />
+          {formError && <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded p-2">{formError}</div>}
         </div>
       </Modal>
 

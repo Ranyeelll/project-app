@@ -13,6 +13,7 @@ import { useData, useAuth } from '../../context/AppContext';
 import { GanttItem } from '../../data/mockData';
 import { UserAvatar } from '../../components/ui/UserAvatar';
 import { GanttCalendarView } from '../../components/gantt/GanttCalendarView';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
 type ZoomLevel = 'week' | 'month' | 'quarter';
 interface Column { label: string; subLabel?: string; startDate: Date; endDate: Date; }
@@ -104,6 +105,16 @@ function dayLabel(d: Date): string {
 export function ViewGanttPage() {
   const { projects, users, ganttItems, ganttDependencies, refreshGanttItems, refreshGanttDependencies } = useData();
   const { currentUser } = useAuth();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (users.length > 0 && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      setIsLoading(false);
+    }
+  }, [users]);
 
   const myProjects = projects.filter(
     p => p.status !== 'archived' && (
@@ -365,6 +376,8 @@ export function ViewGanttPage() {
   const toggleCollapse = (id: string) => {
     setCollapsedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
+
+  if (isLoading) return <LoadingSpinner message="Loading Gantt chart..." />;
 
   return (
     <div className="space-y-4">

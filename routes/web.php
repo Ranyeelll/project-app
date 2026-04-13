@@ -19,6 +19,11 @@ use App\Http\Controllers\Api\ProjectApprovalController;
 use App\Http\Controllers\Api\ProjectFormController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\SystemSettingsController;
+use App\Http\Controllers\Api\TaskActivityController;
+use App\Http\Controllers\Api\TaskProgressLogController;
+use App\Http\Controllers\Api\TaskTimeLogController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Storage;
@@ -60,16 +65,20 @@ Route::get('/login', function () {
 |--------------------------------------------------------------------------
 */
 Route::prefix('api')->group(function () {
-    // Public routes (no auth required)
-    Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/verify-recovery', [AuthController::class, 'verifyRecovery']);
-    Route::post('/reset-password-offline', [AuthController::class, 'resetPasswordOffline']);
+    // Public routes (no auth required) — rate-limited to prevent brute force
+    Route::post('/login', [AuthController::class, 'login'])
+        ->middleware('throttle:10,1');
+    Route::post('/verify-recovery', [AuthController::class, 'verifyRecovery'])
+        ->middleware('throttle:5,15');
+    Route::post('/reset-password-offline', [AuthController::class, 'resetPasswordOffline'])
+        ->middleware('throttle:5,15');
     Route::get('/users/{user}/photo', [UserController::class, 'servePhoto']);
 
     // Authenticated routes
     Route::middleware('auth.api')->group(function () {
         // Session bootstrap (any authenticated user)
         Route::get('/me', [AuthController::class, 'me']);
+        Route::post('/logout', [AuthController::class, 'logout']);
 
         // Password change (any authenticated user)
         Route::post('/change-password', [AuthController::class, 'changePassword']);
@@ -89,8 +98,8 @@ Route::prefix('api')->group(function () {
             Route::get('/audit-logs/export-pdf', [AuditLogController::class, 'exportPdf']);
             Route::get('/audit-logs/export-sheet', [AuditLogController::class, 'exportSheet']);
             // System settings (superadmin)
-            Route::get('/settings/audit-log-retention', [\App\Http\Controllers\Api\SystemSettingsController::class, 'getAuditLogRetention']);
-            Route::put('/settings/audit-log-retention', [\App\Http\Controllers\Api\SystemSettingsController::class, 'updateAuditLogRetention']);
+            Route::get('/settings/audit-log-retention', [SystemSettingsController::class, 'getAuditLogRetention']);
+            Route::put('/settings/audit-log-retention', [SystemSettingsController::class, 'updateAuditLogRetention']);
 
             // Task delete (superadmin only)
             Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
@@ -140,6 +149,11 @@ Route::prefix('api')->group(function () {
         // ─── Any Authenticated User ───────────────────────────────
         // Read-only users list (used by team views and assignee labels)
         Route::get('/users', [UserController::class, 'index']);
+
+        // Notifications
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 
         // Gantt read access (visibility filtering enforced server-side)
         Route::get('/projects/{project}/gantt-items', [GanttController::class, 'index']);

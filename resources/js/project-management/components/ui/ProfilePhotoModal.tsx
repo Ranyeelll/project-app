@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { X, Upload, Eye } from 'lucide-react';
 import { UserAvatar } from './UserAvatar';
+import { apiFetch } from '../../utils/apiFetch';
 
 interface ProfilePhotoModalProps {
   isOpen: boolean;
@@ -52,15 +53,11 @@ export function ProfilePhotoModal({
     setUploading(true);
 
     try {
-      const csrfToken = document
-        .querySelector('meta[name="csrf-token"]')
-        ?.getAttribute('content') || '';
       const formData = new FormData();
       formData.append('photo', file);
 
-      const res = await fetch(`/api/users/${user.id}/profile-photo`, {
+      const res = await apiFetch(`/api/users/${user.id}/profile-photo`, {
         method: 'POST',
-        headers: { 'X-CSRF-TOKEN': csrfToken },
         body: formData,
       });
 

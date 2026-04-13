@@ -17,6 +17,8 @@ import {
   ClipboardCheckIcon,
   XIcon,
   ShieldIcon,
+  SettingsIcon,
+  CalendarIcon,
 } from 'lucide-react';
 import { useAuth, useNavigation } from '../../context/AppContext';
 import { isElevatedRole, isSupervisor } from '../../utils/roles';
@@ -41,12 +43,16 @@ const DEPARTMENT_NAV: Record<string, NavItem[]> = {
     { id: 'admin-reviews', label: 'Task Reviews', icon: <ClipboardCheckIcon size={16} /> },
     { id: 'admin-audit-logs', label: 'Audit Logs', icon: <ShieldIcon size={16} /> },
     { id: 'admin-archive', label: 'Archive', icon: <ArchiveIcon size={16} /> },
+    { id: 'calendar', label: 'Calendar', icon: <CalendarIcon size={16} /> },
+    { id: 'settings', label: 'Settings', icon: <SettingsIcon size={16} /> },
   ],
   Accounting: [
     { id: 'accounting-dashboard', label: 'Dashboard', icon: <LayoutDashboardIcon size={16} /> },
     { id: 'admin-budget', label: 'Budget Approvals', icon: <DollarSignIcon size={16} /> },
     { id: 'admin-budget-report', label: 'Budget Report', icon: <BarChart2Icon size={16} /> },
     { id: 'accounting-review', label: 'Accounting Review', icon: <ClipboardCheckIcon size={16} /> },
+    { id: 'calendar', label: 'Calendar', icon: <CalendarIcon size={16} /> },
+    { id: 'settings', label: 'Settings', icon: <SettingsIcon size={16} /> },
   ],
   Technical: [
     { id: 'technical-dashboard', label: 'Dashboard', icon: <LayoutDashboardIcon size={16} /> },
@@ -54,6 +60,8 @@ const DEPARTMENT_NAV: Record<string, NavItem[]> = {
     { id: 'admin-projects', label: 'Projects', icon: <FolderKanbanIcon size={16} /> },
     { id: 'technical-tasks', label: 'Task Management', icon: <CheckSquareIcon size={16} /> },
     { id: 'technical-review', label: 'Technical Review', icon: <ClipboardCheckIcon size={16} /> },
+    { id: 'calendar', label: 'Calendar', icon: <CalendarIcon size={16} /> },
+    { id: 'settings', label: 'Settings', icon: <SettingsIcon size={16} /> },
   ],
   Employee: [
     { id: 'employee-dashboard', label: 'My Dashboard', icon: <LayoutDashboardIcon size={16} /> },
@@ -63,6 +71,8 @@ const DEPARTMENT_NAV: Record<string, NavItem[]> = {
     { id: 'employee-time', label: 'Log Time', icon: <ClockIcon size={16} /> },
     { id: 'employee-issues', label: 'Report Issue', icon: <AlertTriangleIcon size={16} /> },
     { id: 'employee-resources', label: 'Resources', icon: <FolderOpenIcon size={16} /> },
+    { id: 'calendar', label: 'Calendar', icon: <CalendarIcon size={16} /> },
+    { id: 'settings', label: 'Settings', icon: <SettingsIcon size={16} /> },
   ],
 };
 
@@ -75,6 +85,8 @@ const SUPERVISOR_NAV: NavItem[] = [
   { id: 'admin-gantt', label: 'Gantt Hub', icon: <GanttChartIcon size={16} /> },
   { id: 'admin-monitor', label: 'Analytics', icon: <BarChart2Icon size={16} /> },
   { id: 'admin-reviews', label: 'Task Reviews', icon: <ClipboardCheckIcon size={16} /> },
+  { id: 'calendar', label: 'Calendar', icon: <CalendarIcon size={16} /> },
+  { id: 'settings', label: 'Settings', icon: <SettingsIcon size={16} /> },
 ];
 
 interface SidebarProps {
@@ -101,6 +113,7 @@ export function Sidebar({ isOpen, onClose, isExpanded, onMouseEnter, onMouseLeav
     <aside 
       className={`
         fixed inset-y-0 left-0 z-50 flex flex-col h-full
+        lg:static lg:inset-auto
         dark:bg-dark-card dark:border-dark-border bg-white border-r border-light-border
         transition-[width,transform] duration-200 ease-out
         ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64'}

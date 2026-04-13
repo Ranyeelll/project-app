@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   SearchIcon,
   AlertCircleIcon,
@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useData, useAuth } from '../../context/AppContext';
 import { Badge } from '../../components/ui/Badge';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { apiFetch } from '../../utils/apiFetch';
 
 interface AuditLog {
   id: string;
@@ -49,6 +51,12 @@ const ACTION_LABELS: Record<string, string> = {
   'project_form.reviewed': 'REVIEW',
   'budget.approved': 'APPROVE',
   'audit_log.report_exported': 'EXPORT',
+  'user.created': 'USER CREATED',
+  'user.updated': 'USER UPDATED',
+  'user.deleted': 'USER DELETED',
+  'user.role_changed': 'ROLE CHANGED',
+  'user.department_changed': 'DEPT CHANGED',
+  'settings.updated': 'CONFIG UPDATED',
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -62,6 +70,17 @@ const ACTION_COLORS: Record<string, string> = {
   'SUBMIT': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
   'REVIEW': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
   'EXPORT': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+  'USER CREATED': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  'USER UPDATED': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  'USER DELETED': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  'ROLE CHANGED': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+  'DEPT CHANGED': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+  'CONFIG UPDATED': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  'LOGIN_FAILED': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  'PASSWORD_CHANGED': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  'PASSWORD_RESET': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  'BLOCK': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  'TRANSITION': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
 };
 
 const RESOURCE_LABELS: Record<string, string> = {
@@ -71,6 +90,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   'gantt_item': 'Gantt Item',
   'project_form': 'Form',
   'budget_request': 'Budget',
+  'system_setting': 'Settings',
 };
 
 export function AuditLogPage() {
@@ -94,7 +114,8 @@ export function AuditLogPage() {
   })();
 
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const initialLoadRef = useRef(true);
   const [search, setSearch] = useState('');
   const [filterAction, setFilterAction] = useState('');
   const [filterResourceType, setFilterResourceType] = useState('');
@@ -124,7 +145,7 @@ export function AuditLogPage() {
 
       if (params.toString()) url += `?${params.toString()}`;
 
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       if (res.ok) {
         const data = await res.json();
         setLogs(Array.isArray(data) ? data : []);
@@ -132,6 +153,7 @@ export function AuditLogPage() {
       }
     } finally {
       setLoading(false);
+      initialLoadRef.current = false;
     }
   };
 
@@ -151,7 +173,7 @@ export function AuditLogPage() {
     if (!isAdmin) return;
     const load = async () => {
       try {
-        const res = await fetch('/api/settings/audit-log-retention', { credentials: 'include' });
+        const res = await apiFetch('/api/settings/audit-log-retention');
         if (res.ok) {
           const data = await res.json();
           setRetentionDays(data.audit_log_retention_days ?? 365);
@@ -237,9 +259,8 @@ export function AuditLogPage() {
     setExportError(null);
     const url = buildExportUrl(period, 'pdf');
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         headers: { Accept: 'application/pdf' },
-        credentials: 'include',
       });
 
       if (res.ok && res.headers.get('content-type')?.includes('pdf')) {
@@ -270,7 +291,7 @@ export function AuditLogPage() {
     setExportError(null);
     const url = buildExportUrl(period, 'sheet');
     try {
-      const res = await fetch(url, { credentials: 'include' });
+      const res = await apiFetch(url);
       if (res.ok) {
         const blob = await res.blob();
         const objectUrl = window.URL.createObjectURL(blob);
@@ -292,6 +313,8 @@ export function AuditLogPage() {
       setExporting(false);
     }
   };
+
+  if (initialLoadRef.current && loading) return <LoadingSpinner message="Loading audit logs..." />;
 
   return (
     <div className="space-y-6">
@@ -466,7 +489,7 @@ export function AuditLogPage() {
       {/* Table */}
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg overflow-hidden">
         {loading ? (
-          <div className="text-center py-12 text-sm dark:text-dark-muted text-light-muted">Loading...</div>
+          <LoadingSpinner message="Loading audit logs..." />
         ) : filteredLogs.length === 0 ? (
           <div className="text-center py-12 text-sm dark:text-dark-muted text-light-muted">No audit logs found.</div>
         ) : (
@@ -660,27 +683,43 @@ export function AuditLogPage() {
                   </h3>
                   <div className="dark:bg-dark-bg bg-gray-50 rounded-lg p-5 border dark:border-dark-border border-light-border">
                     <div className="space-y-3">
-                      {Object.entries(selectedLog.changes).map(([key, value]: [string, any]) => (
-                        <div key={key} className="border-l-2 border-blue-400 pl-3">
-                          <p className="text-xs font-semibold dark:text-blue-400 text-blue-600 mb-1">{key}</p>
-                          <div className="flex items-start gap-3 text-xs dark:text-dark-text text-light-text">
-                            {value && typeof value === 'object' && value.old !== undefined && value.new !== undefined ? (
-                              <>
-                                <div className="flex-1">
-                                  <span className="text-red-500 dark:text-red-400 font-mono">Old: </span>
-                                  <span className="break-all">{String(value.old)}</span>
-                                </div>
-                                <div className="flex-1">
-                                  <span className="text-green-500 dark:text-green-400 font-mono">New: </span>
-                                  <span className="break-all">{String(value.new)}</span>
-                                </div>
-                              </>
+                      {Object.entries(selectedLog.changes).map(([key, value]: [string, any]) => {
+                        const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                        const isTransition = value && typeof value === 'object' &&
+                          ((value.old !== undefined && value.new !== undefined) ||
+                           (value.from !== undefined && value.to !== undefined));
+                        const oldVal = isTransition ? (value.old ?? value.from) : null;
+                        const newVal = isTransition ? (value.new ?? value.to) : null;
+
+                        const formatVal = (v: any): string => {
+                          if (v === null || v === undefined) return '—';
+                          if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+                          if (Array.isArray(v)) return v.join(', ') || '—';
+                          if (typeof v === 'object') return JSON.stringify(v, null, 2);
+                          return String(v);
+                        };
+
+                        return (
+                          <div key={key} className="border-l-2 border-blue-400 pl-3">
+                            <p className="text-xs font-semibold dark:text-blue-400 text-blue-600 mb-1">{label}</p>
+                            {isTransition ? (
+                              <div className="flex items-center gap-3 text-sm">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/10 text-red-400 font-medium">
+                                  {formatVal(oldVal)}
+                                </span>
+                                <span className="dark:text-dark-subtle text-light-subtle">→</span>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-500/10 text-green-400 font-medium">
+                                  {formatVal(newVal)}
+                                </span>
+                              </div>
                             ) : (
-                              <span className="break-all">{JSON.stringify(value)}</span>
+                              <p className="text-sm dark:text-dark-text text-light-text break-all">
+                                {formatVal(value)}
+                              </p>
                             )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
