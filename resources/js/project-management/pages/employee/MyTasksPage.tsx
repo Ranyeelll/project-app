@@ -73,7 +73,16 @@ export function MyTasksPage() {
   // Leaders in multi-member projects can manage progress for all project tasks.
   const myTasks = tasks.filter((t) => String(t.assignedTo) === String(currentUser?.id) || isLeaderForProject(t.projectId));
   const filtered = myTasks.filter((t) => {
-    const matchSearch = t.title.toLowerCase().includes(search.toLowerCase());
+    const s = search.toLowerCase();
+    const projectName = projects.find((p) => p.id === t.projectId)?.name || '';
+    const assigneeName = users.find((u) => String(u.id) === String(t.assignedTo))?.name || '';
+    const matchSearch = !s ||
+      t.title.toLowerCase().includes(s) ||
+      (t.description && t.description.toLowerCase().includes(s)) ||
+      t.status.toLowerCase().includes(s) ||
+      t.priority.toLowerCase().includes(s) ||
+      projectName.toLowerCase().includes(s) ||
+      assigneeName.toLowerCase().includes(s);
     const matchStatus = statusFilter === 'all' || t.status === statusFilter;
     const matchProject = projectFilter === 'all' || t.projectId === projectFilter;
     return matchSearch && matchStatus && matchProject;
@@ -93,21 +102,18 @@ export function MyTasksPage() {
       if (response.ok) {
         // Immediately refresh all data to sync across all clients
         refreshAll();
+        const newStatus = newProgress === 100 ? 'completed' : newProgress > 0 ? 'in-progress' : progressModal.status;
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === progressModal.id ? { ...t, progress: newProgress, status: newStatus } : t
+          )
+        );
+      } else {
+        alert('Failed to update progress. Please try again.');
       }
-    } catch { /* continue with local update */ }
-    
-    const newStatus = newProgress === 100 ? 'completed' : newProgress > 0 ? 'in-progress' : progressModal.status;
-    setTasks((prev) =>
-    prev.map((t) =>
-    t.id === progressModal.id ?
-    {
-      ...t,
-      progress: newProgress,
-      status: newStatus
-    } :
-    t
-    )
-    );
+    } catch {
+      alert('Network error. Could not update progress.');
+    }
     
     setProgressModal(null);
   };
@@ -145,16 +151,18 @@ export function MyTasksPage() {
 
         if (!taskRes.ok) {
           alert('Report uploaded but failed to update task status.');
+        } else {
+          // Only update local state when API confirms success
+          setTasks((prev) =>
+            prev.map((t) =>
+              t.id === reportModal.id ? { ...t, completionReportStatus: 'pending', reportCost: Number(reportForm.cost) || 0 } : t
+            )
+          );
         }
 
         // Refresh media, tasks, and projects from server
         refreshMedia();
         refreshProjects();
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === reportModal.id ? { ...t, completionReportStatus: 'pending', reportCost: Number(reportForm.cost) || 0 } : t
-          )
-        );
       } else {
         const err = await res.json().catch(() => null);
         alert('Report submission failed: ' + (err?.message || res.statusText));

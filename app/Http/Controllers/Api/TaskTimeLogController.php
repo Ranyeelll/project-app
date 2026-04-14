@@ -99,6 +99,11 @@ class TaskTimeLogController extends Controller
      */
     public function update(Request $request, Task $task, TaskTimeLog $timeLog): JsonResponse
     {
+        // Verify time log belongs to this task
+        if ($timeLog->task_id !== $task->id) {
+            return response()->json(['error' => 'Not Found'], 404);
+        }
+
         $user = Auth::user();
 
         // Authorization: Employee can only update their own logs
@@ -145,6 +150,11 @@ class TaskTimeLogController extends Controller
      */
     public function destroy(Task $task, TaskTimeLog $timeLog): JsonResponse
     {
+        // Verify time log belongs to this task
+        if ($timeLog->task_id !== $task->id) {
+            return response()->json(['error' => 'Not Found'], 404);
+        }
+
         $user = Auth::user();
 
         // Authorization: Employee can only delete their own logs

@@ -29,6 +29,8 @@ class User extends Authenticatable
         'profile_photo',
         'recovery_code',
         'must_change_password',
+        'last_login_at',
+        'last_login_ip',
     ];
 
     /**
@@ -53,6 +55,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'department' => Department::class,
+            'last_login_at' => 'datetime',
         ];
     }
 

@@ -102,23 +102,9 @@ class TaskProgressLogController extends Controller
             // Broadcasting failed, but continue with response
         }
 
-        // Update project progress using assigned team-member tasks first.
-        // Fallback to all project tasks if none are assigned to team members.
+        // Update project progress from task averages
         try {
-            if ($project) {
-                $teamIds = array_values(array_filter(array_map('intval', $project->team_ids ?? []), static fn ($id) => $id > 0));
-
-                $teamTaskAvg = null;
-                if (!empty($teamIds)) {
-                    $teamTaskAvg = Task::where('project_id', $project->id)
-                        ->whereIn('assigned_to', $teamIds)
-                        ->avg('progress');
-                }
-
-                $allTaskAvg = Task::where('project_id', $project->id)->avg('progress');
-                $averageProgress = (int) round($teamTaskAvg ?? $allTaskAvg ?? 0);
-                $project->update(['progress' => $averageProgress]);
-            }
+            $project?->recalculateProgress();
         } catch (\Throwable $e) {
             // Project update failed, but continue
         }

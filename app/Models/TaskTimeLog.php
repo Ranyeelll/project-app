@@ -13,6 +13,7 @@ class TaskTimeLog extends Model
         'date_worked',
         'hours_worked',
         'work_description',
+        'legacy_time_log_id',
     ];
 
     protected $casts = [

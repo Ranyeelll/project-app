@@ -2,7 +2,7 @@
 ## Complete System Documentation
 
 **Document Version:** 4.2  
-**Last Updated:** April 13, 2026  
+**Last Updated:** April 14, 2026  
 **Classification:** Internal Use Only  
 **Document Owner:** MAPTECH IT Department
 
@@ -403,7 +403,7 @@ graph TD
     subgraph "System Roles"
         SA[Superadmin]
         SUP[Supervisor]
-        STD[Standard User]
+        EMP_ROLE[Employee]
     end
     
     subgraph "Departments"
@@ -428,7 +428,7 @@ graph TD
 |------|-------------|------------------|
 | **Superadmin** | Highest privilege level with full system access | User management, audit logs, system settings, all operations |
 | **Supervisor** | Project management authority | Create/edit/delete projects, elevated approval rights |
-| **Standard User** | Regular user with department-based permissions | Permissions determined by department assignment |
+| **Employee** | Regular user with department-based permissions | Permissions determined by department assignment |
 
 ### 5.3 Department Permissions
 
@@ -491,9 +491,9 @@ project-app/
 │   │   └── Department.php          # Department enum with permissions
 │   ├── Http/
 │   │   ├── Controllers/
-│   │   │   └── Api/                # API controllers (18 controllers)
+│   │   │   └── Api/                # API controllers (20 controllers)
 │   │   └── Middleware/             # Custom middleware (4 files)
-│   ├── Models/                     # Eloquent models (19 models)
+│   ├── Models/                     # Eloquent models (20 models)
 │   ├── Notifications/              # Laravel notifications
 │   ├── Providers/                  # Service providers
 │   └── Services/                   # Business logic services (5 services)
@@ -502,7 +502,7 @@ project-app/
 ├── config/                         # Configuration files
 ├── database/
 │   ├── factories/                  # Model factories
-│   ├── migrations/                 # Database migrations (42 files)
+│   ├── migrations/                 # Database migrations (48 files)
 │   └── seeders/                    # Database seeders
 ├── public/                         # Public assets
 ├── resources/
@@ -551,7 +551,7 @@ project-app/
 
 | Service | Purpose | Key Responsibilities |
 |---------|---------|----------------------|
-| `AuditService` | Audit logging | 42+ event types, immutable logging, sensitive flagging |
+| `AuditService` | Audit logging | 35+ event types, immutable logging, sensitive flagging |
 | `ProjectApprovalService` | Approval workflow | Multi-stage transitions, permission validation, budget recalculation |
 | `ProjectSerialService` | Serial generation | Unique serial creation with concurrency safety |
 | `GanttVisibilityService` | Gantt permissions | Role and assignment-based visibility checks |
@@ -829,7 +829,7 @@ flowchart TD
 
 | ID | Requirement | Implementation |
 |----|-------------|----------------|
-| FR-AUD-01 | All significant actions must be logged | `AuditService` with 42+ event types |
+| FR-AUD-01 | All significant actions must be logged | `AuditService` with 35+ event types |
 | FR-AUD-02 | Audit logs must be immutable | `AuditLog` model prevents update/delete |
 | FR-AUD-03 | Global audit log administration is Superadmin-only | `role:superadmin` middleware on `/api/audit-logs*` (project-scoped logs are separate) |
 | FR-AUD-04 | Audit logs must capture user, action, changes, context | Schema includes all required fields |
@@ -1177,7 +1177,7 @@ The audit log detail modal formats the `changes` JSON for readability:
 - `AuditLog` model - Immutable log storage
 
 **Key Features:**
-- 42+ event types tracked
+- 35+ event types tracked
 - Immutable record storage
 - Sensitive operation flagging
 - PDF/Excel export
@@ -1987,10 +1987,10 @@ This User Manual provides step-by-step guidance for using the MAPTECH Project Ma
 |------|------------|----------------------|
 | **Superadmin** | Admin | Full system access: user management, audit logs, all project/task operations |
 | **Supervisor** | Any | Create/edit/delete projects, approve at supervisor level, elevated permissions |
-| **Standard User** | Admin | All project/task operations, full department access |
-| **Standard User** | Technical | Task and Gantt management, technical review |
-| **Standard User** | Accounting | Budget management, financial reporting, accounting review |
-| **Standard User** | Employee | View assigned tasks, log time, submit budget requests |
+| **Employee** | Admin | All project/task operations, full department access |
+| **Employee** | Technical | Task and Gantt management, technical review |
+| **Employee** | Accounting | Budget management, financial reporting, accounting review |
+| **Employee** | Employee | View assigned tasks, log time, submit budget requests |
 
 ### 23.3 Getting Started
 

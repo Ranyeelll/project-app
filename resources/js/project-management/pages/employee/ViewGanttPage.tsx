@@ -203,8 +203,9 @@ export function ViewGanttPage() {
       const end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
       return { start, end, totalDays: daysBetween(start, end) + 1 };
     }
-    const min = new Date(Math.min(...dates.map(d => d.getTime())));
-    const max = new Date(Math.max(...dates.map(d => d.getTime())));
+    const timestamps = dates.map(d => d.getTime());
+    const min = new Date(Math.min.apply(null, timestamps));
+    const max = new Date(Math.max.apply(null, timestamps));
     const start = min;
     const end = max;
     return { start, end, totalDays: Math.max(daysBetween(start, end) + 1, 1) };

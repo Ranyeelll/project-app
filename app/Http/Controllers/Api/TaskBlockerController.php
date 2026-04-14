@@ -113,6 +113,10 @@ class TaskBlockerController extends Controller
             }
         } catch (\Throwable $e) {
             // Don't block blocker reporting for notification failures
+            \Illuminate\Support\Facades\Log::warning('Blocker notification failed', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         return response()->json([
@@ -127,6 +131,11 @@ class TaskBlockerController extends Controller
      */
     public function update(Request $request, Task $task, TaskBlocker $blocker): JsonResponse
     {
+        // Verify blocker belongs to this task
+        if ($blocker->task_id !== $task->id) {
+            return response()->json(['error' => 'Not Found'], 404);
+        }
+
         $user = Auth::user();
 
         // Authorization: Only Technical/Admin can resolve
@@ -171,6 +180,11 @@ class TaskBlockerController extends Controller
      */
     public function destroy(Task $task, TaskBlocker $blocker): JsonResponse
     {
+        // Verify blocker belongs to this task
+        if ($blocker->task_id !== $task->id) {
+            return response()->json(['error' => 'Not Found'], 404);
+        }
+
         $user = Auth::user();
 
         // Authorization: Only admin or the reporter can delete

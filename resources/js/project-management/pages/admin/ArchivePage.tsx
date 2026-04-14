@@ -30,9 +30,18 @@ export function ArchivePage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const archived = projects.
   filter((p) => p.status === 'archived' || p.status === 'completed').
-  filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  filter((p) => {
+    const s = search.toLowerCase();
+    return !s ||
+      p.name.toLowerCase().includes(s) ||
+      (p.description && p.description.toLowerCase().includes(s)) ||
+      (p.category && p.category.toLowerCase().includes(s)) ||
+      p.status.toLowerCase().includes(s);
+  });
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const handleRestore = async (id: string) => {
     setRestoring(true);
+    setRestoreError(null);
     try {
       const res = await apiFetch(`/api/projects/${id}`, {
         method: 'PUT',
@@ -43,24 +52,14 @@ export function ArchivePage() {
         const updated = await res.json();
         setProjects((prev) => prev.map((p) => p.id === id ? updated : p));
         refreshProjects();
-        return;
+      } else {
+        setRestoreError('Failed to restore project. Please try again.');
       }
     } catch {
-      // Fallback to local update below when request fails.
+      setRestoreError('Network error. Could not restore project.');
     } finally {
       setRestoring(false);
     }
-
-    setProjects((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              status: 'active',
-            }
-          : p
-      )
-    );
   };
   const handleDelete = (id: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== id));
@@ -95,7 +94,11 @@ export function ArchivePage() {
         </div>
       </div>
 
-      {/* List */}
+      {restoreError && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+          <p className="text-sm text-red-400">{restoreError}</p>
+        </div>
+      )}      {/* List */}
       <div className="space-y-3">
         {archived.map((project) => {
           const ptasks = tasks.filter((t) => t.projectId === project.id);

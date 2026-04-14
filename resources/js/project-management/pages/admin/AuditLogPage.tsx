@@ -219,12 +219,16 @@ export function AuditLogPage() {
   };
 
   const filteredLogs = logs.filter((log) => {
-    if (search.toLowerCase()) {
-      const searchLower = search.toLowerCase();
+    const s = search.toLowerCase();
+    if (s) {
+      const user = userName(log.userId);
       return (
-        log.action.toLowerCase().includes(searchLower) ||
-        log.resourceType.toLowerCase().includes(searchLower) ||
-        getResourceLabel(log.resourceType).toLowerCase().includes(searchLower)
+        log.action.toLowerCase().includes(s) ||
+        log.resourceType.toLowerCase().includes(s) ||
+        getResourceLabel(log.resourceType).toLowerCase().includes(s) ||
+        getActionLabel(log.action).toLowerCase().includes(s) ||
+        user.toLowerCase().includes(s) ||
+        (log.resourceId && log.resourceId.toLowerCase().includes(s))
       );
     }
     return true;

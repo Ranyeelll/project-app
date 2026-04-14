@@ -71,9 +71,7 @@ export function BudgetApprovalsPage() {
   const getProjectBudgetInfo = (projectId: string) => {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return { budget: 0, spent: 0, remaining: 0, pct: 0 };
-    const spent = budgetRequests
-      .filter((b) => b.projectId === projectId && b.status === 'approved' && (b.type || 'spending') === 'spending')
-      .reduce((s, b) => s + b.amount, 0);
+    const spent = project.spent;
     const remaining = project.budget - spent;
     const pct = project.budget > 0 ? Math.round((spent / project.budget) * 100) : 0;
     return { budget: project.budget, spent, remaining, pct };

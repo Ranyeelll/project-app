@@ -29,20 +29,17 @@ enum Department: string
                 'budget.manage',
                 'budget-report.view',
                 'budget-report.export',
-                'chat.access',
             ],
             self::Technical => [
                 'gantt.view',
                 'gantt.manage',
                 'tasks.view',
                 'tasks.manage',
-                'chat.access',
             ],
             self::Employee => [
                 'tasks.view-own',
                 'tasks.update-own',
                 'budget.request',
-                'chat.access',
             ],
         };
     }

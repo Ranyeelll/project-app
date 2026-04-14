@@ -96,9 +96,9 @@ export function ProjectsPage() {
 
     const interval = setInterval(() => {
       apiFetch('/api/projects')
-        .then((res) => res.json())
+        .then((res) => { if (res.ok) return res.json(); throw new Error('refresh failed'); })
         .then((data: Project[]) => { if (Array.isArray(data)) setProjects(data); })
-        .catch(() => {});
+        .catch(() => { /* background refresh — no user action needed */ });
     }, 5000);
     return () => clearInterval(interval);
   }, [setProjects, modalMode]);
@@ -127,7 +127,14 @@ export function ProjectsPage() {
   }, [projects]);
 
   const filtered = projects.filter((p) => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const s = search.toLowerCase();
+    const matchSearch = !s ||
+      p.name.toLowerCase().includes(s) ||
+      (p.description && p.description.toLowerCase().includes(s)) ||
+      (p.category && p.category.toLowerCase().includes(s)) ||
+      (p.serial && p.serial.toLowerCase().includes(s)) ||
+      p.status.toLowerCase().includes(s) ||
+      p.priority.toLowerCase().includes(s);
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
     const matchApproval =
       approvalFilter === 'all' ||
@@ -435,22 +442,12 @@ export function ProjectsPage() {
       if (res.ok) {
         const updated = await res.json();
         setProjects((prev) => prev.map((p) => p.id === id ? updated : p));
-        return;
+      } else {
+        alert('Failed to archive project. Please try again.');
       }
     } catch {
-      // Fallback to local status update below.
+      alert('Network error. Could not archive project.');
     }
-
-    setProjects((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              status: 'archived',
-            }
-          : p
-      )
-    );
   };
   const dismissBudgetWarning = () => {
     const seenKey = 'maptech-overbudget-seen';

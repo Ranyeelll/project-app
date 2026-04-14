@@ -5,6 +5,7 @@ namespace App\Notifications;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
+use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 
 class ProjectApprovalUpdate extends Notification implements ShouldQueue
@@ -17,7 +18,7 @@ class ProjectApprovalUpdate extends Notification implements ShouldQueue
 
     public function via($notifiable)
     {
-        return ['mail', 'database'];
+        return ['mail', 'database', 'broadcast'];
     }
 
     public function toMail($notifiable)
@@ -34,5 +35,13 @@ class ProjectApprovalUpdate extends Notification implements ShouldQueue
     public function toDatabase($notifiable)
     {
         return $this->payload;
+    }
+
+    public function toBroadcast($notifiable): BroadcastMessage
+    {
+        return new BroadcastMessage([
+            'type' => 'ProjectApprovalUpdate',
+            'data' => $this->payload,
+        ]);
     }
 }

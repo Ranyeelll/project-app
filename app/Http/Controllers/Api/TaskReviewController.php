@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ApprovalStatus;
 use App\Enums\Department;
 use App\Http\Controllers\Controller;
 use App\Models\Task;
@@ -77,10 +78,10 @@ class TaskReviewController extends Controller
         ]);
 
         // Update task status based on review
-        if ($data['approval_status'] === 'approved') {
-            $task->update(['completion_report_status' => 'approved']);
-        } elseif ($data['approval_status'] === 'revision_requested') {
-            $task->update(['completion_report_status' => 'revision_requested']);
+        if ($data['approval_status'] === ApprovalStatus::APPROVED->value) {
+            $task->update(['completion_report_status' => ApprovalStatus::APPROVED->value]);
+        } elseif ($data['approval_status'] === ApprovalStatus::REVISION_REQUESTED->value) {
+            $task->update(['completion_report_status' => ApprovalStatus::REVISION_REQUESTED->value]);
         }
 
         // Audit log
@@ -144,10 +145,10 @@ class TaskReviewController extends Controller
 
         // Update task status if approval status changed
         if (isset($data['approval_status'])) {
-            if ($data['approval_status'] === 'approved') {
-                $task->update(['completion_report_status' => 'approved']);
-            } elseif ($data['approval_status'] === 'revision_requested') {
-                $task->update(['completion_report_status' => 'revision_requested']);
+            if ($data['approval_status'] === ApprovalStatus::APPROVED->value) {
+                $task->update(['completion_report_status' => ApprovalStatus::APPROVED->value]);
+            } elseif ($data['approval_status'] === ApprovalStatus::REVISION_REQUESTED->value) {
+                $task->update(['completion_report_status' => ApprovalStatus::REVISION_REQUESTED->value]);
             }
         }
 

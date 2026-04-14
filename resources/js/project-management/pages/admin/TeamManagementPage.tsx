@@ -58,6 +58,8 @@ export function TeamManagementPage() {
     status: 'active'
   });
 
+  if (isLoading) return <LoadingSpinner message="Loading team..." />;
+
   if (!isSuperadmin(currentUser?.role)) {
     return (
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-card p-6">
@@ -77,9 +79,13 @@ export function TeamManagementPage() {
     { value: 'Employee', label: 'Employee' },
   ];
   const filtered = users.filter((u) => {
-    const matchSearch =
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase());
+    const s = search.toLowerCase();
+    const matchSearch = !s ||
+      u.name.toLowerCase().includes(s) ||
+      u.email.toLowerCase().includes(s) ||
+      u.role.toLowerCase().includes(s) ||
+      u.department.toLowerCase().includes(s) ||
+      u.position.toLowerCase().includes(s);
     const matchRole = roleFilter === 'all' || u.role === roleFilter;
     return matchSearch && matchRole;
   });
@@ -249,7 +255,6 @@ export function TeamManagementPage() {
     QA: '#f59e0b',
     Backend: '#3b82f6'
   };
-  if (isLoading) return <LoadingSpinner message="Loading data..." />;
   return (
     <div className="space-y-5">
       {/* Toolbar */}

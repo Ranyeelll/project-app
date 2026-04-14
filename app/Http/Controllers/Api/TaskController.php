@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ApprovalStatus;
 use App\Enums\Department;
 use App\Http\Controllers\Controller;
 use App\Models\Task;
@@ -11,6 +12,7 @@ use App\Services\TaskActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
 {
@@ -35,6 +37,37 @@ class TaskController extends Controller
 
         if ($request->has('project_id')) {
             $query->where('project_id', $request->input('project_id'));
+        }
+
+        // Advanced filters
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->input('priority'));
+        }
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'ilike', "%{$search}%")
+                  ->orWhere('description', 'ilike', "%{$search}%");
+            });
+        }
+        if ($request->filled('start_date_from')) {
+            $query->where('start_date', '>=', $request->input('start_date_from'));
+        }
+        if ($request->filled('start_date_to')) {
+            $query->where('start_date', '<=', $request->input('start_date_to'));
+        }
+        if ($request->filled('end_date_from')) {
+            $query->where('end_date', '>=', $request->input('end_date_from'));
+        }
+        if ($request->filled('end_date_to')) {
+            $query->where('end_date', '<=', $request->input('end_date_to'));
+        }
+        if ($request->filled('overdue') && $request->boolean('overdue')) {
+            $query->where('end_date', '<', now())
+                  ->whereNotIn('status', ['completed', 'done', 'approved']);
         }
 
         $tasks = $query->orderByDesc('created_at')
@@ -131,15 +164,28 @@ class TaskController extends Controller
         $oldAssignedTo = $task->assigned_to;
         $oldStatusField = $task->status;
 
-        // When re-submitting a report for an already-approved task,
-        // ADD the new cost to the existing approved cost (accumulate, not replace)
-        if (isset($data['completion_report_status']) && $data['completion_report_status'] === 'pending'
-            && $oldStatus === 'approved'
-            && isset($data['report_cost']) && (float) $task->report_cost > 0) {
-            $data['report_cost'] = (float) $task->report_cost + (float) $data['report_cost'];
-        }
+        DB::transaction(function () use ($task, &$data, $oldStatus) {
+            // When re-submitting a report for an already-approved task,
+            // ADD the new cost to the existing approved cost (accumulate, not replace)
+            if (isset($data['completion_report_status']) && $data['completion_report_status'] === ApprovalStatus::PENDING->value
+                && $oldStatus === ApprovalStatus::APPROVED->value
+                && isset($data['report_cost']) && (float) $task->report_cost > 0) {
+                // Lock the task row to prevent concurrent reads
+                $task->lockForUpdate()->first();
+                $data['report_cost'] = (float) $task->report_cost + (float) $data['report_cost'];
+            }
 
-        $task->update($data);
+            $task->update($data);
+
+            // When a report is approved, auto-recalculate project.spent
+            if (isset($data['completion_report_status']) && $data['completion_report_status'] === ApprovalStatus::APPROVED->value && $oldStatus !== ApprovalStatus::APPROVED->value) {
+                $this->recalcProjectSpent($task->project_id);
+            }
+            // If report is un-approved (rejected after approval), recalc too
+            if (isset($data['completion_report_status']) && $oldStatus === ApprovalStatus::APPROVED->value && $data['completion_report_status'] !== ApprovalStatus::APPROVED->value) {
+                $this->recalcProjectSpent($task->project_id);
+            }
+        });
 
         // Log activity changes
         // 1. Status change
@@ -164,13 +210,10 @@ class TaskController extends Controller
             TaskActivityLogger::taskUpdated($task->id, $data);
         }
 
-        // When a report is approved, auto-recalculate project.spent
-        if (isset($data['completion_report_status']) && $data['completion_report_status'] === 'approved' && $oldStatus !== 'approved') {
-            $this->recalcProjectSpent($task->project_id);
-        }
-        // If report is un-approved (rejected after approval), recalc too
-        if (isset($data['completion_report_status']) && $oldStatus === 'approved' && $data['completion_report_status'] !== 'approved') {
-            $this->recalcProjectSpent($task->project_id);
+        // Auto-recalculate project progress when task progress or status changes
+        if (isset($data['progress']) || isset($data['status'])) {
+            $project = Project::find($task->project_id);
+            $project?->recalculateProgress();
         }
 
         return response()->json($this->formatTask($task->fresh()));
@@ -214,16 +257,16 @@ class TaskController extends Controller
      */
     private function recalcProjectSpent(int $projectId): void
     {
-        $project = Project::find($projectId);
+        $project = Project::lockForUpdate()->find($projectId);
         if (!$project) return;
 
         $budgetSpent = BudgetRequest::where('project_id', $projectId)
-            ->where('status', 'approved')
+            ->where('status', ApprovalStatus::APPROVED->value)
             ->where('type', 'spending')
             ->sum('amount');
 
         $reportCosts = Task::where('project_id', $projectId)
-            ->where('completion_report_status', 'approved')
+            ->where('completion_report_status', ApprovalStatus::APPROVED->value)
             ->sum('report_cost');
 
         $project->spent = $budgetSpent + $reportCosts;

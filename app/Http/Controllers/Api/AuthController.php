@@ -36,6 +36,7 @@ class AuthController extends Controller
                                     ? '/api/users/' . $user->id . '/photo'
                                     : null,
             'mustChangePassword' => (bool) $user->must_change_password,
+            'lastLoginAt'     => $user->last_login_at?->toIso8601String(),
         ];
     }
 
@@ -95,6 +96,12 @@ class AuthController extends Controller
 
         // Establish a Laravel session so WebSocket presence channels can authenticate
         Auth::login($user);
+
+        // Track last login
+        $user->update([
+            'last_login_at' => now(),
+            'last_login_ip' => $request->ip(),
+        ]);
 
         // Log successful login
         $this->audit->log(

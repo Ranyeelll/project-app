@@ -24,7 +24,7 @@ A web-based project management application for managing projects, tasks, budgets
 - **Issue Tracking** — Risk, issue, assumption, and dependency tracking
 - **Audit Logging** — Immutable, append-only audit trail for compliance (project approvals, budget changes, exports, config updates)
 - **Notifications** — Queued notifications for budget approvals, task reviews, blockers, and overdue tasks
-- **Role-Based Access** — Superadmin, Supervisor, Admin, Technical, Accounting, and Employee roles with department-based permissions
+- **Role-Based Access** — Superadmin, Supervisor, and Employee roles with department-based permissions (Admin, Technical, Accounting, Employee)
 
 ## Prerequisites
 
@@ -123,7 +123,7 @@ resources/js/project-management/
 
 ## Documentation
 
-Comprehensive system documentation is available at [`docs/SYSTEM_DOCUMENTATION.md`](docs/SYSTEM_DOCUMENTATION.md) (v4.0), covering:
+Comprehensive system documentation is available at [`docs/SYSTEM_DOCUMENTATION.md`](docs/SYSTEM_DOCUMENTATION.md) (v4.2), covering:
 
 - System architecture and data models
 - API endpoint reference

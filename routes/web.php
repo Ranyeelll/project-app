@@ -18,6 +18,8 @@ use App\Http\Controllers\Api\GanttController;
 use App\Http\Controllers\Api\ProjectApprovalController;
 use App\Http\Controllers\Api\ProjectFormController;
 use App\Http\Controllers\Api\AuditLogController;
+use App\Http\Controllers\Api\BulkOperationController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SystemSettingsController;
@@ -120,6 +122,10 @@ Route::prefix('api')->group(function () {
             // Admin and Technical can create tasks
             Route::post('/tasks', [TaskController::class, 'store']);
 
+            // Bulk task operations
+            Route::post('/bulk/tasks/status', [BulkOperationController::class, 'updateTaskStatus']);
+            Route::post('/bulk/tasks/assign', [BulkOperationController::class, 'assignTasks']);
+
             // Gantt items (Admin + Technical can create/edit/delete)
             Route::post('/projects/{project}/gantt-items', [GanttController::class, 'store']);
             Route::put('/projects/{project}/gantt-items/{item}', [GanttController::class, 'update']);
@@ -135,6 +141,9 @@ Route::prefix('api')->group(function () {
         Route::middleware('department:Accounting')->group(function () {
             Route::delete('/budget-requests/{budget_request}', [BudgetRequestController::class, 'destroy']);
 
+            // Bulk budget operations
+            Route::post('/bulk/budget-requests/status', [BulkOperationController::class, 'updateBudgetStatus']);
+
             // Budget reports
             Route::get('/budget-report', [BudgetRequestController::class, 'report']);
             Route::get('/budget-report/export-pdf', [BudgetRequestController::class, 'exportPdf']);
@@ -147,6 +156,9 @@ Route::prefix('api')->group(function () {
         });
 
         // ─── Any Authenticated User ───────────────────────────────
+        // Dashboard analytics
+        Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
+
         // Read-only users list (used by team views and assignee labels)
         Route::get('/users', [UserController::class, 'index']);
 
@@ -226,7 +238,7 @@ Route::prefix('api')->group(function () {
         Route::get('/media/{medium}/download', [MediaController::class, 'download']);
         Route::get('/media/{medium}/serve', [MediaController::class, 'serve']);
 
-        // Time logs
+        // Time logs (legacy - proxies to task_time_logs)
         Route::get('/time-logs', [TimeLogController::class, 'index']);
         Route::post('/time-logs', [TimeLogController::class, 'store']);
         Route::delete('/time-logs/{time_log}', [TimeLogController::class, 'destroy']);

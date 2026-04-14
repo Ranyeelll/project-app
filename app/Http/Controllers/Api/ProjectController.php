@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ApprovalStatus;
 use App\Enums\Department;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
@@ -26,7 +27,7 @@ class ProjectController extends Controller
      * List all projects.
      * Employees can only see projects where they are manager or team member.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
         $query = Project::query();
@@ -37,6 +38,34 @@ class ProjectController extends Controller
                 $q->where('manager_id', $user->id)
                   ->orWhereJsonContains('team_ids', (string) $user->id);
             });
+        }
+
+        // Advanced filters
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->input('priority'));
+        }
+        if ($request->filled('category')) {
+            $query->where('category', $request->input('category'));
+        }
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'ilike', "%{$search}%")
+                  ->orWhere('description', 'ilike', "%{$search}%")
+                  ->orWhere('serial', 'ilike', "%{$search}%");
+            });
+        }
+        if ($request->filled('approval_status')) {
+            $query->where('approval_status', $request->input('approval_status'));
+        }
+        if ($request->filled('start_date_from')) {
+            $query->where('start_date', '>=', $request->input('start_date_from'));
+        }
+        if ($request->filled('end_date_to')) {
+            $query->where('end_date', '<=', $request->input('end_date_to'));
         }
 
         $projects = $query->orderByDesc('created_at')
@@ -57,14 +86,14 @@ class ProjectController extends Controller
             ->pluck('cnt', 'project_id');
 
         $approvedSpentByProject = BudgetRequest::whereIn('project_id', $projectIds)
-            ->where('status', 'approved')
+            ->where('status', ApprovalStatus::APPROVED->value)
             ->where('type', 'spending')
             ->groupBy('project_id')
             ->selectRaw('project_id, SUM(amount) as total')
             ->pluck('total', 'project_id');
 
         $reportCostsByProject = Task::whereIn('project_id', $projectIds)
-            ->where('completion_report_status', 'approved')
+            ->where('completion_report_status', ApprovalStatus::APPROVED->value)
             ->groupBy('project_id')
             ->selectRaw('project_id, SUM(report_cost) as total')
             ->pluck('total', 'project_id');
@@ -281,9 +310,9 @@ class ProjectController extends Controller
             $allTaskAvg = Task::where('project_id', $p->id)->avg('progress');
             $hasProjectTasks = Task::where('project_id', $p->id)->exists();
             $approvedSpent = (float) BudgetRequest::where('project_id', $p->id)
-                ->where('status', 'approved')->where('type', 'spending')->sum('amount');
+                ->where('status', ApprovalStatus::APPROVED->value)->where('type', 'spending')->sum('amount');
             $reportCosts = (float) Task::where('project_id', $p->id)
-                ->where('completion_report_status', 'approved')->sum('report_cost');
+                ->where('completion_report_status', ApprovalStatus::APPROVED->value)->sum('report_cost');
         }
 
         $taskAverageProgress = (int) round($teamTaskAvg ?? $allTaskAvg ?? 0);

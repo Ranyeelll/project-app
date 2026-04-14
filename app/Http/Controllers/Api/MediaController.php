@@ -55,7 +55,7 @@ class MediaController extends Controller
             'title'       => 'required|string|max:255',
             'content'     => 'nullable|string',
             'file'        => 'nullable|file|max:512000|mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,zip,rar,mp4,mov,avi,mkv,webm',
-            'visible_to'  => 'nullable|string',
+            'visible_to'  => ['nullable', 'string', 'regex:/^(\d+)(,\s*\d+)*$/'],
         ]);
 
         $actor = Auth::user();
@@ -81,10 +81,18 @@ class MediaController extends Controller
             $fileSize = $this->formatBytes($bytes);
         }
 
-        // Parse visible_to from comma-separated string to array
+        // Parse visible_to from comma-separated string to array of valid user IDs
         $visibleTo = null;
         if (!empty($data['visible_to'])) {
-            $visibleTo = array_map('trim', explode(',', $data['visible_to']));
+            $visibleTo = array_values(array_filter(
+                array_map('trim', explode(',', $data['visible_to'])),
+                fn ($id) => is_numeric($id) && $id > 0
+            ));
+            if (empty($visibleTo)) {
+                $visibleTo = null;
+            } elseif (count($visibleTo) > 50) {
+                $visibleTo = array_slice($visibleTo, 0, 50);
+            }
         }
 
         $media = Media::create([

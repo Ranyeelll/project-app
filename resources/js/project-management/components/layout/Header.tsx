@@ -70,15 +70,15 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   // Search results computed from local data
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (q.length < 2) return { projects: [], tasks: [], users: [] };
+    if (!q) return { projects: [], tasks: [], users: [] };
 
     const matchedProjects = projects
-      .filter((p) => p.name.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q))
+      .filter((p) => p.name.toLowerCase().includes(q))
       .slice(0, 5)
       .map((p) => ({ id: p.id, title: p.name, subtitle: `${p.status} · ${p.category || 'General'}`, type: 'project' as const }));
 
     const matchedTasks = tasks
-      .filter((t) => t.title.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q))
+      .filter((t) => t.title.toLowerCase().includes(q))
       .slice(0, 5)
       .map((t) => {
         const proj = projects.find((p) => p.id === t.projectId);
@@ -86,7 +86,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
       });
 
     const matchedUsers = users
-      .filter((u) => u.name.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q))
+      .filter((u) => u.name.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
       .slice(0, 5)
       .map((u) => ({ id: u.id, title: u.name, subtitle: `${u.department || ''} · ${u.email || ''}`, type: 'user' as const }));
 
@@ -557,7 +557,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
         </div>
 
         {/* Search Results Dropdown */}
-        {showSearch && searchQuery.length >= 2 && (
+        {showSearch && searchQuery.trim().length >= 1 && (
           <div className="absolute top-full left-0 right-0 mt-1 dark:bg-dark-card bg-white rounded-lg shadow-xl border dark:border-dark-border border-light-border overflow-hidden z-50 max-h-[400px] overflow-y-auto">
             {!hasSearchResults ? (
               <div className="px-4 py-6 text-center">

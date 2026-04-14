@@ -4,9 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Project extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'name',
         'description',
@@ -66,5 +70,25 @@ class Project extends Model
     public function leader(): BelongsTo
     {
         return $this->belongsTo(User::class, 'project_leader_id');
+    }
+
+    /**
+     * Compute progress as the average of team-member tasks (or all tasks if no team).
+     * Updates the stored progress column and returns the computed value.
+     */
+    public function recalculateProgress(): int
+    {
+        $teamIds = array_values(array_filter(array_map('intval', $this->team_ids ?? []), static fn ($id) => $id > 0));
+
+        $query = Task::where('project_id', $this->id);
+        if (!empty($teamIds)) {
+            $query->whereIn('assigned_to', $teamIds);
+        }
+
+        $avg = (int) round($query->avg('progress') ?? 0);
+        if ((int) $this->progress !== $avg) {
+            $this->update(['progress' => $avg]);
+        }
+        return $avg;
     }
 }
