@@ -79,6 +79,7 @@ class BudgetRequestController extends Controller
         }
 
         $items = $query->orderByDesc('created_at')
+            ->limit(500)
             ->get()
             ->map(fn ($b) => $this->formatBudgetRequest($b));
 
@@ -242,7 +243,17 @@ class BudgetRequestController extends Controller
             }
         }
 
-        return response()->json($this->formatBudgetRequest($budget_request->fresh()));
+        $freshBudget = $budget_request->fresh();
+        if (isset($data['status'])) {
+            $status = $data['status'];
+            if ($status === ApprovalStatus::APPROVED->value) {
+                \App\Services\WebhookService::dispatch('budget.approved', $freshBudget->toArray());
+            } elseif ($status === ApprovalStatus::REJECTED->value) {
+                \App\Services\WebhookService::dispatch('budget.rejected', $freshBudget->toArray());
+            }
+        }
+
+        return response()->json($this->formatBudgetRequest($freshBudget));
     }
 
     /**

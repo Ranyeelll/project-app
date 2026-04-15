@@ -128,9 +128,11 @@ export function AuditLogPage() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [retentionDays, setRetentionDays] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalLogs, setTotalLogs] = useState(0);
   const pageSize = 15;
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (page = 1) => {
     setLoading(true);
     try {
       let url = selectedProject && selectedProject !== 'global'
@@ -141,15 +143,31 @@ export function AuditLogPage() {
       if (search) params.append('search', search);
       if (filterAction) params.append('action', filterAction);
       if (filterResourceType) params.append('resourceType', filterResourceType);
-      if (selectedProject === 'global' && isAdmin) params.append('limit', '200');
+
+      // Use server-side pagination for global audit logs
+      if (!selectedProject || selectedProject === 'global') {
+        params.append('page', String(page));
+        params.append('per_page', String(pageSize));
+      }
 
       if (params.toString()) url += `?${params.toString()}`;
 
       const res = await apiFetch(url);
       if (res.ok) {
         const data = await res.json();
-        setLogs(Array.isArray(data) ? data : []);
-        setCurrentPage(0);
+        if (data && data.data && data.meta) {
+          // Server-side paginated response
+          setLogs(Array.isArray(data.data) ? data.data : []);
+          setTotalPages(data.meta.last_page);
+          setTotalLogs(data.meta.total);
+          setCurrentPage(data.meta.current_page - 1); // 0-indexed for UI
+        } else {
+          // Flat array (project-scoped)
+          setLogs(Array.isArray(data) ? data : []);
+          setTotalPages(Math.ceil((Array.isArray(data) ? data.length : 0) / pageSize));
+          setTotalLogs(Array.isArray(data) ? data.length : 0);
+          setCurrentPage(0);
+        }
       }
     } finally {
       setLoading(false);
@@ -218,32 +236,19 @@ export function AuditLogPage() {
     return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')} ${date.getHours() >= 12 ? 'PM' : 'AM'}`;
   };
 
-  const filteredLogs = logs.filter((log) => {
-    const s = search.toLowerCase();
-    if (s) {
-      const user = userName(log.userId);
-      return (
-        log.action.toLowerCase().includes(s) ||
-        log.resourceType.toLowerCase().includes(s) ||
-        getResourceLabel(log.resourceType).toLowerCase().includes(s) ||
-        getActionLabel(log.action).toLowerCase().includes(s) ||
-        user.toLowerCase().includes(s) ||
-        (log.resourceId && log.resourceId.toLowerCase().includes(s))
-      );
-    }
-    return true;
-  });
-
-  // Calculate stats
+  // Calculate stats (from current page data)
   const now = new Date();
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const last24h = filteredLogs.filter((l) => new Date(l.createdAt) > oneDayAgo).length;
-  const userActions = filteredLogs.filter((l) => l.resourceType === 'user').length;
-  const taskActions = filteredLogs.filter((l) => l.resourceType === 'task').length;
+  const last24h = logs.filter((l) => new Date(l.createdAt) > oneDayAgo).length;
+  const userActions = logs.filter((l) => l.resourceType === 'user').length;
+  const taskActions = logs.filter((l) => l.resourceType === 'task').length;
 
-  // Pagination
-  const totalPages = Math.ceil(filteredLogs.length / pageSize);
-  const paginatedLogs = filteredLogs.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+  // Pagination — for server-side paginated (global), logs already has the current page.
+  // For project-scoped (flat array), use client-side slicing.
+  const isServerPaginated = !selectedProject || selectedProject === 'global';
+  const paginatedLogs = isServerPaginated ? logs : logs.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+  const displayTotalPages = isServerPaginated ? totalPages : Math.ceil(logs.length / pageSize);
+  const displayTotal = isServerPaginated ? totalLogs : logs.length;
 
   const buildExportUrl = (period: 'weekly' | 'monthly' | 'yearly', format: 'pdf' | 'sheet') => {
     const params = new URLSearchParams();
@@ -347,7 +352,7 @@ export function AuditLogPage() {
       <div className="grid grid-cols-4 gap-4">
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg p-4">
           <p className="text-xs font-medium dark:text-dark-muted text-light-muted uppercase tracking-wider mb-1">Total Logs</p>
-          <p className="text-2xl font-bold dark:text-dark-text text-light-text">{filteredLogs.length}</p>
+          <p className="text-2xl font-bold dark:text-dark-text text-light-text">{displayTotal}</p>
         </div>
         <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg p-4">
           <p className="text-xs font-medium dark:text-dark-muted text-light-muted uppercase tracking-wider mb-1">Last 24 Hours</p>
@@ -494,7 +499,7 @@ export function AuditLogPage() {
       <div className="dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg overflow-hidden">
         {loading ? (
           <LoadingSpinner message="Loading audit logs..." />
-        ) : filteredLogs.length === 0 ? (
+        ) : logs.length === 0 ? (
           <div className="text-center py-12 text-sm dark:text-dark-muted text-light-muted">No audit logs found.</div>
         ) : (
           <>
@@ -553,22 +558,28 @@ export function AuditLogPage() {
             {/* Pagination */}
             <div className="border-t dark:border-dark-border border-light-border px-4 py-3 flex items-center justify-between">
               <p className="text-xs dark:text-dark-muted text-light-muted">
-                Showing {Math.min(currentPage * pageSize + 1, filteredLogs.length)}–{Math.min((currentPage + 1) * pageSize, filteredLogs.length)} of {filteredLogs.length} logs
+                Showing {Math.min(currentPage * pageSize + 1, displayTotal)}–{Math.min((currentPage + 1) * pageSize, displayTotal)} of {displayTotal} logs
               </p>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  onClick={() => {
+                    const prev = Math.max(0, currentPage - 1);
+                    if (isServerPaginated) { fetchLogs(prev + 1); } else { setCurrentPage(prev); }
+                  }}
                   disabled={currentPage === 0}
                   className="p-1.5 rounded dark:hover:bg-dark-card2 hover:bg-gray-100 disabled:opacity-30 transition-colors"
                 >
                   <ChevronLeftIcon size={16} className="dark:text-dark-muted text-light-muted" />
                 </button>
                 <span className="text-xs dark:text-dark-text text-light-text font-medium">
-                  {currentPage + 1} / {totalPages}
+                  {currentPage + 1} / {displayTotalPages}
                 </span>
                 <button
-                  onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                  disabled={currentPage === totalPages - 1}
+                  onClick={() => {
+                    const next = Math.min(displayTotalPages - 1, currentPage + 1);
+                    if (isServerPaginated) { fetchLogs(next + 1); } else { setCurrentPage(next); }
+                  }}
+                  disabled={currentPage === displayTotalPages - 1}
                   className="p-1.5 rounded dark:hover:bg-dark-card2 hover:bg-gray-100 disabled:opacity-30 transition-colors"
                 >
                   <ChevronRightIcon size={16} className="dark:text-dark-muted text-light-muted" />

@@ -190,6 +190,172 @@ export interface TimeLog {
   date: string;
 }
 
+// ─── Task Comments ─────────────────────────────────────────────────────────
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  userId: string;
+  userName: string;
+  body: string;
+  parentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Project Templates ─────────────────────────────────────────────────────
+
+export interface TaskTemplateItem {
+  id: string;
+  title: string;
+  description: string;
+  priority: string;
+  offsetDays: number;
+  durationDays: number;
+  estimatedHours: number;
+  position: number;
+}
+
+export interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  riskLevel: string;
+  defaultBudget: number;
+  defaultDurationDays: number;
+  defaultTeamStructure: Record<string, any>[];
+  createdBy: string;
+  createdAt: string;
+  taskTemplates: TaskTemplateItem[];
+}
+
+// ─── Sprints ───────────────────────────────────────────────────────────────
+
+export interface Sprint {
+  id: string;
+  projectId: string;
+  name: string;
+  goal: string;
+  startDate: string;
+  endDate: string;
+  status: 'planning' | 'active' | 'completed' | 'cancelled';
+  totalTasks: number;
+  completedTasks: number;
+  progress: number;
+  tasks: { id: string; title: string; status: string; priority: string; progress: number }[];
+}
+
+// ─── Custom Fields ─────────────────────────────────────────────────────────
+
+export interface CustomField {
+  id: string;
+  entityType: 'project' | 'task';
+  name: string;
+  label: string;
+  fieldType: 'text' | 'number' | 'date' | 'select' | 'checkbox' | 'textarea';
+  options: string[];
+  required: boolean;
+  position: number;
+  createdBy: string;
+}
+
+export interface CustomFieldValue {
+  id: string;
+  fieldId: string;
+  fieldName: string;
+  fieldLabel: string;
+  fieldType: string;
+  value: string;
+}
+
+// ─── Dashboard Widgets ─────────────────────────────────────────────────────
+
+export interface DashboardWidget {
+  id: string;
+  widgetType: string;
+  title: string;
+  position: number;
+  colSpan: number;
+  config: Record<string, any>;
+  isVisible: boolean;
+}
+
+// ─── Webhooks ──────────────────────────────────────────────────────────────
+
+export interface Webhook {
+  id: string;
+  name: string;
+  url: string;
+  events: string[];
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface WebhookLogEntry {
+  id: string;
+  event: string;
+  responseCode: number | null;
+  success: boolean;
+  createdAt: string;
+}
+
+// ─── Media Version ─────────────────────────────────────────────────────────
+
+export interface MediaVersion {
+  id: string;
+  mediaId: string;
+  versionNumber: number;
+  filePath: string;
+  originalFilename: string;
+  fileSize: number;
+  uploadedBy: string;
+  changeNote: string;
+  createdAt: string;
+}
+
+// ─── Activity Feed ─────────────────────────────────────────────────────────
+
+export interface ActivityFeedItem {
+  id: string;
+  userId: string;
+  actorRole: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  projectId: string;
+  changes: Record<string, any>;
+  context: Record<string, any>;
+  createdAt: string;
+}
+
+// ─── Workload ──────────────────────────────────────────────────────────────
+
+export interface WorkloadEntry {
+  userId: string;
+  userName: string;
+  department: string;
+  activeTasks: number;
+  estimatedHours: number;
+  loggedHours: number;
+  utilization: number;
+}
+
+// ─── Budget Variance ───────────────────────────────────────────────────────
+
+export interface BudgetVariance {
+  projectId: string;
+  projectName: string;
+  budget: number;
+  spent: number;
+  variance: number;
+  variancePercent: number;
+  burnRate: number;
+  projectedTotal: number;
+  status: 'healthy' | 'warning' | 'over-budget';
+}
+
 export const MOCK_USERS: User[] = [
 {
   id: 'u1',
@@ -197,7 +363,7 @@ export const MOCK_USERS: User[] = [
   email: 'admin@maptech.com',
   role: 'superadmin',
   avatar: 'AR',
-  department: 'Engineering',
+  department: 'Admin',
   position: 'Project Manager',
   status: 'active',
   joinDate: '2022-01-15'
@@ -208,7 +374,7 @@ export const MOCK_USERS: User[] = [
   email: 'employee@maptech.com',
   role: 'employee',
   avatar: 'MS',
-  department: 'Development',
+  department: 'Technical',
   position: 'Senior Developer',
   status: 'active',
   joinDate: '2022-06-01'
@@ -219,7 +385,7 @@ export const MOCK_USERS: User[] = [
   email: 'james@maptech.com',
   role: 'employee',
   avatar: 'JR',
-  department: 'Design',
+  department: 'Technical',
   position: 'UI/UX Designer',
   status: 'active',
   joinDate: '2023-02-14'
@@ -230,7 +396,7 @@ export const MOCK_USERS: User[] = [
   email: 'clara@maptech.com',
   role: 'employee',
   avatar: 'CM',
-  department: 'QA',
+  department: 'Technical',
   position: 'QA Engineer',
   status: 'active',
   joinDate: '2023-05-20'
@@ -241,7 +407,7 @@ export const MOCK_USERS: User[] = [
   email: 'daniel@maptech.com',
   role: 'employee',
   avatar: 'DC',
-  department: 'Backend',
+  department: 'Technical',
   position: 'Backend Developer',
   status: 'inactive',
   joinDate: '2021-11-10'

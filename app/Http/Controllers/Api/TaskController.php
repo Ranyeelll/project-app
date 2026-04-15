@@ -105,6 +105,8 @@ class TaskController extends Controller
         // Log task creation
         TaskActivityLogger::taskCreated($task->id, $task->title);
 
+        \App\Services\WebhookService::dispatch('task.created', $task->fresh()->toArray());
+
         return response()->json($this->formatTask($task->fresh()), 201);
     }
 
@@ -216,7 +218,14 @@ class TaskController extends Controller
             $project?->recalculateProgress();
         }
 
-        return response()->json($this->formatTask($task->fresh()));
+        $freshTask = $task->fresh();
+        if (isset($data['status']) && $data['status'] === 'completed') {
+            \App\Services\WebhookService::dispatch('task.completed', $freshTask->toArray());
+        } else {
+            \App\Services\WebhookService::dispatch('task.updated', $freshTask->toArray());
+        }
+
+        return response()->json($this->formatTask($freshTask));
     }
 
     /**
@@ -224,6 +233,7 @@ class TaskController extends Controller
      */
     public function destroy(Task $task): JsonResponse
     {
+        \App\Services\WebhookService::dispatch('task.deleted', $task->toArray());
         $task->delete();
         return response()->json(['message' => 'Task deleted']);
     }

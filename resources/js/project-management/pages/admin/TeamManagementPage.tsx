@@ -6,6 +6,7 @@ import {
   TrashIcon,
   UserCheckIcon,
   UserXIcon,
+  UsersIcon,
   KeyIcon,
   ClipboardCopyIcon,
   CheckCircleIcon,
@@ -299,7 +300,7 @@ export function TeamManagementPage() {
             icon={<DownloadIcon size={14} />}
             onClick={() => {
               const headers = ['Name', 'Email', 'Department', 'Position', 'Role', 'Status'];
-              const rows = filtered.map((u) => [u.name, u.email, u.department || '', u.position || '', u.role, u.isActive ? 'Active' : 'Inactive']);
+              const rows = filtered.map((u) => [u.name, u.email, u.department || '', u.position || '', u.role, u.status === 'active' ? 'Active' : 'Inactive']);
               downloadCsv('team-directory', headers, rows);
             }}
           >
@@ -372,6 +373,15 @@ export function TeamManagementPage() {
               </tr>
             </thead>
             <tbody className="divide-y dark:divide-dark-border divide-light-border">
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center">
+                    <UsersIcon size={32} className="mx-auto mb-3 dark:text-dark-muted text-gray-300" />
+                    <p className="text-sm font-medium dark:text-dark-muted text-gray-500">No team members found</p>
+                    <p className="text-xs dark:text-dark-subtle text-gray-400 mt-1">Try adjusting your search or filter criteria</p>
+                  </td>
+                </tr>
+              )}
               {filtered.map((user) =>
               <tr key={user.id} className="table-row-hover">
                   <td className="px-5 py-3.5">

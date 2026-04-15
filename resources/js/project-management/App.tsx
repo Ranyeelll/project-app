@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import {
   AppProvider,
   useAuth,
@@ -11,25 +11,31 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ChangePasswordModal } from './components/ui/ChangePasswordModal';
 import { OverdueWarningModal } from './components/ui/OverdueWarningModal';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { ProjectsPage } from './pages/admin/ProjectsPage';
-import { GanttPage } from './pages/admin/GanttPage';
-import { MonitorControlPage } from './pages/admin/MonitorControlPage';
-import { BudgetApprovalsPage } from './pages/admin/BudgetApprovalsPage';
-import { BudgetReportPage } from './pages/admin/BudgetReportPage';
-import { TeamManagementPage } from './pages/admin/TeamManagementPage';
-import { ReportsMediaPage } from './pages/admin/ReportsMediaPage';
-import { TaskReviewsPage } from './pages/admin/TaskReviewsPage';
-import { ArchivePage } from './pages/admin/ArchivePage';
-import { AuditLogPage } from './pages/admin/AuditLogPage';
-import { CreateProjectPage } from './pages/admin/CreateProjectPage';
-// Chat feature removed: chat pages omitted
-import { EmployeeDashboard } from './pages/employee/EmployeeDashboard';
-import { MyTasksPage } from './pages/employee/MyTasksPage';
-import { ViewGanttPage } from './pages/employee/ViewGanttPage';
-import { BudgetRequestPage } from './pages/employee/BudgetRequestPage';
-import { LogTimePage } from './pages/employee/LogTimePage';
-import { ReportIssuePage } from './pages/employee/ReportIssuePage';
-import { ResourcesPage } from './pages/employee/ResourcesPage';
+
+// Lazy-loaded admin pages (code-split for smaller initial bundle)
+const ProjectsPage = React.lazy(() => import('./pages/admin/ProjectsPage').then(m => ({ default: m.ProjectsPage })));
+const GanttPage = React.lazy(() => import('./pages/admin/GanttPage').then(m => ({ default: m.GanttPage })));
+const MonitorControlPage = React.lazy(() => import('./pages/admin/MonitorControlPage').then(m => ({ default: m.MonitorControlPage })));
+const BudgetApprovalsPage = React.lazy(() => import('./pages/admin/BudgetApprovalsPage').then(m => ({ default: m.BudgetApprovalsPage })));
+const BudgetReportPage = React.lazy(() => import('./pages/admin/BudgetReportPage').then(m => ({ default: m.BudgetReportPage })));
+const BudgetVariancePage = React.lazy(() => import('./pages/admin/BudgetVariancePage').then(m => ({ default: m.BudgetVariancePage })));
+const TeamManagementPage = React.lazy(() => import('./pages/admin/TeamManagementPage').then(m => ({ default: m.TeamManagementPage })));
+const ReportsMediaPage = React.lazy(() => import('./pages/admin/ReportsMediaPage').then(m => ({ default: m.ReportsMediaPage })));
+const TaskReviewsPage = React.lazy(() => import('./pages/admin/TaskReviewsPage').then(m => ({ default: m.TaskReviewsPage })));
+const ArchivePage = React.lazy(() => import('./pages/admin/ArchivePage').then(m => ({ default: m.ArchivePage })));
+const AuditLogPage = React.lazy(() => import('./pages/admin/AuditLogPage').then(m => ({ default: m.AuditLogPage })));
+const CreateProjectPage = React.lazy(() => import('./pages/admin/CreateProjectPage').then(m => ({ default: m.CreateProjectPage })));
+const WorkloadPage = React.lazy(() => import('./pages/admin/WorkloadPage').then(m => ({ default: m.WorkloadPage })));
+const ActivityFeedPage = React.lazy(() => import('./pages/admin/ActivityFeedPage').then(m => ({ default: m.ActivityFeedPage })));
+
+// Lazy-loaded employee pages
+const EmployeeDashboard = React.lazy(() => import('./pages/employee/EmployeeDashboard').then(m => ({ default: m.EmployeeDashboard })));
+const MyTasksPage = React.lazy(() => import('./pages/employee/MyTasksPage').then(m => ({ default: m.MyTasksPage })));
+const ViewGanttPage = React.lazy(() => import('./pages/employee/ViewGanttPage').then(m => ({ default: m.ViewGanttPage })));
+const BudgetRequestPage = React.lazy(() => import('./pages/employee/BudgetRequestPage').then(m => ({ default: m.BudgetRequestPage })));
+const LogTimePage = React.lazy(() => import('./pages/employee/LogTimePage').then(m => ({ default: m.LogTimePage })));
+const ReportIssuePage = React.lazy(() => import('./pages/employee/ReportIssuePage').then(m => ({ default: m.ReportIssuePage })));
+const ResourcesPage = React.lazy(() => import('./pages/employee/ResourcesPage').then(m => ({ default: m.ResourcesPage })));
 import { SettingsPage } from './pages/SettingsPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { isElevatedRole, isEmployeeRole, isSuperadmin, isSupervisor } from './utils/roles';
@@ -87,7 +93,6 @@ function AppContent() {
   const renderPage = (): { page: React.ReactNode; routeNotice: string | null } => {
     const dept = currentUser.department;
     const redirectedNotice = 'That page is unavailable for your role, so you were redirected to your dashboard.';
-    const chatNotice = 'Chat is currently disabled, so you were redirected to your dashboard.';
 
     // Supervisor role - project and monitoring access only
     if (isSupervisor(currentUser.role)) {
@@ -102,10 +107,12 @@ function AppContent() {
           return { page: <GanttPage />, routeNotice: null };
         case 'admin-monitor':
           return { page: <MonitorControlPage />, routeNotice: null };
+        case 'admin-workload':
+          return { page: <WorkloadPage />, routeNotice: null };
         case 'admin-reviews':
           return { page: <TaskReviewsPage />, routeNotice: null };
-        case 'admin-chat':
-          return { page: <AdminDashboard />, routeNotice: chatNotice };
+        case 'admin-activity-feed':
+          return { page: <ActivityFeedPage />, routeNotice: null };
         case 'settings':
           return { page: <SettingsPage />, routeNotice: null };
         case 'calendar':
@@ -128,23 +135,26 @@ function AppContent() {
           return { page: <GanttPage />, routeNotice: null };
         case 'admin-monitor':
           return { page: <MonitorControlPage />, routeNotice: null };
+        case 'admin-workload':
+          return { page: <WorkloadPage />, routeNotice: null };
         case 'admin-budget':
           return { page: <BudgetApprovalsPage />, routeNotice: null };
         case 'admin-budget-report':
           return { page: <BudgetReportPage />, routeNotice: null };
+        case 'admin-budget-variance':
+          return { page: <BudgetVariancePage />, routeNotice: null };
         case 'admin-team':
           return { page: <TeamManagementPage />, routeNotice: null };
         case 'admin-reports':
           return { page: <ReportsMediaPage />, routeNotice: null };
         case 'admin-reviews':
           return { page: <TaskReviewsPage />, routeNotice: null };
+        case 'admin-activity-feed':
+          return { page: <ActivityFeedPage />, routeNotice: null };
         case 'admin-audit-logs':
           return { page: <AuditLogPage />, routeNotice: null };
         case 'admin-archive':
           return { page: <ArchivePage />, routeNotice: null };
-        // chat removed -> fall back to dashboard
-        case 'admin-chat':
-          return { page: <AdminDashboard />, routeNotice: chatNotice };
         case 'settings':
           return { page: <SettingsPage />, routeNotice: null };
         case 'calendar':
@@ -163,11 +173,10 @@ function AppContent() {
           return { page: <BudgetApprovalsPage />, routeNotice: null };
         case 'admin-budget-report':
           return { page: <BudgetReportPage />, routeNotice: null };
+        case 'admin-budget-variance':
+          return { page: <BudgetVariancePage />, routeNotice: null };
         case 'accounting-review':
           return { page: <TaskReviewsPage />, routeNotice: null };
-        // chat removed -> fall back to dashboard
-        case 'admin-chat':
-          return { page: <AdminDashboard />, routeNotice: chatNotice };
         case 'settings':
           return { page: <SettingsPage />, routeNotice: null };
         case 'calendar':
@@ -190,9 +199,6 @@ function AppContent() {
           return { page: <MyTasksPage />, routeNotice: null };
         case 'technical-review':
           return { page: <TaskReviewsPage />, routeNotice: null };
-        // chat removed -> fall back to dashboard
-        case 'admin-chat':
-          return { page: <AdminDashboard />, routeNotice: chatNotice };
         case 'settings':
           return { page: <SettingsPage />, routeNotice: null };
         case 'calendar':
@@ -220,9 +226,6 @@ function AppContent() {
           return { page: <ReportIssuePage />, routeNotice: null };
         case 'employee-resources':
           return { page: <ResourcesPage />, routeNotice: null };
-        // chat removed -> fall back to employee dashboard
-        case 'employee-chat':
-          return { page: <EmployeeDashboard />, routeNotice: chatNotice };
         case 'settings':
           return { page: <SettingsPage />, routeNotice: null };
         case 'calendar':
@@ -243,21 +246,24 @@ function AppContent() {
           return { page: <GanttPage />, routeNotice: null };
         case 'admin-monitor':
           return { page: <MonitorControlPage />, routeNotice: null };
+        case 'admin-workload':
+          return { page: <WorkloadPage />, routeNotice: null };
         case 'admin-budget':
           return { page: <BudgetApprovalsPage />, routeNotice: null };
         case 'admin-budget-report':
           return { page: <BudgetReportPage />, routeNotice: null };
+        case 'admin-budget-variance':
+          return { page: <BudgetVariancePage />, routeNotice: null };
         case 'admin-team':
           return { page: <TeamManagementPage />, routeNotice: null };
         case 'admin-reports':
           return { page: <ReportsMediaPage />, routeNotice: null };
         case 'admin-reviews':
           return { page: <TaskReviewsPage />, routeNotice: null };
+        case 'admin-activity-feed':
+          return { page: <ActivityFeedPage />, routeNotice: null };
         case 'admin-archive':
           return { page: <ArchivePage />, routeNotice: null };
-        // chat removed -> fall back to dashboard
-        case 'admin-chat':
-          return { page: <AdminDashboard />, routeNotice: chatNotice };
         case 'settings':
           return { page: <SettingsPage />, routeNotice: null };
         case 'calendar':
@@ -280,7 +286,9 @@ function AppContent() {
             {routeNotice}
           </div>
         )}
+        <Suspense fallback={<div className="flex items-center justify-center h-64 text-zinc-400">Loading...</div>}>
         {page}
+        </Suspense>
       </AppLayout>
       <ChangePasswordModal
         isOpen={showForceChange}

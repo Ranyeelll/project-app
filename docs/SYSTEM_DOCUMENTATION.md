@@ -1,8 +1,8 @@
 # MAPTECH Project Management System
 ## Complete System Documentation
 
-**Document Version:** 4.2  
-**Last Updated:** April 14, 2026  
+**Document Version:** 4.3  
+**Last Updated:** April 15, 2026  
 **Classification:** Internal Use Only  
 **Document Owner:** MAPTECH IT Department
 
@@ -953,6 +953,7 @@ erDiagram
         json team_ids
         string approval_status
         text approval_notes
+        timestamp deleted_at
     }
     
     tasks {
@@ -971,6 +972,7 @@ erDiagram
         boolean allow_employee_edit
         string completion_report_status
         decimal report_cost
+        timestamp deleted_at
     }
 ```
 
@@ -979,8 +981,8 @@ erDiagram
 | Table | Description | Key Fields |
 |-------|-------------|------------|
 | `users` | User accounts | name, email, role, department, status |
-| `projects` | Project records | serial, name, budget, spent, approval_status |
-| `tasks` | Task records | project_id, title, status, progress, assigned_to |
+| `projects` | Project records (soft-deletable) | serial, name, budget, spent, approval_status, deleted_at |
+| `tasks` | Task records (soft-deletable) | project_id, title, status, progress, assigned_to, deleted_at |
 | `budget_requests` | Budget requests | project_id, amount, status, type, purpose |
 | `gantt_items` | Gantt chart items | project_id, type, name, start_date, end_date |
 | `gantt_dependencies` | Item dependencies | predecessor_id, successor_id, type |
@@ -1051,6 +1053,19 @@ The audit log detail modal formats the `changes` JSON for readability:
 | `json` | Flexible arrays | team_ids, assignee_ids, changes |
 | `enum` | Constrained values | status, priority, type |
 | `boolean` | Flags | allow_employee_edit, sensitive_flag |
+| `timestamp (nullable)` | Soft deletes | deleted_at |
+
+### 10.6 Soft Deletes
+
+The `projects` and `tasks` tables support soft deletes via Laravel's `SoftDeletes` trait. Soft-deleted records are automatically excluded from standard Eloquent queries by a global scope. Key behaviors:
+
+- **Deletion**: Records are not physically removed; instead, `deleted_at` is set to the current timestamp.
+- **Querying**: All standard queries (e.g., `Project::all()`, `Task::where(...)`) automatically exclude soft-deleted records.
+- **Restoration**: Soft-deleted records can be restored by setting `deleted_at` back to `null`.
+- **Permanent deletion**: Use `->forceDelete()` to permanently remove a record.
+- **Including trashed**: Use `->withTrashed()` to include soft-deleted records in queries, or `->onlyTrashed()` to retrieve only soft-deleted records.
+
+**Migration**: `2026_04_14_095504_add_soft_deletes_to_projects_and_tasks.php`
 
 ---
 
@@ -1094,13 +1109,14 @@ The audit log detail modal formats the `changes` JSON for readability:
 - `ProjectApprovalController` - Approval workflow
 - `ProjectApprovalService` - Approval business logic
 - `ProjectSerialService` - Serial number generation
-- `Project` model - Project data model
+- `Project` model - Project data model (with `SoftDeletes`)
 
 **Key Features:**
 - Project creation with team assignment
 - Multi-stage approval workflow
 - Serial number auto-generation
 - Budget tracking
+- Soft delete support (projects are archived, not permanently removed)
 
 ### 11.4 Task Module
 
@@ -1123,6 +1139,7 @@ The audit log detail modal formats the `changes` JSON for readability:
 - Completion submission and review
 - Blocker reporting and resolution
 - Activity timeline for audit
+- Soft delete support (tasks are archived, not permanently removed)
 
 ### 11.5 Gantt Module
 
@@ -1166,6 +1183,7 @@ The audit log detail modal formats the `changes` JSON for readability:
 - File upload (document, video, text)
 - Visibility control per file
 - Download and inline serving
+- Server-side `uploaded_by` enforcement (always set from authenticated user, not from request body)
 
 ### 11.8 Audit Module
 
@@ -1644,6 +1662,7 @@ Route::middleware('department:Admin,Technical,Accounting') // Multiple departmen
 | XSS | React auto-escaping, CSP headers |
 | SQL Injection | Eloquent ORM parameterized queries |
 | Session Hijacking | HTTP-only secure cookies |
+| Identity Spoofing | `uploaded_by` forced to `Auth::id()` server-side (not user-supplied) |
 
 ### 14.6 Sensitive Operations
 
@@ -1700,10 +1719,25 @@ window.Echo = new Echo({
 | Test Type | Purpose | Location |
 |-----------|---------|----------|
 | Unit Tests | Individual methods | `tests/Unit/` |
-| Feature Tests | API endpoints | `tests/Feature/` |
+| Feature Tests | API endpoints & workflows | `tests/Feature/` |
 | Browser Tests | E2E workflows | Future |
 
+**Current Coverage:**
+- 29 tests, 95 assertions
+- Authentication (login, logout, registration, password reset/update)
+- Email verification
+- Profile management
+- Budget approval flow (multi-stage)
+- Project finish notification (supervisor + superadmin + legacy admin)
+
 ### 16.2 Test Configuration
+
+Tests run against SQLite in-memory for speed. All migrations are compatible with both PostgreSQL (production) and SQLite (testing).
+
+**SQLite Compatibility Notes:**
+- Migrations must not use Eloquent models that have global scopes (e.g., `SoftDeletes`) on columns added in later migrations. Use `DB::table()` instead.
+- Foreign key modifications (`dropForeign`/`foreign`) are skipped on SQLite via driver guards.
+- PostgreSQL-specific statements (e.g., `pg_advisory_xact_lock`) are wrapped in `DB::getDriverName()` checks.
 
 ```xml
 <!-- phpunit.xml -->
@@ -1711,7 +1745,7 @@ window.Echo = new Echo({
     <env name="APP_ENV" value="testing"/>
     <env name="DB_CONNECTION" value="sqlite"/>
     <env name="DB_DATABASE" value=":memory:"/>
-    <env name="CACHE_DRIVER" value="array"/>
+    <env name="CACHE_STORE" value="array"/>
     <env name="QUEUE_CONNECTION" value="sync"/>
 </php>
 ```
@@ -1906,8 +1940,8 @@ php artisan migrate:status
 | Table | Purpose |
 |-------|---------|
 | `users` | User accounts and authentication |
-| `projects` | Project records |
-| `tasks` | Task records within projects |
+| `projects` | Project records (soft-deletable) |
+| `tasks` | Task records within projects (soft-deletable) |
 | `task_progress_logs` | Task progress history |
 | `task_time_logs` | Time tracking entries |
 | `task_completions` | Completion submissions |
@@ -1921,6 +1955,8 @@ php artisan migrate:status
 | `issues` | Project issues/risks |
 | `project_form_submissions` | Form submissions |
 | `audit_logs` | Immutable audit trail |
+| `system_settings` | Key-value configuration store |
+| `notifications` | Laravel notification records |
 
 ### Appendix B: Configuration Files
 

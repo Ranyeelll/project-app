@@ -40,6 +40,23 @@ class AuditLogController extends Controller
     {
         $query = $this->baseQuery($request)->orderBy('created_at', 'desc');
 
+        // Support server-side pagination: ?page=1&per_page=100
+        if ($request->has('page')) {
+            $perPage = min($request->integer('per_page', 100), 200);
+            $paginated = $query->paginate($perPage);
+
+            return response()->json([
+                'data' => collect($paginated->items())->map(fn ($log) => $this->formatLog($log)),
+                'meta' => [
+                    'current_page' => $paginated->currentPage(),
+                    'last_page'    => $paginated->lastPage(),
+                    'per_page'     => $paginated->perPage(),
+                    'total'        => $paginated->total(),
+                ],
+            ]);
+        }
+
+        // Legacy: flat array with limit (for backwards compat with AppContext / other callers)
         $limit = $request->integer('limit', 100);
         $logs = $query->limit($limit)->get()->map(fn ($log) => $this->formatLog($log));
 

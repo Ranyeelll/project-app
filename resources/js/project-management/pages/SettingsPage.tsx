@@ -47,6 +47,31 @@ export function SettingsPage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Notification preferences state
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({
+    task_assignments: true,
+    budget_approvals: true,
+    blocker_alerts: true,
+    overdue_reminders: true,
+    email_digest: false,
+  });
+
+  useEffect(() => {
+    apiFetch('/api/notification-preferences')
+      .then((r) => r.json())
+      .then((d) => { if (d && typeof d === 'object') setNotifPrefs(d); })
+      .catch(() => {});
+  }, []);
+
+  const toggleNotifPref = async (key: string) => {
+    const newVal = !notifPrefs[key];
+    setNotifPrefs((prev) => ({ ...prev, [key]: newVal }));
+    await apiFetch('/api/notification-preferences', {
+      method: 'PUT',
+      body: JSON.stringify({ [key]: newVal }),
+    });
+  };
+
   useEffect(() => {
     if (users.length > 0 && !initialLoadRef.current) {
       initialLoadRef.current = true;
@@ -131,7 +156,7 @@ export function SettingsPage() {
     try {
       const formData = new FormData();
       formData.append('photo', file);
-      const res = await apiFetch('/api/user/profile-photo', {
+      const res = await apiFetch(`/api/users/${currentUser?.id}/profile-photo`, {
         method: 'POST',
         body: formData,
       });
@@ -340,19 +365,23 @@ export function SettingsPage() {
                 <p className="text-sm font-medium dark:text-dark-text text-light-text">Notification Preferences</p>
               </div>
               {[
-                { label: 'Task assignments', description: 'When a task is assigned to you' },
-                { label: 'Budget approvals', description: 'Updates on budget requests' },
-                { label: 'Blocker alerts', description: 'When blockers are reported' },
-                { label: 'Overdue reminders', description: 'Tasks past their due date' },
+                { key: 'task_assignments', label: 'Task assignments', description: 'When a task is assigned to you' },
+                { key: 'budget_approvals', label: 'Budget approvals', description: 'Updates on budget requests' },
+                { key: 'blocker_alerts', label: 'Blocker alerts', description: 'When blockers are reported' },
+                { key: 'overdue_reminders', label: 'Overdue reminders', description: 'Tasks past their due date' },
+                { key: 'email_digest', label: 'Daily email digest', description: 'Summary of activity sent daily' },
               ].map((pref) => (
-                <div key={pref.label} className="flex items-center justify-between dark:bg-dark-card2 bg-light-card2 rounded-lg px-4 py-3">
+                <div key={pref.key} className="flex items-center justify-between dark:bg-dark-card2 bg-light-card2 rounded-lg px-4 py-3">
                   <div>
                     <p className="text-sm dark:text-dark-text text-light-text">{pref.label}</p>
                     <p className="text-xs dark:text-dark-subtle text-light-subtle">{pref.description}</p>
                   </div>
-                  <div className="w-9 h-5 rounded-full bg-green-primary relative cursor-default">
-                    <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-white" />
-                  </div>
+                  <button
+                    onClick={() => toggleNotifPref(pref.key)}
+                    className={`relative w-9 h-5 rounded-full transition-colors ${notifPrefs[pref.key] ? 'bg-green-primary' : 'bg-zinc-600'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${notifPrefs[pref.key] ? 'right-0.5' : 'left-0.5'}`} />
+                  </button>
                 </div>
               ))}
             </div>

@@ -40,7 +40,9 @@ interface AuthContextType {
   => Promise<{
     success: boolean;
     error?: string;
+    requires2fa?: boolean;
   }>;
+  verify2fa: (code: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateCurrentUser: (user: User) => void;
 }
@@ -49,6 +51,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => ({
     success: false
   }),
+  verify2fa: async () => ({ success: false }),
   logout: async () => {},
   updateCurrentUser: () => {}
 });
@@ -219,7 +222,7 @@ export function AppProvider({ children }: AppProviderProps) {
     async (
       email: string,
       password: string
-    ): Promise<{ success: boolean; error?: string }> => {
+    ): Promise<{ success: boolean; error?: string; requires2fa?: boolean }> => {
       try {
         const res = await apiFetch('/api/login', {
           method: 'POST',
@@ -230,7 +233,30 @@ export function AppProvider({ children }: AppProviderProps) {
           setCurrentUser(data.user as User);
           return { success: true };
         }
+        if (data.requires_2fa) {
+          return { success: false, requires2fa: true };
+        }
         return { success: false, error: data.error || 'Login failed.' };
+      } catch {
+        return { success: false, error: 'Network error. Please try again.' };
+      }
+    },
+    []
+  );
+
+  const verify2fa = useCallback(
+    async (code: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const res = await apiFetch('/api/login/2fa', {
+          method: 'POST',
+          body: JSON.stringify({ code }),
+        });
+        const data = await res.json();
+        if (data.success && data.user) {
+          setCurrentUser(data.user as User);
+          return { success: true };
+        }
+        return { success: false, error: data.error || 'Verification failed.' };
       } catch {
         return { success: false, error: 'Network error. Please try again.' };
       }
@@ -647,7 +673,7 @@ export function AppProvider({ children }: AppProviderProps) {
     refreshNotifications();
   }, [refreshAll, refreshNotifications, currentUser]);
 
-  // ─── Auto-refresh every 15 seconds (skip while tab is hidden, not authed, or already refreshing)
+  // ─── Auto-refresh every 30 seconds (skip while tab is hidden, not authed, or already refreshing)
   const isRefreshingRef = useRef(false);
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -662,7 +688,7 @@ export function AppProvider({ children }: AppProviderProps) {
         // Allow next refresh after a short delay to prevent overlap
         setTimeout(() => { isRefreshingRef.current = false; }, 2000);
       }
-    }, 15000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [refreshAll, refreshNotifications, currentUser]);
 
@@ -676,7 +702,8 @@ export function AppProvider({ children }: AppProviderProps) {
     login,
     logout,
     updateCurrentUser,
-  }), [currentUser, login, logout, updateCurrentUser]);
+    verify2fa,
+  }), [currentUser, login, logout, updateCurrentUser, verify2fa]);
 
   const navigationContextValue = useMemo(() => ({
     currentPage,

@@ -70,4 +70,42 @@ class NotificationController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    /**
+     * GET /api/notification-preferences
+     */
+    public function getPreferences(): JsonResponse
+    {
+        $user = Auth::user();
+        $defaults = [
+            'task_assignments' => true,
+            'budget_approvals' => true,
+            'blocker_alerts' => true,
+            'overdue_reminders' => true,
+            'email_digest' => false,
+        ];
+
+        return response()->json(array_merge($defaults, $user->notification_preferences ?? []));
+    }
+
+    /**
+     * PUT /api/notification-preferences
+     */
+    public function updatePreferences(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'task_assignments' => 'sometimes|boolean',
+            'budget_approvals' => 'sometimes|boolean',
+            'blocker_alerts' => 'sometimes|boolean',
+            'overdue_reminders' => 'sometimes|boolean',
+            'email_digest' => 'sometimes|boolean',
+        ]);
+
+        $user = Auth::user();
+        $current = $user->notification_preferences ?? [];
+        $user->notification_preferences = array_merge($current, $data);
+        $user->save();
+
+        return response()->json($user->notification_preferences);
+    }
 }

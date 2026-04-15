@@ -50,12 +50,14 @@ class TaskReviewController extends Controller
     {
         $user = Auth::user();
 
-        // Authorization: Only Technical, Admin, Accounting can review
-        $canReview = $user && in_array($user->department, [
-            Department::Admin,
-            Department::Technical,
-            Department::Accounting,
-        ]);
+        // Authorization: Only Technical, Admin, Accounting, or Supervisor can review
+        $canReview = $user && (
+            in_array($user->department, [
+                Department::Admin,
+                Department::Technical,
+                Department::Accounting,
+            ]) || $user->isSupervisor()
+        );
 
         if (!$canReview) {
             return response()->json([

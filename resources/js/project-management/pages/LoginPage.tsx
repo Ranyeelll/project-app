@@ -14,7 +14,7 @@ import { useAuth, useTheme, useNavigation } from '../context/AppContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, verify2fa } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const { setCurrentPage } = useNavigation();
   const [email, setEmail] = useState('');
@@ -22,6 +22,8 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [needs2fa, setNeeds2fa] = useState(false);
+  const [tfaCode, setTfaCode] = useState('');
   // playful evasive button offsets when user clicks empty submit
   const [btnOffset, setBtnOffset] = useState({ x: 0, y: 0 });
   const [btnShaking, setBtnShaking] = useState(false);
@@ -47,8 +49,25 @@ export function LoginPage() {
     if (result.success) {
       // Navigation is handled automatically by AppContext
       // once currentUser is set from the API response
+    } else if (result.requires2fa) {
+      setNeeds2fa(true);
+      setError('');
     } else {
       setError(result.error || 'Login failed.');
+    }
+  };
+  const handle2faSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tfaCode || tfaCode.length !== 6) {
+      setError('Please enter a 6-digit code.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    const result = await verify2fa(tfaCode);
+    setLoading(false);
+    if (!result.success) {
+      setError(result.error || 'Invalid code. Please try again.');
     }
   };
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -151,6 +170,42 @@ export function LoginPage() {
             </div>
           }
 
+          {needs2fa ? (
+            <form onSubmit={handle2faSubmit} className="space-y-4" noValidate>
+              <p className="text-sm dark:text-dark-muted text-light-muted">
+                Enter the 6-digit code from your authenticator app.
+              </p>
+              <Input
+                label="Authentication Code"
+                type="text"
+                placeholder="000000"
+                value={tfaCode}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setTfaCode(v);
+                  setError('');
+                }}
+                icon={<LockIcon size={15} />}
+                autoComplete="one-time-code"
+                required />
+
+              <Button
+                type="submit"
+                variant="primary"
+                fullWidth
+                size="lg"
+                loading={loading}
+              >
+                {loading ? 'Verifying...' : 'Verify'}
+              </Button>
+              <button
+                type="button"
+                onClick={() => { setNeeds2fa(false); setTfaCode(''); setError(''); }}
+                className="text-sm text-green-interactive hover:text-green-primary transition-colors w-full text-center">
+                Back to login
+              </button>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {/* Email */}
             <Input
@@ -237,6 +292,7 @@ export function LoginPage() {
               </div>
             </div>
           </form>
+          )}
 
           {}
         </div>

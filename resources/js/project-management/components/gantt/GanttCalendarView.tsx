@@ -222,7 +222,7 @@ export function GanttCalendarView({ items, users, onItemClick }: GanttCalendarVi
                           {assignees.length > 0 && (
                             <span className="flex -space-x-1 flex-shrink-0">
                               {assignees.map(u => (
-                                <UserAvatar key={u.id} user={u} size="xs" />
+                                <UserAvatar key={u.id} name={u.name} profilePhoto={u.profilePhoto} className="w-5 h-5" />
                               ))}
                             </span>
                           )}

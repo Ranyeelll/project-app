@@ -18,6 +18,7 @@ import { GanttCalendarView } from '../../components/gantt/GanttCalendarView';
 import { UserAvatar } from '../../components/ui/UserAvatar';
 import { apiFetch } from '../../utils/apiFetch';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { isSupervisor } from '../../utils/roles';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ZoomLevel = 'week' | 'month' | 'quarter';
@@ -123,6 +124,7 @@ export function GanttPage() {
   const { projects, users, ganttItems, ganttDependencies, refreshGanttItems, refreshGanttDependencies } = useData();
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.department === 'Admin';
+  const canManageGantt = isAdmin || currentUser?.department === 'Technical' || isSupervisor(currentUser?.role);
 
   const [selectedProject, setSelectedProject] = useState('');
   const [viewMode, setViewMode] = useState<'gantt' | 'calendar'>('gantt');
@@ -587,21 +589,19 @@ export function GanttPage() {
     <div className="space-y-4">
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Project tabs */}
-        <div className="flex gap-2 flex-wrap flex-1">
-          {projects.filter(p => p.status !== 'archived').map(p => (
-            <button
-              key={p.id}
-              onClick={() => setSelectedProject(p.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                selectedProject === p.id
-                  ? 'bg-green-primary text-black shadow-sm'
-                  : 'dark:bg-dark-card dark:border dark:border-dark-border dark:text-dark-muted dark:hover:text-dark-text bg-white border border-light-border text-light-muted hover:text-light-text'
-              }`}
-            >
-              {p.name}
-            </button>
-          ))}
+        {/* Project selector */}
+        <div className="relative flex-shrink-0">
+          <select
+            value={selectedProject}
+            onChange={e => setSelectedProject(e.target.value)}
+            className="appearance-none pl-3 pr-8 py-1.5 rounded-lg text-sm font-medium dark:bg-dark-card dark:border dark:border-dark-border dark:text-dark-text bg-white border border-light-border text-light-text cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-primary/40 min-w-[220px] max-w-[360px] truncate"
+            style={{ WebkitAppearance: 'none', MozAppearance: 'none', backgroundImage: 'none' }}
+          >
+            {projects.filter(p => p.status !== 'archived').map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <ChevronDownIcon size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none dark:text-dark-muted text-light-muted" />
         </div>
 
         <div className="flex items-center gap-2">
@@ -644,12 +644,14 @@ export function GanttPage() {
             </div>
           )}
 
-          <button
-            onClick={() => { setEditItem(null); setAddParent(null); setShowForm(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-primary text-black rounded-lg hover:bg-green-progress transition-colors"
-          >
-            <PlusIcon size={13} /> Add Phase
-          </button>
+          {canManageGantt && (
+            <button
+              onClick={() => { setEditItem(null); setAddParent(null); setShowForm(true); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-primary text-black rounded-lg hover:bg-green-progress transition-colors"
+            >
+              <PlusIcon size={13} /> Add Phase
+            </button>
+          )}
         </div>
       </div>
 
@@ -764,7 +766,7 @@ export function GanttPage() {
                         )}
                       </div>
                     )}
-                    {(isAdmin || currentUser?.department === 'Technical') && (
+                    {canManageGantt && (
                       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity ml-1">
                         <button
                           onClick={() => { setEditItem(item); setAddParent(null); setShowForm(true); }}
@@ -773,7 +775,7 @@ export function GanttPage() {
                         >
                           <PencilIcon size={12} className="dark:text-dark-muted text-light-muted" />
                         </button>
-                        {isAdmin && (
+                        {(isAdmin || isSupervisor(currentUser?.role)) && (
                           <>
                             <button
                               onClick={() => { setAddParent(item); setEditItem(null); setShowForm(true); }}

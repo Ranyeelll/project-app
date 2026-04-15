@@ -98,7 +98,7 @@ export function isTerminalStatus(status: string): boolean {
 
 /** Check if a status is pending some form of review */
 export function isPendingReview(status: string): boolean {
-  return [
+  return ([
     APPROVAL_STATUS.PENDING,
     APPROVAL_STATUS.SUBMITTED,
     APPROVAL_STATUS.TECHNICAL_REVIEW,
@@ -107,5 +107,5 @@ export function isPendingReview(status: string): boolean {
     APPROVAL_STATUS.SUPERADMIN_REVIEW,
     APPROVAL_STATUS.ACCOUNTING_APPROVED,
     APPROVAL_STATUS.SUPERVISOR_APPROVED,
-  ].includes(status as ApprovalStatusValue);
+  ] as string[]).includes(status);
 }

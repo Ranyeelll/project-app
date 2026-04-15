@@ -31,6 +31,10 @@ class User extends Authenticatable
         'must_change_password',
         'last_login_at',
         'last_login_ip',
+        'two_factor_secret',
+        'two_factor_enabled',
+        'two_factor_confirmed_at',
+        'notification_preferences',
     ];
 
     /**
@@ -42,6 +46,7 @@ class User extends Authenticatable
         'password',
         'remember_token',
         'recovery_code',
+        'two_factor_secret',
     ];
 
     /**
@@ -56,6 +61,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'department' => Department::class,
             'last_login_at' => 'datetime',
+            'notification_preferences' => 'array',
         ];
     }
 

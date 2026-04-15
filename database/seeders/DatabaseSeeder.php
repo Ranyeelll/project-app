@@ -70,5 +70,7 @@ class DatabaseSeeder extends Seeder
                 $userData
             );
         }
+
+        $this->call(SampleDataSeeder::class);
     }
 }

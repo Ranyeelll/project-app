@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -12,6 +13,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            // SQLite does not support dropping/recreating foreign keys
+            return;
+        }
+
         // budget_requests.requested_by
         Schema::table('budget_requests', function (Blueprint $table) {
             $table->dropForeign(['requested_by']);
@@ -63,6 +69,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Revert back to cascadeOnDelete
         $tables = [
             'budget_requests' => 'requested_by',

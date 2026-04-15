@@ -37,9 +37,9 @@ class EnsureDepartment
             ? $user->department->value
             : (string) ($user->department ?? '');
 
-        // Superadmin always has access (legacy admin role remains supported)
+        // Superadmin and supervisor always have access (legacy admin role remains supported)
         if (
-            in_array($userRole, ['superadmin', 'admin'], true) ||
+            in_array($userRole, ['superadmin', 'admin', 'supervisor'], true) ||
             strcasecmp($userDepartment, Department::Admin->value) === 0
         ) {
             return $next($request);

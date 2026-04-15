@@ -12,7 +12,10 @@ import {
   DollarSignIcon,
   UsersIcon,
   ActivityIcon,
-  DownloadIcon } from
+  DownloadIcon,
+  RefreshCwIcon,
+  FileTextIcon,
+  TableIcon } from
 'lucide-react';
 import { useData, useAuth, useNavigation } from '../../context/AppContext';
 import { Project, Task, ApprovalStatus } from '../../data/mockData';
@@ -27,7 +30,6 @@ import { isSupervisor } from '../../utils/roles';
 import { apiFetch } from '../../utils/apiFetch';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { TaskActivityTimeline } from '../../components/projects/TaskActivityTimeline';
-import { downloadCsv } from '../../utils/exportCsv';
 type ModalMode = 'create' | 'edit' | 'view' | null;
 export function ProjectsPage() {
   const { projects, setProjects, users, tasks, setTasks, refreshTasks, refreshProjects } = useData();
@@ -53,6 +55,10 @@ export function ProjectsPage() {
   const [taskActivityTarget, setTaskActivityTarget] = useState<{ id: string; title: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const initialLoadRef = useRef(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'sheet'>('pdf');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (users.length > 0 && !initialLoadRef.current) {
@@ -102,6 +108,73 @@ export function ProjectsPage() {
     }, 5000);
     return () => clearInterval(interval);
   }, [setProjects, modalMode]);
+
+  // ─── Export handlers ─────────────────────────────────────────────────
+  const buildExportUrl = (period: 'weekly' | 'monthly' | 'yearly', format: 'pdf' | 'sheet') => {
+    const params = new URLSearchParams();
+    params.append('period', period);
+    if (statusFilter !== 'all') params.append('status', statusFilter);
+    const base = format === 'pdf' ? '/api/projects/export-pdf' : '/api/projects/export-sheet';
+    return `${base}?${params.toString()}`;
+  };
+
+  const handleExportPdf = async (period: 'weekly' | 'monthly' | 'yearly') => {
+    setExporting(true);
+    setShowExportMenu(false);
+    setExportError(null);
+    const url = buildExportUrl(period, 'pdf');
+    try {
+      const res = await apiFetch(url, { headers: { Accept: 'application/pdf' } });
+      if (res.ok && res.headers.get('content-type')?.includes('pdf')) {
+        const blob = await res.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `projects-${period}-${new Date().toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(objectUrl);
+      } else {
+        setExportError(`Export failed (${res.status}). Opening in new tab…`);
+        window.open(url, '_blank');
+      }
+    } catch {
+      setExportError('Export failed. Opening in new tab…');
+      window.open(url, '_blank');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportSheet = async (period: 'weekly' | 'monthly' | 'yearly') => {
+    setExporting(true);
+    setShowExportMenu(false);
+    setExportError(null);
+    const url = buildExportUrl(period, 'sheet');
+    try {
+      const res = await apiFetch(url);
+      if (res.ok) {
+        const blob = await res.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `projects-${period}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(objectUrl);
+      } else {
+        setExportError(`Export failed (${res.status}). Opening in new tab…`);
+        window.open(url, '_blank');
+      }
+    } catch {
+      setExportError('Export failed. Opening in new tab…');
+      window.open(url, '_blank');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Warn once per newly over-budget project in the current browser session.
   useEffect(() => {
@@ -538,22 +611,70 @@ export function ProjectsPage() {
             className="w-40" />
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            icon={<DownloadIcon size={14} />}
-            onClick={() => {
-              const headers = ['Name', 'Status', 'Priority', 'Category', 'Approval', 'Budget', 'Spent', 'Progress', 'Start Date', 'End Date'];
-              const rows = filtered.map((p) => [
-                p.name, p.status, p.priority, p.category || '', p.approvalStatus || '', String(p.budget), String(p.spent),
-                String(Math.round((tasks.filter((t) => t.projectId === p.id && t.status === 'completed').length / Math.max(tasks.filter((t) => t.projectId === p.id).length, 1)) * 100)),
-                p.startDate, p.endDate,
-              ]);
-              downloadCsv('projects', headers, rows);
-            }}
-          >
-            Export CSV
-          </Button>
+          <div className="relative">
+            {exportError && (
+              <p className="absolute -top-5 right-0 text-[10px] text-red-400 whitespace-nowrap">{exportError}</p>
+            )}
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-green-primary text-black font-medium hover:bg-green-primary/90 transition-colors disabled:opacity-50"
+            >
+              {exporting ? <RefreshCwIcon size={12} className="animate-spin" /> : <DownloadIcon size={12} />}
+              Export
+            </button>
+
+            {showExportMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 w-52 dark:bg-dark-card dark:border-dark-border bg-white border border-light-border rounded-lg shadow-lg overflow-hidden">
+                  <div className="px-3 pt-2.5 pb-2 border-b dark:border-dark-border border-light-border">
+                    <p className="text-[10px] font-semibold dark:text-dark-muted text-light-muted mb-1.5 uppercase tracking-wide">Format</p>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setExportFormat('pdf')}
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                          exportFormat === 'pdf'
+                            ? 'bg-green-primary text-black'
+                            : 'dark:bg-dark-card2 dark:text-dark-muted bg-gray-100 text-light-muted hover:bg-gray-200 dark:hover:bg-dark-border'
+                        }`}
+                      >
+                        <FileTextIcon size={11} /> PDF
+                      </button>
+                      <button
+                        onClick={() => setExportFormat('sheet')}
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                          exportFormat === 'sheet'
+                            ? 'bg-green-primary text-black'
+                            : 'dark:bg-dark-card2 dark:text-dark-muted bg-gray-100 text-light-muted hover:bg-gray-200 dark:hover:bg-dark-border'
+                        }`}
+                      >
+                        <TableIcon size={11} /> XLS
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="px-3 py-2 text-xs font-semibold dark:text-dark-muted text-light-muted border-b dark:border-dark-border border-light-border">
+                    Select Report Period
+                  </div>
+                  {([
+                    { value: 'weekly' as const, label: 'Weekly Report', desc: 'Current week' },
+                    { value: 'monthly' as const, label: 'Monthly Report', desc: 'Current month' },
+                    { value: 'yearly' as const, label: 'Yearly Report', desc: 'Current year' },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => exportFormat === 'pdf' ? handleExportPdf(opt.value) : handleExportSheet(opt.value)}
+                      className="w-full text-left px-3 py-2.5 text-xs dark:text-dark-text text-light-text dark:hover:bg-dark-card2 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="font-medium">{opt.label}</div>
+                      <div className="dark:text-dark-subtle text-light-subtle text-[10px]">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           {isAdmin && (
             <Button
               variant="primary"

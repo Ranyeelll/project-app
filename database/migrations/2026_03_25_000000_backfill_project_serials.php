@@ -1,7 +1,5 @@
 <?php
 
-use App\Models\AuditLog;
-use App\Models\Project;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
@@ -12,7 +10,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $projects = Project::whereNull('serial')
+        $projects = DB::table('projects')
+            ->whereNull('serial')
             ->orWhere('serial', '')
             ->orderBy('created_at', 'asc')
             ->get();
@@ -22,7 +21,9 @@ return new class extends Migration
             $prefix = "MAP-{$year}-";
 
             DB::transaction(function () use ($project, $prefix) {
-                DB::statement("SELECT pg_advisory_xact_lock(hashtext('project_serial'))");
+                if (DB::getDriverName() === 'pgsql') {
+                    DB::statement("SELECT pg_advisory_xact_lock(hashtext('project_serial'))");
+                }
 
                 $latestSerial = DB::table('projects')
                     ->where('serial', 'like', $prefix . '%')
@@ -35,23 +36,26 @@ return new class extends Migration
 
                 $serial = $prefix . str_pad($nextSequence, 6, '0', STR_PAD_LEFT);
 
-                $project->serial = $serial;
-                $project->save();
+                DB::table('projects')
+                    ->where('id', $project->id)
+                    ->update(['serial' => $serial]);
 
-                AuditLog::create([
+                DB::table('audit_logs')->insert([
                     'action'      => 'project.serial.backfilled',
                     'resource_type' => 'project',
                     'resource_id'   => $project->id,
-                    'changes'       => [
+                    'changes'       => json_encode([
                         'serial'             => $serial,
                         'project_name'       => $project->name,
                         'backfilled_at'      => now()->toIso8601String(),
-                        'original_created_at' => $project->created_at->toIso8601String(),
-                    ],
+                        'original_created_at' => $project->created_at,
+                    ]),
                     'user_id'    => null,
                     'performed_via' => 'migration',
                     'ip_address' => null,
                     'user_agent' => 'Migration: backfill_project_serials',
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
             });
         }
@@ -62,6 +66,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Project::whereNotNull('serial')->update(['serial' => null]);
+        DB::table('projects')->whereNotNull('serial')->update(['serial' => null]);
     }
 };

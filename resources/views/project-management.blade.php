@@ -12,6 +12,11 @@
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
+        <!-- PWA -->
+        <link rel="manifest" href="/manifest.json">
+        <meta name="theme-color" content="#22c55e">
+        <link rel="apple-touch-icon" href="/Maptech_Official_Logo_version2_(1).png">
+
         <!-- Poster handled via embedded base64 background; no separate preload needed -->
         <link rel="preload" href="/Maptech_Official_Logo_version2_(1).png" as="image" type="image/png">
 
@@ -30,5 +35,10 @@
     </head>
     <body class="antialiased">
         <div id="project-management-root"></div>
+        <script>
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/service-worker.js');
+            }
+        </script>
     </body>
 </html>

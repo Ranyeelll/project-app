@@ -16,7 +16,7 @@ interface CalendarEvent {
   id: string;
   title: string;
   date: string;
-  type: 'task-deadline' | 'project-deadline' | 'overdue';
+  type: 'task-deadline' | 'project-deadline' | 'project-start' | 'overdue';
   color: string;
   navigateTo: string;
 }
@@ -56,6 +56,7 @@ export function CalendarPage() {
   // Build calendar events from tasks and projects
   const events = useMemo((): CalendarEvent[] => {
     const evts: CalendarEvent[] = [];
+    const toDate = (d: string) => d ? d.slice(0, 10) : '';
 
     // Filter tasks for employee vs admin
     const relevantTasks = isAdmin
@@ -63,12 +64,13 @@ export function CalendarPage() {
       : tasks.filter((t) => t.assignedTo === currentUser?.id);
 
     for (const task of relevantTasks) {
-      if (task.endDate) {
-        const isOverdue = task.status !== 'completed' && task.endDate < today;
+      const endDate = toDate(task.endDate);
+      if (endDate) {
+        const isOverdue = task.status !== 'completed' && endDate < today;
         evts.push({
           id: `task-${task.id}`,
           title: task.title,
-          date: task.endDate,
+          date: endDate,
           type: isOverdue ? 'overdue' : 'task-deadline',
           color: isOverdue ? 'bg-red-500' : 'bg-blue-500',
           navigateTo: isAdmin ? 'admin-projects' : 'employee-tasks',
@@ -77,12 +79,24 @@ export function CalendarPage() {
     }
 
     for (const project of projects) {
-      if (project.endDate) {
-        const isOverdue = project.status === 'active' && project.endDate < today;
+      const startDate = toDate(project.startDate);
+      const endDate = toDate(project.endDate);
+      if (startDate) {
+        evts.push({
+          id: `proj-start-${project.id}`,
+          title: `▶ ${project.name}`,
+          date: startDate,
+          type: 'project-start',
+          color: 'bg-emerald-600',
+          navigateTo: isAdmin ? 'admin-projects' : 'employee-dashboard',
+        });
+      }
+      if (endDate) {
+        const isOverdue = project.status === 'active' && endDate < today;
         evts.push({
           id: `proj-${project.id}`,
-          title: project.name,
-          date: project.endDate,
+          title: `📁 ${project.name}`,
+          date: endDate,
           type: isOverdue ? 'overdue' : 'project-deadline',
           color: isOverdue ? 'bg-red-500' : 'bg-green-primary',
           navigateTo: isAdmin ? 'admin-projects' : 'employee-dashboard',
@@ -274,6 +288,7 @@ export function CalendarPage() {
                       {evt.type === 'overdue' && '⚠ Overdue — '}
                       {evt.type === 'task-deadline' && 'Task deadline'}
                       {evt.type === 'project-deadline' && 'Project deadline'}
+                      {evt.type === 'project-start' && 'Project starts'}
                       {evt.type === 'overdue' && (evt.id.startsWith('task') ? 'Task overdue' : 'Project overdue')}
                     </p>
                   </div>

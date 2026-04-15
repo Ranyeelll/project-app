@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use App\Services\TaskActivityLogger;
 
 class MediaController extends Controller
 {
@@ -50,7 +51,6 @@ class MediaController extends Controller
         $data = $request->validate([
             'project_id'  => 'required|exists:projects,id',
             'task_id'     => 'nullable|exists:tasks,id',
-            'uploaded_by' => 'required|exists:users,id',
             'type'        => 'required|in:file,video,text',
             'title'       => 'required|string|max:255',
             'content'     => 'nullable|string',
@@ -59,6 +59,7 @@ class MediaController extends Controller
         ]);
 
         $actor = Auth::user();
+        $data['uploaded_by'] = $actor->id;
         if ($actor && $actor->department?->value === 'Employee') {
             $project = Project::find($data['project_id']);
             if ($project && in_array($project->status, ['completed', 'archived'], true)) {
@@ -107,6 +108,17 @@ class MediaController extends Controller
             'file_size'         => $fileSize,
             'visible_to'        => $visibleTo,
         ]);
+
+        // Log file upload activity on the associated task
+        if (!empty($data['task_id'])) {
+            TaskActivityLogger::fileUploaded(
+                (int) $data['task_id'],
+                $originalFilename ?? $data['title'],
+                $data['type']
+            );
+        }
+
+        \App\Services\WebhookService::dispatch('media.uploaded', $media->toArray());
 
         return response()->json($this->formatMedia($media), 201);
     }

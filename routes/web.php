@@ -26,6 +26,18 @@ use App\Http\Controllers\Api\SystemSettingsController;
 use App\Http\Controllers\Api\TaskActivityController;
 use App\Http\Controllers\Api\TaskProgressLogController;
 use App\Http\Controllers\Api\TaskTimeLogController;
+use App\Http\Controllers\Api\TaskCommentController;
+use App\Http\Controllers\Api\WorkloadController;
+use App\Http\Controllers\Api\ProjectTemplateController;
+use App\Http\Controllers\Api\BudgetVarianceController;
+use App\Http\Controllers\Api\SprintController;
+use App\Http\Controllers\Api\CustomFieldController;
+use App\Http\Controllers\Api\DashboardWidgetController;
+use App\Http\Controllers\Api\WebhookController;
+use App\Http\Controllers\Api\MediaVersionController;
+use App\Http\Controllers\Api\ActivityFeedController;
+use App\Http\Controllers\Api\TwoFactorController;
+use App\Http\Controllers\Api\UserImportController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Storage;
@@ -70,6 +82,8 @@ Route::prefix('api')->group(function () {
     // Public routes (no auth required) — rate-limited to prevent brute force
     Route::post('/login', [AuthController::class, 'login'])
         ->middleware('throttle:10,1');
+    Route::post('/login/2fa', [AuthController::class, 'login2fa'])
+        ->middleware('throttle:5,1');
     Route::post('/verify-recovery', [AuthController::class, 'verifyRecovery'])
         ->middleware('throttle:5,15');
     Route::post('/reset-password-offline', [AuthController::class, 'resetPasswordOffline'])
@@ -77,13 +91,17 @@ Route::prefix('api')->group(function () {
     Route::get('/users/{user}/photo', [UserController::class, 'servePhoto']);
 
     // Authenticated routes
-    Route::middleware('auth.api')->group(function () {
+    Route::middleware(['auth.api', 'throttle:120,1'])->group(function () {
         // Session bootstrap (any authenticated user)
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
 
         // Password change (any authenticated user)
         Route::post('/change-password', [AuthController::class, 'changePassword']);
+
+        // Self-service profile & password (Settings page)
+        Route::put('/user/profile', [UserController::class, 'updateProfile']);
+        Route::put('/user/password', [UserController::class, 'updatePassword']);
 
         // ─── Superadmin Only ───────────────────────────────────────
         Route::middleware('role:superadmin')->group(function () {
@@ -92,6 +110,9 @@ Route::prefix('api')->group(function () {
             Route::put('/users/{user}', [UserController::class, 'update']);
             Route::delete('/users/{user}', [UserController::class, 'destroy']);
             Route::post('/users/{user}/regenerate-recovery', [UserController::class, 'regenerateRecovery']);
+
+            // Bulk user import (CSV)
+            Route::post('/users/import', [UserImportController::class, 'import']);
 
             // Chat moderation endpoints removed (chat feature disabled)
 
@@ -108,6 +129,27 @@ Route::prefix('api')->group(function () {
 
             // Issue delete (superadmin only)
             Route::delete('/issues/{issue}', [IssueController::class, 'destroy']);
+
+            // Project templates (superadmin only)
+            Route::get('/project-templates', [ProjectTemplateController::class, 'index']);
+            Route::post('/project-templates', [ProjectTemplateController::class, 'store']);
+            Route::put('/project-templates/{template}', [ProjectTemplateController::class, 'update']);
+            Route::delete('/project-templates/{template}', [ProjectTemplateController::class, 'destroy']);
+            Route::post('/project-templates/{template}/instantiate', [ProjectTemplateController::class, 'instantiate']);
+
+            // Custom fields management (superadmin only)
+            Route::get('/custom-fields', [CustomFieldController::class, 'index']);
+            Route::post('/custom-fields', [CustomFieldController::class, 'store']);
+            Route::put('/custom-fields/{field}', [CustomFieldController::class, 'update']);
+            Route::delete('/custom-fields/{field}', [CustomFieldController::class, 'destroy']);
+
+            // Webhooks (superadmin only)
+            Route::get('/webhooks', [WebhookController::class, 'index']);
+            Route::post('/webhooks', [WebhookController::class, 'store']);
+            Route::put('/webhooks/{webhook}', [WebhookController::class, 'update']);
+            Route::delete('/webhooks/{webhook}', [WebhookController::class, 'destroy']);
+            Route::get('/webhooks/{webhook}/logs', [WebhookController::class, 'logs']);
+            Route::post('/webhooks/{webhook}/regenerate-secret', [WebhookController::class, 'regenerateSecret']);
         });
 
         // ─── Superadmin + Supervisor (Project management) ───────────
@@ -115,6 +157,8 @@ Route::prefix('api')->group(function () {
             Route::post('/projects', [ProjectController::class, 'store']);
             Route::put('/projects/{project}', [ProjectController::class, 'update']);
             Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+            Route::get('/projects/export-pdf', [ProjectController::class, 'exportPdf']);
+            Route::get('/projects/export-sheet', [ProjectController::class, 'exportSheet']);
         });
 
         // ─── Admin + Technical (Task management + Gantt writes) ────
@@ -131,6 +175,10 @@ Route::prefix('api')->group(function () {
             Route::put('/projects/{project}/gantt-items/{item}', [GanttController::class, 'update']);
             Route::delete('/projects/{project}/gantt-items/{item}', [GanttController::class, 'destroy']);
             Route::patch('/projects/{project}/gantt-items/{item}/move', [GanttController::class, 'move']);
+
+            // Gantt report exports
+            Route::get('/projects/{project}/gantt-report/export-pdf', [GanttController::class, 'exportPdf']);
+            Route::get('/projects/{project}/gantt-report/export-sheet', [GanttController::class, 'exportSheet']);
 
             // Gantt dependency writes
             Route::post('/projects/{project}/gantt-dependencies', [GanttController::class, 'storeDependency']);
@@ -159,6 +207,34 @@ Route::prefix('api')->group(function () {
         // Dashboard analytics
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
 
+        // Workload & resource utilization
+        Route::get('/workload', [WorkloadController::class, 'index']);
+
+        // Budget variance / burn rate
+        Route::get('/budget-variance', [BudgetVarianceController::class, 'index']);
+
+        // Global activity feed
+        Route::get('/activity-feed', [ActivityFeedController::class, 'index']);
+
+        // Dashboard widgets (user-specific)
+        Route::get('/dashboard-widgets', [DashboardWidgetController::class, 'index']);
+        Route::post('/dashboard-widgets', [DashboardWidgetController::class, 'store']);
+        Route::put('/dashboard-widgets/{widget}', [DashboardWidgetController::class, 'update']);
+        Route::delete('/dashboard-widgets/{widget}', [DashboardWidgetController::class, 'destroy']);
+        Route::post('/dashboard-widgets/reorder', [DashboardWidgetController::class, 'reorder']);
+
+        // Two-factor authentication (own account)
+        Route::get('/two-factor/status', [TwoFactorController::class, 'status']);
+        Route::post('/two-factor/setup', [TwoFactorController::class, 'setup']);
+        Route::post('/two-factor/verify', [TwoFactorController::class, 'verify']);
+        Route::post('/two-factor/disable', [TwoFactorController::class, 'disable']);
+
+        // Custom field values (read/write for any entity)
+        Route::get('/custom-field-values/{entityType}/{entityId}', [CustomFieldController::class, 'getValues'])
+            ->where('entityType', 'project|task');
+        Route::post('/custom-field-values/{entityType}/{entityId}', [CustomFieldController::class, 'setValues'])
+            ->where('entityType', 'project|task');
+
         // Read-only users list (used by team views and assignee labels)
         Route::get('/users', [UserController::class, 'index']);
 
@@ -166,6 +242,8 @@ Route::prefix('api')->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+        Route::get('/notification-preferences', [NotificationController::class, 'getPreferences']);
+        Route::put('/notification-preferences', [NotificationController::class, 'updatePreferences']);
 
         // Gantt read access (visibility filtering enforced server-side)
         Route::get('/projects/{project}/gantt-items', [GanttController::class, 'index']);
@@ -226,6 +304,18 @@ Route::prefix('api')->group(function () {
         // Task activity timeline
         Route::get('/tasks/{task}/activities', [TaskActivityController::class, 'index']);
 
+        // Task comments (discussion threads)
+        Route::get('/tasks/{task}/comments', [TaskCommentController::class, 'index']);
+        Route::post('/tasks/{task}/comments', [TaskCommentController::class, 'store']);
+        Route::put('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'update']);
+        Route::delete('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'destroy']);
+
+        // Sprints (per project)
+        Route::get('/projects/{project}/sprints', [SprintController::class, 'index']);
+        Route::post('/projects/{project}/sprints', [SprintController::class, 'store']);
+        Route::put('/projects/{project}/sprints/{sprint}', [SprintController::class, 'update']);
+        Route::delete('/projects/{project}/sprints/{sprint}', [SprintController::class, 'destroy']);
+
         // Budget requests (all can view/create, approval in controller)
         Route::get('/budget-requests', [BudgetRequestController::class, 'index']);
         Route::post('/budget-requests', [BudgetRequestController::class, 'store']);
@@ -237,6 +327,11 @@ Route::prefix('api')->group(function () {
         Route::delete('/media/{medium}', [MediaController::class, 'destroy']);
         Route::get('/media/{medium}/download', [MediaController::class, 'download']);
         Route::get('/media/{medium}/serve', [MediaController::class, 'serve']);
+
+        // Media versions (file versioning)
+        Route::get('/media/{medium}/versions', [MediaVersionController::class, 'index']);
+        Route::post('/media/{medium}/versions', [MediaVersionController::class, 'store']);
+        Route::get('/media/{medium}/versions/{version}/download', [MediaVersionController::class, 'download']);
 
         // Time logs (legacy - proxies to task_time_logs)
         Route::get('/time-logs', [TimeLogController::class, 'index']);

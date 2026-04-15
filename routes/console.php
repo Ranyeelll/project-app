@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Send overdue task notifications daily at 8 AM
 Schedule::command('tasks:notify-overdue')->dailyAt('08:00');
+
+// Send daily digest email at 7 AM
+Schedule::command('digest:send-daily')->dailyAt('07:00');

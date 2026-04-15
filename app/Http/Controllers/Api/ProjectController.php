@@ -10,6 +10,8 @@ use App\Models\Task;
 use App\Models\BudgetRequest;
 use App\Services\AuditService;
 use App\Services\ProjectSerialService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -184,6 +186,8 @@ class ProjectController extends Controller
             return $project;
         });
 
+        \App\Services\WebhookService::dispatch('project.created', $project->fresh()->toArray());
+
         return response()->json($this->formatProject($project->fresh()), 201);
     }
 
@@ -277,6 +281,8 @@ class ProjectController extends Controller
             }
         }
 
+        \App\Services\WebhookService::dispatch('project.updated', $project->fresh()->toArray());
+
         return response()->json($this->formatProject($project->fresh()));
     }
 
@@ -286,6 +292,7 @@ class ProjectController extends Controller
     public function destroy(Project $project): JsonResponse
     {
         $this->audit->projectDeleted($project);
+        \App\Services\WebhookService::dispatch('project.deleted', $project->toArray());
         $project->delete();
         return response()->json(['message' => 'Project deleted']);
     }
@@ -372,5 +379,378 @@ class ProjectController extends Controller
                 ]);
             }
         }
+    }
+
+    // ─── Export helpers ─────────────────────────────────────────────────
+
+    private function resolvePeriod(string $period): array
+    {
+        $now = Carbon::now();
+
+        switch ($period) {
+            case 'weekly':
+                $startDate = $now->copy()->startOfWeek();
+                $endDate = $now->copy()->endOfWeek();
+                $periodLabel = 'Weekly Projects Report';
+                $dateRange = $startDate->format('M d, Y') . ' - ' . $endDate->format('M d, Y');
+                break;
+            case 'yearly':
+                $startDate = $now->copy()->startOfYear();
+                $endDate = $now->copy()->endOfYear();
+                $periodLabel = 'Yearly Projects Report';
+                $dateRange = $startDate->format('Y');
+                break;
+            default:
+                $period = 'monthly';
+                $startDate = $now->copy()->startOfMonth();
+                $endDate = $now->copy()->endOfMonth();
+                $periodLabel = 'Monthly Projects Report';
+                $dateRange = $now->format('F Y');
+                break;
+        }
+
+        return [$period, $periodLabel, $dateRange, $startDate, $endDate];
+    }
+
+    private function getProjectRows(Request $request, Carbon $startDate, Carbon $endDate): \Illuminate\Support\Collection
+    {
+        $query = Project::query()
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->orderBy('created_at', 'desc');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->input('priority'));
+        }
+        if ($request->filled('category')) {
+            $query->where('category', $request->input('category'));
+        }
+
+        return $query->limit(500)->get();
+    }
+
+    private function buildProjectSummary(\Illuminate\Support\Collection $projects): array
+    {
+        return [
+            'totalProjects' => $projects->count(),
+            'activeProjects' => $projects->where('status', 'active')->count(),
+            'completedProjects' => $projects->where('status', 'completed')->count(),
+            'totalBudget' => $projects->sum('budget'),
+        ];
+    }
+
+    /**
+     * Export projects as PDF.
+     */
+    public function exportPdf(Request $request)
+    {
+        $now = Carbon::now();
+        [$period, $periodLabel, $dateRange, $startDate, $endDate] = $this->resolvePeriod($request->input('period', 'monthly'));
+
+        $projects = $this->getProjectRows($request, $startDate, $endDate);
+
+        // Compute spent per project
+        $projectIds = $projects->pluck('id');
+        $approvedSpent = BudgetRequest::whereIn('project_id', $projectIds)
+            ->where('status', ApprovalStatus::APPROVED->value)
+            ->where('type', 'spending')
+            ->groupBy('project_id')
+            ->selectRaw('project_id, SUM(amount) as total')
+            ->pluck('total', 'project_id');
+
+        $reportCosts = Task::whereIn('project_id', $projectIds)
+            ->where('completion_report_status', ApprovalStatus::APPROVED->value)
+            ->groupBy('project_id')
+            ->selectRaw('project_id, SUM(report_cost) as total')
+            ->pluck('total', 'project_id');
+
+        $taskAvg = Task::whereIn('project_id', $projectIds)
+            ->groupBy('project_id')
+            ->selectRaw('project_id, AVG(progress) as avg_progress')
+            ->pluck('avg_progress', 'project_id');
+
+        $rows = $projects->map(function (Project $p) use ($approvedSpent, $reportCosts, $taskAvg) {
+            $spent = (float) ($approvedSpent[$p->id] ?? 0) + (float) ($reportCosts[$p->id] ?? 0);
+            $progress = (int) round($taskAvg[$p->id] ?? $p->progress ?? 0);
+            return [
+                'name'       => $p->name,
+                'serial'     => $p->serial ?? '—',
+                'status'     => ucfirst($p->status),
+                'priority'   => ucfirst($p->priority),
+                'category'   => ucfirst($p->category ?? '—'),
+                'budget'     => number_format((float) $p->budget, 2),
+                'spent'      => number_format($spent, 2),
+                'progress'   => $progress . '%',
+                'startDate'  => $p->start_date?->format('M d, Y') ?? '—',
+                'endDate'    => $p->end_date?->format('M d, Y') ?? '—',
+            ];
+        })->toArray();
+
+        $summary = $this->buildProjectSummary($projects);
+        $totalSpent = $projects->sum(function ($p) use ($approvedSpent, $reportCosts) {
+            return (float) ($approvedSpent[$p->id] ?? 0) + (float) ($reportCosts[$p->id] ?? 0);
+        });
+
+        $filters = [
+            'status'   => (string) $request->query('status', ''),
+            'priority' => (string) $request->query('priority', ''),
+            'category' => (string) $request->query('category', ''),
+        ];
+
+        $pdf = Pdf::loadView('pdf.projects-report', [
+            'summary'     => $summary,
+            'totalSpent'  => $totalSpent,
+            'filters'     => $filters,
+            'periodLabel' => $periodLabel,
+            'dateRange'   => $dateRange,
+            'generatedAt' => $now->format('M d, Y h:i A'),
+            'rows'        => $rows,
+        ]);
+        $pdf->setPaper('A4', 'portrait');
+
+        return $pdf->download('projects-' . $period . '-' . $now->format('Y-m-d') . '.pdf');
+    }
+
+    /**
+     * Export projects as .xlsx (Open XML via ZipArchive).
+     */
+    public function exportSheet(Request $request)
+    {
+        $now = Carbon::now();
+        [$period, $periodLabel, $dateRange, $startDate, $endDate] = $this->resolvePeriod($request->input('period', 'monthly'));
+
+        $projects = $this->getProjectRows($request, $startDate, $endDate);
+
+        $projectIds = $projects->pluck('id');
+        $approvedSpent = BudgetRequest::whereIn('project_id', $projectIds)
+            ->where('status', ApprovalStatus::APPROVED->value)
+            ->where('type', 'spending')
+            ->groupBy('project_id')
+            ->selectRaw('project_id, SUM(amount) as total')
+            ->pluck('total', 'project_id');
+
+        $reportCosts = Task::whereIn('project_id', $projectIds)
+            ->where('completion_report_status', ApprovalStatus::APPROVED->value)
+            ->groupBy('project_id')
+            ->selectRaw('project_id, SUM(report_cost) as total')
+            ->pluck('total', 'project_id');
+
+        $taskAvg = Task::whereIn('project_id', $projectIds)
+            ->groupBy('project_id')
+            ->selectRaw('project_id, AVG(progress) as avg_progress')
+            ->pluck('avg_progress', 'project_id');
+
+        $summary = $this->buildProjectSummary($projects);
+        $totalSpent = $projects->sum(function ($p) use ($approvedSpent, $reportCosts) {
+            return (float) ($approvedSpent[$p->id] ?? 0) + (float) ($reportCosts[$p->id] ?? 0);
+        });
+
+        $filters = [
+            'status'   => (string) $request->query('status', ''),
+            'priority' => (string) $request->query('priority', ''),
+            'category' => (string) $request->query('category', ''),
+        ];
+
+        $colLetters = ['A','B','C','D','E','F','G','H','I','J'];
+        $x = fn (string $s): string => htmlspecialchars($s, ENT_XML1, 'UTF-8');
+        $rows = [];
+        $merges = [];
+        $rowNum = 0;
+
+        $addRow = function (array $vals, array $styles = [], ?int $mergeToCol = null) use (&$rows, &$merges, &$rowNum, $colLetters) {
+            $rowNum++;
+            $rows[] = ['vals' => $vals, 'styles' => $styles];
+            if ($mergeToCol !== null) {
+                $endCol = $colLetters[$mergeToCol - 1] ?? chr(64 + $mergeToCol);
+                $merges[] = "A{$rowNum}:{$endCol}{$rowNum}";
+            }
+        };
+
+        $addRow(["PROJECTS REPORT - {$periodLabel}"], [2], 10);
+        $addRow(["Range: {$dateRange}"], [0], 10);
+        $addRow(["Generated: " . $now->format('M d, Y h:i A')], [0], 10);
+        $addRow([]);
+
+        $addRow(['SUMMARY'], [2], 10);
+        $addRow(['Total Projects', 'Active', 'Completed', 'Total Budget', 'Total Spent'], array_fill(0, 5, 1));
+        $addRow([
+            (string) $summary['totalProjects'],
+            (string) $summary['activeProjects'],
+            (string) $summary['completedProjects'],
+            number_format((float) $summary['totalBudget'], 2),
+            number_format($totalSpent, 2),
+        ], [3, 4, 4, 3, 5]);
+        $addRow([]);
+
+        $addRow(['ACTIVE FILTERS'], [2], 10);
+        $addRow(['Status', 'Priority', 'Category'], array_fill(0, 3, 1));
+        $addRow([
+            $filters['status'] !== '' ? ucfirst($filters['status']) : 'All',
+            $filters['priority'] !== '' ? ucfirst($filters['priority']) : 'All',
+            $filters['category'] !== '' ? ucfirst($filters['category']) : 'All',
+        ], [0, 0, 0]);
+        $addRow([]);
+
+        $addRow(['PROJECT LIST'], [2], 10);
+        $addRow(['Name', 'Serial', 'Status', 'Priority', 'Category', 'Budget', 'Spent', 'Progress', 'Start Date', 'End Date'], array_fill(0, 10, 1));
+
+        foreach ($projects as $p) {
+            $spent = (float) ($approvedSpent[$p->id] ?? 0) + (float) ($reportCosts[$p->id] ?? 0);
+            $progress = (int) round($taskAvg[$p->id] ?? $p->progress ?? 0);
+            $addRow([
+                $p->name,
+                $p->serial ?? '',
+                ucfirst($p->status),
+                ucfirst($p->priority),
+                ucfirst($p->category ?? ''),
+                number_format((float) $p->budget, 2),
+                number_format($spent, 2),
+                $progress . '%',
+                $p->start_date?->format('Y-m-d') ?? '',
+                $p->end_date?->format('Y-m-d') ?? '',
+            ], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        }
+
+        // Build XML
+        $sheetRows = '';
+        foreach ($rows as $rIdx => $row) {
+            $rNum = $rIdx + 1;
+            $cells = '';
+            foreach ($row['vals'] as $cIdx => $val) {
+                $col = $colLetters[$cIdx] ?? chr(65 + $cIdx);
+                $cellRef = $col . $rNum;
+                $styleIdx = $row['styles'][$cIdx] ?? 0;
+                if ($val === null || $val === '') {
+                    $cells .= "<c r=\"{$cellRef}\" s=\"{$styleIdx}\"><v></v></c>";
+                } else {
+                    $escaped = $x((string) $val);
+                    $cells .= "<c r=\"{$cellRef}\" s=\"{$styleIdx}\" t=\"inlineStr\"><is><t>{$escaped}</t></is></c>";
+                }
+            }
+            $sheetRows .= "<row r=\"{$rNum}\">{$cells}</row>";
+        }
+
+        $mergeCellsXml = '';
+        if (!empty($merges)) {
+            $mergeCellsXml = '<mergeCells count="' . count($merges) . '">';
+            foreach ($merges as $m) {
+                $mergeCellsXml .= "<mergeCell ref=\"{$m}\"/>";
+            }
+            $mergeCellsXml .= '</mergeCells>';
+        }
+
+        $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+    <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+    <cols>
+        <col min="1" max="1" width="35" customWidth="1"/>
+        <col min="2" max="2" width="16" customWidth="1"/>
+        <col min="3" max="3" width="12" customWidth="1"/>
+        <col min="4" max="4" width="12" customWidth="1"/>
+        <col min="5" max="5" width="16" customWidth="1"/>
+        <col min="6" max="6" width="16" customWidth="1"/>
+        <col min="7" max="7" width="16" customWidth="1"/>
+        <col min="8" max="8" width="12" customWidth="1"/>
+        <col min="9" max="9" width="14" customWidth="1"/>
+        <col min="10" max="10" width="14" customWidth="1"/>
+    </cols>
+    <sheetData>' . $sheetRows . '</sheetData>
+    ' . $mergeCellsXml . '
+</worksheet>';
+
+        $stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+    <fonts count="7">
+        <font><sz val="10"/><name val="Arial"/></font>
+        <font><sz val="10"/><name val="Arial"/><b/><color rgb="FFFFFFFF"/></font>
+        <font><sz val="12"/><name val="Arial"/><b/><color rgb="FF154734"/></font>
+        <font><sz val="10"/><name val="Arial"/><b/></font>
+        <font><sz val="10"/><name val="Arial"/><b/><color rgb="FF16a34a"/></font>
+        <font><sz val="10"/><name val="Arial"/><b/><color rgb="FFdc2626"/></font>
+        <font><sz val="10"/><name val="Arial"/><b/><color rgb="FFca8a04"/></font>
+    </fonts>
+    <fills count="6">
+        <fill><patternFill patternType="none"/></fill>
+        <fill><patternFill patternType="gray125"/></fill>
+        <fill><patternFill patternType="solid"><fgColor rgb="FF154734"/></patternFill></fill>
+        <fill><patternFill patternType="solid"><fgColor rgb="FFe8f5e9"/></patternFill></fill>
+        <fill><patternFill patternType="solid"><fgColor rgb="FFf0fdf4"/></patternFill></fill>
+        <fill><patternFill patternType="solid"><fgColor rgb="FFf3f4f6"/></patternFill></fill>
+    </fills>
+    <borders count="3">
+        <border><left/><right/><top/><bottom/><diagonal/></border>
+        <border><left style="thin"><color rgb="FFcccccc"/></left><right style="thin"><color rgb="FFcccccc"/></right><top style="thin"><color rgb="FFcccccc"/></top><bottom style="thin"><color rgb="FFcccccc"/></bottom><diagonal/></border>
+        <border><left style="medium"><color rgb="FF154734"/></left><right style="medium"><color rgb="FF154734"/></right><top style="medium"><color rgb="FF154734"/></top><bottom style="medium"><color rgb="FF154734"/></bottom><diagonal/></border>
+    </borders>
+    <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+    <cellXfs count="11">
+        <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0"/>
+        <xf numFmtId="0" fontId="1" fillId="2" borderId="2" xfId="0"/>
+        <xf numFmtId="0" fontId="2" fillId="4" borderId="0" xfId="0"/>
+        <xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0"/>
+        <xf numFmtId="0" fontId="4" fillId="3" borderId="1" xfId="0"/>
+        <xf numFmtId="0" fontId="5" fillId="0" borderId="1" xfId="0"/>
+        <xf numFmtId="0" fontId="6" fillId="0" borderId="1" xfId="0"/>
+        <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0"/>
+        <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0"><alignment horizontal="center"/></xf>
+        <xf numFmtId="0" fontId="3" fillId="4" borderId="2" xfId="0"/>
+        <xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0"/>
+    </cellXfs>
+</styleSheet>';
+
+        $workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+    <sheets>
+        <sheet name="Projects Report" sheetId="1" r:id="rId1"/>
+    </sheets>
+</workbook>';
+
+        $workbookRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+    <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>';
+
+        $contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+    <Default Extension="xml" ContentType="application/xml"/>
+    <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+    <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+    <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>';
+
+        $packageRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>';
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'xlsx_');
+        $zip = new \ZipArchive();
+        $zip->open($tmpFile, \ZipArchive::OVERWRITE);
+        $zip->addFromString('[Content_Types].xml', $contentTypes);
+        $zip->addFromString('_rels/.rels', $packageRels);
+        $zip->addFromString('xl/workbook.xml', $workbookXml);
+        $zip->addFromString('xl/_rels/workbook.xml.rels', $workbookRels);
+        $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
+        $zip->addFromString('xl/styles.xml', $stylesXml);
+        $zip->close();
+
+        $filename = 'projects-' . $period . '-' . $now->format('Y-m-d') . '.xlsx';
+        $content = file_get_contents($tmpFile);
+        unlink($tmpFile);
+
+        return response($content, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Length' => strlen($content),
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ]);
     }
 }

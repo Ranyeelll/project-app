@@ -390,14 +390,20 @@ export function ViewGanttPage() {
         </p>
       </div>
 
-      {/* Project tabs + zoom */}
+      {/* Project selector + zoom */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex gap-2 flex-wrap flex-1">
-          {myProjects.map(p => (
-            <button key={p.id} onClick={() => setSelectedProject(p.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedProject === p.id ? 'bg-green-primary text-black shadow-sm' : 'dark:bg-dark-card dark:border dark:border-dark-border dark:text-dark-muted bg-white border border-light-border text-light-muted hover:text-light-text'}`}
-            >{p.name}</button>
-          ))}
+        <div className="relative flex-shrink-0">
+          <select
+            value={selectedProject}
+            onChange={e => setSelectedProject(e.target.value)}
+            className="appearance-none pl-3 pr-8 py-1.5 rounded-lg text-sm font-medium dark:bg-dark-card dark:border dark:border-dark-border dark:text-dark-text bg-white border border-light-border text-light-text cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-primary/40 min-w-[220px] max-w-[360px] truncate"
+            style={{ WebkitAppearance: 'none', MozAppearance: 'none', backgroundImage: 'none' }}
+          >
+            {myProjects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <ChevronDownIcon size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none dark:text-dark-muted text-light-muted" />
         </div>
         <div className="flex items-center gap-2">
           {/* View Mode Toggle */}

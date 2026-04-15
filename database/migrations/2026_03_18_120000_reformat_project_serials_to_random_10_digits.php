@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Project;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
@@ -9,10 +8,11 @@ return new class extends Migration
     
     public function up(): void
     {
-        $projects = Project::orderBy('created_at', 'asc')->get();
+        $projects = DB::table('projects')->orderBy('created_at', 'asc')->get();
 
         foreach ($projects as $project) {
-            $year = (int) ($project->created_at?->year ?? now()->year);
+            $createdAt = $project->created_at ? date('Y', strtotime($project->created_at)) : date('Y');
+            $year = (int) $createdAt;
             $prefix = "MAP-{$year}-";
 
             if (is_string($project->serial) && preg_match('/^MAP-\d{4}-\d{10}$/', $project->serial)) {
@@ -36,8 +36,9 @@ return new class extends Migration
                     $exists = (clone $query)->where('serial', $candidate)->exists();
 
                     if (!$exists) {
-                        $project->serial = $candidate;
-                        $project->save();
+                        DB::table('projects')
+                            ->where('id', $project->id)
+                            ->update(['serial' => $candidate]);
                         return;
                     }
                 }

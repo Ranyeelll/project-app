@@ -7,7 +7,7 @@ interface ProfilePhotoModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: {
-    id: number;
+    id: string | number;
     name: string;
     profilePhoto?: string | null;
   };

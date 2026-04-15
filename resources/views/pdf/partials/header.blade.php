@@ -44,8 +44,8 @@
     header.pdf-header h1 { font-size: 22px; color: #154734; margin: 16px 0 4px; letter-spacing: 0.4px; line-height:1.05; font-weight:700; text-align:center }
     header.pdf-header .subtitle { font-size: 12px; color: #374151; font-weight: 600; }
     header.pdf-header .period { font-size: 10px; color: #6b7280; margin-top: 3px; }
-    /* Ensure body content doesn't overlap header */
-    body { margin-top: 140px; }
+    /* Ensure body content doesn't overlap header or fixed footer */
+    body { margin-top: 140px; margin-bottom: 50px; }
 </style>
 
 <header class="pdf-header">

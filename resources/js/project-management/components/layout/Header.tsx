@@ -30,6 +30,7 @@ import { ProfilePhotoModal } from '../ui/ProfilePhotoModal';
 import RetentionModal from '../ui/RetentionModal';
 import { useTheme, useAuth, useNavigation, useData } from '../../context/AppContext';
 import { isElevatedRole, isSuperadmin } from '../../utils/roles';
+import { useEchoNotifications } from '../../hooks/useEchoNotifications';
 
 interface Notification {
   id: string;
@@ -49,6 +50,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   const { currentUser, logout, updateCurrentUser } = useAuth();
   const { currentPage, setCurrentPage } = useNavigation();
   const { tasks, projects, budgetRequests, issues, users } = useData();
+  const { liveNotifications, dismissLive, clearAll: clearLive } = useEchoNotifications();
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -452,7 +454,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
 
   // No DB chat notifications — chat feature removed
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length + liveNotifications.length;
 
   // Notification category filter
   const [notifFilter, setNotifFilter] = useState<'all' | 'tasks' | 'budget' | 'issues' | 'system'>('all');
@@ -470,6 +472,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
     const newDismissed = new Set(dismissedIds);
     notifications.forEach((n) => newDismissed.add(n.id));
     setDismissedIds(newDismissed);
+    clearLive();
   };
 
   const handleNotifClick = (notif: Notification) => {
@@ -705,7 +708,36 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
 
               {/* Notification List */}
               <div className="max-h-[380px] overflow-y-auto">
-                {filteredNotifications.length === 0 ? (
+                {/* Live real-time notifications */}
+                {liveNotifications.length > 0 && (
+                  <>
+                    {liveNotifications.map((ln) => (
+                      <div
+                        key={ln.id}
+                        className="w-full flex items-start gap-3 px-4 py-3 text-left dark:bg-green-900/20 bg-green-50/40 dark:border-dark-border/50 border-b border-light-border/50"
+                      >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 bg-green-500/15 text-green-400">
+                          <BellIcon size={14} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-semibold truncate dark:text-dark-text text-light-text">{ln.title}</p>
+                            <span className="w-1.5 h-1.5 bg-green-primary rounded-full flex-shrink-0 animate-pulse" />
+                          </div>
+                          <p className="text-[11px] dark:text-dark-subtle text-light-subtle mt-0.5 truncate">{ln.description}</p>
+                          <p className="text-[10px] dark:text-dark-subtle/70 text-light-subtle/70 mt-1 font-medium">{ln.time}</p>
+                        </div>
+                        <button
+                          onClick={() => dismissLive(ln.id)}
+                          className="text-[10px] dark:text-dark-subtle text-light-subtle hover:text-red-400 flex-shrink-0 mt-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {filteredNotifications.length === 0 && liveNotifications.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10">
                     <BellIcon size={28} className="dark:text-dark-subtle text-light-subtle opacity-30 mb-2" />
                     <p className="text-xs dark:text-dark-subtle text-light-subtle">No notifications</p>

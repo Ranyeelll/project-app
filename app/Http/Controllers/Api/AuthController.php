@@ -94,6 +94,17 @@ class AuthController extends Controller
             ], 403);
         }
 
+        // ── 2FA gate ──────────────────────────────────────────────────
+        if ($user->two_factor_enabled && $user->two_factor_secret) {
+            // Store the user ID in the session but do NOT fully auth yet
+            $request->session()->put('2fa:user_id', $user->id);
+
+            return response()->json([
+                'success'      => false,
+                'requires_2fa' => true,
+            ]);
+        }
+
         // Establish a Laravel session so WebSocket presence channels can authenticate
         Auth::login($user);
 
@@ -111,6 +122,74 @@ class AuthController extends Controller
             context: ['email' => $user->email, 'department' => $user->department],
             userId: $user->id,
             sensitiveFlag: false
+        );
+
+        return response()->json([
+            'success' => true,
+            'user'    => $this->userPayload($user),
+        ]);
+    }
+
+    /* ================================================================== */
+    /*  POST /api/login/2fa                                               */
+    /*  Complete login after TOTP verification.                           */
+    /* ================================================================== */
+    public function login2fa(Request $request): JsonResponse
+    {
+        $request->validate([
+            'code' => 'required|string|size:6',
+        ]);
+
+        $userId = $request->session()->get('2fa:user_id');
+        if (! $userId) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'No pending 2FA session. Please log in again.',
+            ], 422);
+        }
+
+        $user = User::find($userId);
+        if (! $user) {
+            $request->session()->forget('2fa:user_id');
+            return response()->json([
+                'success' => false,
+                'error'   => 'User not found.',
+            ], 422);
+        }
+
+        if (! $this->verifyTotp($user->two_factor_secret, $request->code)) {
+            $this->audit->log(
+                action: 'auth.2fa_failed',
+                resourceType: 'user',
+                resourceId: $user->id,
+                context: ['email' => $user->email],
+                userId: $user->id,
+                sensitiveFlag: true,
+            );
+
+            return response()->json([
+                'success' => false,
+                'error'   => 'Invalid verification code.',
+            ], 422);
+        }
+
+        // Clear the 2FA pending state
+        $request->session()->forget('2fa:user_id');
+
+        // Full login
+        Auth::login($user);
+        $user->update([
+            'last_login_at' => now(),
+            'last_login_ip' => $request->ip(),
+        ]);
+
+        $this->audit->log(
+            action: 'auth.login_success',
+            resourceType: 'user',
+            resourceId: $user->id,
+            context: ['email' => $user->email, 'department' => $user->department, '2fa' => true],
+            userId: $user->id,
+            sensitiveFlag: false,
         );
 
         return response()->json([
@@ -332,5 +411,55 @@ class AuthController extends Controller
             'success'       => true,
             'recovery_code' => $plainCode, // new code shown ONCE
         ]);
+    }
+
+    /* ================================================================== */
+    /*  TOTP helpers (RFC 6238)                                           */
+    /* ================================================================== */
+    private function verifyTotp(string $secret, string $code, int $window = 1): bool
+    {
+        $period = 30;
+        $time = intval(time() / $period);
+        for ($i = -$window; $i <= $window; $i++) {
+            if (hash_equals($this->generateTotp($secret, $time + $i), $code)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function generateTotp(string $base32Secret, int $counter): string
+    {
+        $key = $this->base32Decode($base32Secret);
+        $packed = pack('N*', 0, $counter);
+        $hash = hash_hmac('sha1', $packed, $key, true);
+        $offset = ord($hash[19]) & 0x0F;
+        $code = (
+            ((ord($hash[$offset]) & 0x7F) << 24) |
+            ((ord($hash[$offset + 1]) & 0xFF) << 16) |
+            ((ord($hash[$offset + 2]) & 0xFF) << 8) |
+            (ord($hash[$offset + 3]) & 0xFF)
+        ) % 1000000;
+        return str_pad((string) $code, 6, '0', STR_PAD_LEFT);
+    }
+
+    private function base32Decode(string $input): string
+    {
+        $map = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+        $input = strtoupper(rtrim($input, '='));
+        $buffer = 0;
+        $bitsLeft = 0;
+        $output = '';
+        for ($i = 0, $len = strlen($input); $i < $len; $i++) {
+            $val = strpos($map, $input[$i]);
+            if ($val === false) continue;
+            $buffer = ($buffer << 5) | $val;
+            $bitsLeft += 5;
+            if ($bitsLeft >= 8) {
+                $bitsLeft -= 8;
+                $output .= chr(($buffer >> $bitsLeft) & 0xFF);
+            }
+        }
+        return $output;
     }
 }

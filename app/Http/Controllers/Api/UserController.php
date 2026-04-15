@@ -70,10 +70,19 @@ class UserController extends Controller
 
     public function index(): JsonResponse
     {
+        $currentUser = Auth::user();
+        $isElevated = $currentUser && in_array(strtolower(trim((string) $currentUser->role)), ['superadmin', 'supervisor']);
+
         $users = User::select('id', 'name', 'email', 'role', 'department', 'position', 'status', 'profile_photo', 'created_at')
             ->orderBy('id')
             ->get()
-            ->map(fn ($u) => $this->formatUser($u));
+            ->map(function ($u) use ($isElevated) {
+                $formatted = $this->formatUser($u);
+                if (!$isElevated) {
+                    unset($formatted['email'], $formatted['joinDate']);
+                }
+                return $formatted;
+            });
 
         return response()->json($users);
     }
@@ -113,7 +122,47 @@ class UserController extends Controller
         $payload = $this->formatUser($user);
         $payload['recovery_code'] = $plainCode; // shown ONCE to the admin
 
+        \App\Services\WebhookService::dispatch('user.created', $user->toArray());
+
         return response()->json($payload, 201);
+    }
+
+    /**
+     * Update the authenticated user's own profile (name).
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        $user = Auth::user();
+        $user->update($data);
+
+        return response()->json(['user' => $this->formatUser($user)]);
+    }
+
+    /**
+     * Update the authenticated user's own password.
+     */
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password'      => 'required|string',
+            'password'              => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = Auth::user();
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['message' => 'Current password is incorrect.'], 422);
+        }
+
+        $user->password = Hash::make($request->password);
+        $user->must_change_password = 0;
+        $user->save();
+
+        return response()->json(['message' => 'Password changed successfully.']);
     }
 
     /**
