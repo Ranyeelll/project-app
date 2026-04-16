@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Department;
 use App\Http\Controllers\Controller;
+use App\Models\Project;
+use App\Models\Task;
 use App\Models\TaskComment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -10,8 +13,31 @@ use Illuminate\Support\Facades\Auth;
 
 class TaskCommentController extends Controller
 {
+    /**
+     * Verify the authenticated user has access to the task's project.
+     */
+    private function authorizeTaskAccess(int $taskId): Task
+    {
+        $task = Task::findOrFail($taskId);
+        $user = Auth::user();
+
+        if ($user->department === Department::Employee) {
+            $project = Project::find($task->project_id);
+            if ($project) {
+                $teamIds = array_map('intval', $project->team_ids ?? []);
+                if (!in_array((int) $user->id, $teamIds, true) && (int) $task->assigned_to !== (int) $user->id) {
+                    abort(403, 'You do not have access to this task.');
+                }
+            }
+        }
+
+        return $task;
+    }
+
     public function index(Request $request, int $taskId): JsonResponse
     {
+        $this->authorizeTaskAccess($taskId);
+
         $comments = TaskComment::where('task_id', $taskId)
             ->with('user:id,name')
             ->orderBy('created_at', 'asc')
@@ -23,6 +49,8 @@ class TaskCommentController extends Controller
 
     public function store(Request $request, int $taskId): JsonResponse
     {
+        $this->authorizeTaskAccess($taskId);
+
         $data = $request->validate([
             'body' => 'required|string|max:5000',
             'parent_id' => 'nullable|exists:task_comments,id',

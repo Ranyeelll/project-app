@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Department;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectFormSubmission;
@@ -17,10 +18,27 @@ class ProjectFormController extends Controller
     ) {}
 
     /**
+     * Verify the authenticated user has access to the project.
+     */
+    private function authorizeProjectAccess(Project $project): void
+    {
+        $user = Auth::user();
+
+        if ($user->department === Department::Employee) {
+            $teamIds = array_map('intval', $project->team_ids ?? []);
+            if (!in_array((int) $user->id, $teamIds, true)) {
+                abort(403, 'You do not have access to this project.');
+            }
+        }
+    }
+
+    /**
      * List form submissions for a project, optionally filtered by form_type.
      */
     public function index(Request $request, Project $project): JsonResponse
     {
+        $this->authorizeProjectAccess($project);
+
         $query = ProjectFormSubmission::where('project_id', $project->id)
             ->orderBy('created_at', 'desc');
 
@@ -38,6 +56,8 @@ class ProjectFormController extends Controller
      */
     public function store(Request $request, Project $project): JsonResponse
     {
+        $this->authorizeProjectAccess($project);
+
         $request->validate([
             'form_type' => ['required', 'string', 'in:' . implode(',', ProjectFormSubmission::FORM_TYPES)],
             'data'      => ['required', 'array'],
