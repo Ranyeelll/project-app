@@ -101,7 +101,7 @@ class MediaController extends Controller
             }
         }
 
-        $media = Media::create([
+        $mediaData = [
             'project_id'        => $data['project_id'],
             'task_id'           => $data['task_id'] ?? null,
             'uploaded_by'       => $data['uploaded_by'],
@@ -109,12 +109,27 @@ class MediaController extends Controller
             'title'             => $data['title'],
             'content'           => $data['content'] ?? '',
             'file_path'         => $filePath,
-            'file_data'         => $fileData,
-            'file_mime'         => $fileMime,
             'original_filename' => $originalFilename,
             'file_size'         => $fileSize,
             'visible_to'        => $visibleTo,
-        ]);
+        ];
+
+        // Store binary data in DB if columns exist, otherwise fall back to local disk
+        if ($fileData) {
+            $mediaData['file_data'] = $fileData;
+            $mediaData['file_mime'] = $fileMime;
+        }
+
+        try {
+            $media = Media::create($mediaData);
+        } catch (\Throwable $e) {
+            // DB columns may not exist yet — retry without binary data, use local disk
+            unset($mediaData['file_data'], $mediaData['file_mime']);
+            if ($request->hasFile('file')) {
+                $mediaData['file_path'] = $request->file('file')->store('media', 'public');
+            }
+            $media = Media::create($mediaData);
+        }
 
         // Queue task activity log so the response is not blocked by a DB write
         if (!empty($data['task_id'])) {
@@ -152,7 +167,12 @@ class MediaController extends Controller
         }
 
         // Delete the physical file if it exists (legacy local disk files)
-        if ($medium->file_path && !$medium->file_data) {
+        try {
+            $hasDbData = $medium->file_data;
+        } catch (\Throwable $e) {
+            $hasDbData = false;
+        }
+        if ($medium->file_path && !$hasDbData) {
             Storage::disk('public')->delete($medium->file_path);
         }
 
@@ -169,11 +189,15 @@ class MediaController extends Controller
         $this->authorizeMediaAccess($medium);
 
         // Serve from DB storage
-        if ($medium->file_data) {
-            $filename = $medium->original_filename ?? basename($medium->file_path ?? 'download');
-            return response($medium->file_data)
-                ->header('Content-Type', $medium->file_mime ?? 'application/octet-stream')
-                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        try {
+            if ($medium->file_data) {
+                $filename = $medium->original_filename ?? basename($medium->file_path ?? 'download');
+                return response($medium->file_data)
+                    ->header('Content-Type', $medium->file_mime ?? 'application/octet-stream')
+                    ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+            }
+        } catch (\Throwable $e) {
+            // Column may not exist yet
         }
 
         // Fallback: legacy local disk files
@@ -195,10 +219,14 @@ class MediaController extends Controller
         $this->authorizeMediaAccess($medium);
 
         // Serve from DB storage
-        if ($medium->file_data) {
-            return response($medium->file_data)
-                ->header('Content-Type', $medium->file_mime ?? 'application/octet-stream')
-                ->header('Cache-Control', 'public, max-age=86400');
+        try {
+            if ($medium->file_data) {
+                return response($medium->file_data)
+                    ->header('Content-Type', $medium->file_mime ?? 'application/octet-stream')
+                    ->header('Cache-Control', 'public, max-age=86400');
+            }
+        } catch (\Throwable $e) {
+            // Column may not exist yet
         }
 
         // Fallback: legacy local disk files

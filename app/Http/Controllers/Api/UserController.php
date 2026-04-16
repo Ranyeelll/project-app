@@ -250,11 +250,19 @@ class UserController extends Controller
 
         $uploadedFile = $request->file('photo');
         $path = 'profile-photos/' . uniqid() . '_' . $uploadedFile->getClientOriginalName();
-        $user->update([
-            'profile_photo' => $path,
-            'profile_photo_data' => file_get_contents($uploadedFile->getRealPath()),
-            'profile_photo_mime' => $uploadedFile->getMimeType(),
-        ]);
+
+        // Store in DB if columns exist, otherwise fall back to local disk
+        try {
+            $user->update([
+                'profile_photo' => $path,
+                'profile_photo_data' => file_get_contents($uploadedFile->getRealPath()),
+                'profile_photo_mime' => $uploadedFile->getMimeType(),
+            ]);
+        } catch (\Throwable $e) {
+            // DB columns not yet migrated — fall back to local disk storage
+            $diskPath = $uploadedFile->store('profile-photos', 'public');
+            $user->update(['profile_photo' => $diskPath]);
+        }
 
         return response()->json($this->formatUser($user));
     }
@@ -308,10 +316,14 @@ class UserController extends Controller
     public function servePhoto(User $user)
     {
         // Serve from DB storage
-        if ($user->profile_photo_data) {
-            return response($user->profile_photo_data)
-                ->header('Content-Type', $user->profile_photo_mime ?? 'image/jpeg')
-                ->header('Cache-Control', 'public, max-age=86400');
+        try {
+            if ($user->profile_photo_data) {
+                return response($user->profile_photo_data)
+                    ->header('Content-Type', $user->profile_photo_mime ?? 'image/jpeg')
+                    ->header('Cache-Control', 'public, max-age=86400');
+            }
+        } catch (\Throwable $e) {
+            // Column may not exist yet if migration hasn't run
         }
 
         // Fallback: legacy local disk files
