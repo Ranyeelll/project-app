@@ -13,7 +13,8 @@ import {
   AlertTriangleIcon,
   EyeIcon,
   DownloadIcon,
-  ActivityIcon } from
+  ActivityIcon,
+  MessageSquareIcon } from
 'lucide-react';
 import { useData, useAuth, useNavigation } from '../../context/AppContext';
 import { Task, MediaUpload } from '../../data/mockData';
@@ -26,6 +27,8 @@ import { isElevatedRole } from '../../utils/roles';
 import { apiFetch } from '../../utils/apiFetch';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { TaskActivityTimeline } from '../../components/projects/TaskActivityTimeline';
+import { TaskComments } from '../../components/projects/TaskComments';
+import { Pagination } from '../../components/ui/Pagination';
 import { downloadCsv } from '../../utils/exportCsv';
 export function MyTasksPage() {
   const { tasks, setTasks, projects, users, media, refreshMedia, refreshProjects, refreshTasks, refreshAll } = useData();
@@ -49,6 +52,9 @@ export function MyTasksPage() {
   const [submittingReport, setSubmittingReport] = useState(false);
   const [teamModal, setTeamModal] = useState<string | null>(null); // project id
   const [activityModal, setActivityModal] = useState<Task | null>(null);
+  const [commentsModal, setCommentsModal] = useState<Task | null>(null);
+  const [taskPage, setTaskPage] = useState(0);
+  const taskPageSize = 10;
   const [submittingProjectId, setSubmittingProjectId] = useState<string | null>(null);
   const [notifyFeedback, setNotifyFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,6 +93,10 @@ export function MyTasksPage() {
     const matchProject = projectFilter === 'all' || t.projectId === projectFilter;
     return matchSearch && matchStatus && matchProject;
   });
+
+  // Reset page when filters change
+  useEffect(() => { setTaskPage(0); }, [search, statusFilter, projectFilter]);
+
   const openProgress = (task: Task) => {
     setProgressModal(task);
     setNewProgress(task.progress);
@@ -402,7 +412,7 @@ export function MyTasksPage() {
 
       {/* Task list */}
       <div className="space-y-3">
-        {filtered.map((task) => {
+        {filtered.slice(taskPage * taskPageSize, (taskPage + 1) * taskPageSize).map((task) => {
           const project = projects.find((p) => p.id === task.projectId);
           const taskMedia = media.filter((m) => m.taskId === task.id);
           return (
@@ -603,6 +613,14 @@ export function MyTasksPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  icon={<MessageSquareIcon size={12} />}
+                  onClick={() => setCommentsModal(task)}
+                >
+                  Discussion
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   icon={<ActivityIcon size={12} />}
                   onClick={() => setActivityModal(task)}
                 >
@@ -626,6 +644,15 @@ export function MyTasksPage() {
           </div>
         }
       </div>
+
+      <Pagination
+        currentPage={taskPage}
+        totalPages={Math.ceil(filtered.length / taskPageSize)}
+        totalItems={filtered.length}
+        pageSize={taskPageSize}
+        onPageChange={setTaskPage}
+        label="tasks"
+      />
 
       {/* Progress Modal */}
       <Modal
@@ -964,6 +991,22 @@ export function MyTasksPage() {
           <div className="max-h-[60vh] overflow-y-auto pr-1">
             <TaskActivityTimeline taskId={activityModal.id} />
           </div>
+        )}
+      </Modal>
+
+      {/* Task Discussion Modal */}
+      <Modal
+        isOpen={!!commentsModal}
+        onClose={() => setCommentsModal(null)}
+        title={commentsModal ? `Discussion — ${commentsModal.title}` : 'Discussion'}
+        size="md"
+        footer={
+          <Button variant="secondary" onClick={() => setCommentsModal(null)}>
+            Close
+          </Button>
+        }>
+        {commentsModal && (
+          <TaskComments taskId={commentsModal.id} taskTitle={commentsModal.title} />
         )}
       </Modal>
     </div>);

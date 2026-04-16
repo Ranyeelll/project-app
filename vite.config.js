@@ -6,7 +6,6 @@ export default defineConfig({
     plugins: [
         laravel({
             input: [
-                'resources/js/app.jsx',
                 'resources/js/project-management/index.tsx',
                 'resources/js/project-management/index.css',
             ],

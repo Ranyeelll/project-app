@@ -27,18 +27,19 @@ class TaskTimeLogController extends Controller
         $logs = $task->timeLogs()
             ->with('user:id,name')
             ->orderBy('date_worked', 'desc')
-            ->get()
-            ->map(fn ($log) => $this->formatTimeLog($log));
+            ->get();
 
-        // Calculate total hours
-        $totalHours = $task->timeLogs()->sum('hours_worked');
+        $formatted = $logs->map(fn ($log) => $this->formatTimeLog($log));
+
+        // Calculate total hours from already-loaded collection
+        $totalHours = $logs->sum('hours_worked');
 
         return response()->json([
             'taskId' => (string) $task->id,
             'estimatedHours' => (float) $task->estimated_hours,
             'loggedHours' => (float) $task->logged_hours,
             'totalFromLogs' => (float) $totalHours,
-            'logs' => $logs,
+            'logs' => $formatted,
         ]);
     }
 

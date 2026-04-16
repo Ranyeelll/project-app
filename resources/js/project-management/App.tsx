@@ -36,6 +36,7 @@ const BudgetRequestPage = React.lazy(() => import('./pages/employee/BudgetReques
 const LogTimePage = React.lazy(() => import('./pages/employee/LogTimePage').then(m => ({ default: m.LogTimePage })));
 const ReportIssuePage = React.lazy(() => import('./pages/employee/ReportIssuePage').then(m => ({ default: m.ReportIssuePage })));
 const ResourcesPage = React.lazy(() => import('./pages/employee/ResourcesPage').then(m => ({ default: m.ResourcesPage })));
+const KanbanPage = React.lazy(() => import('./pages/employee/KanbanPage').then(m => ({ default: m.KanbanPage })));
 import { SettingsPage } from './pages/SettingsPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { isElevatedRole, isEmployeeRole, isSuperadmin, isSupervisor } from './utils/roles';
@@ -113,6 +114,8 @@ function AppContent() {
           return { page: <TaskReviewsPage />, routeNotice: null };
         case 'admin-activity-feed':
           return { page: <ActivityFeedPage />, routeNotice: null };
+        case 'employee-board':
+          return { page: <KanbanPage />, routeNotice: null };
         case 'settings':
           return { page: <SettingsPage />, routeNotice: null };
         case 'calendar':
@@ -155,6 +158,8 @@ function AppContent() {
           return { page: <AuditLogPage />, routeNotice: null };
         case 'admin-archive':
           return { page: <ArchivePage />, routeNotice: null };
+        case 'employee-board':
+          return { page: <KanbanPage />, routeNotice: null };
         case 'settings':
           return { page: <SettingsPage />, routeNotice: null };
         case 'calendar':
@@ -197,6 +202,8 @@ function AppContent() {
           return { page: <ProjectsPage />, routeNotice: null };
         case 'technical-tasks':
           return { page: <MyTasksPage />, routeNotice: null };
+        case 'employee-board':
+          return { page: <KanbanPage />, routeNotice: null };
         case 'technical-review':
           return { page: <TaskReviewsPage />, routeNotice: null };
         case 'settings':
@@ -216,6 +223,8 @@ function AppContent() {
           return { page: <EmployeeDashboard />, routeNotice: null };
         case 'employee-tasks':
           return { page: <MyTasksPage />, routeNotice: null };
+        case 'employee-board':
+          return { page: <KanbanPage />, routeNotice: null };
         case 'employee-gantt':
           return { page: <ViewGanttPage />, routeNotice: null };
         case 'employee-budget':
@@ -264,6 +273,8 @@ function AppContent() {
           return { page: <ActivityFeedPage />, routeNotice: null };
         case 'admin-archive':
           return { page: <ArchivePage />, routeNotice: null };
+        case 'employee-board':
+          return { page: <KanbanPage />, routeNotice: null };
         case 'settings':
           return { page: <SettingsPage />, routeNotice: null };
         case 'calendar':

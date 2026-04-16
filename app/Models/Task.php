@@ -13,6 +13,7 @@ class Task extends Model
 
     protected $fillable = [
         'project_id',
+        'gantt_phase_id',
         'title',
         'description',
         'status',
@@ -45,6 +46,11 @@ class Task extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function ganttPhase(): BelongsTo
+    {
+        return $this->belongsTo(GanttItem::class, 'gantt_phase_id');
     }
 
     // ─── New Enhancement: Task Management Forms ────────────────────────

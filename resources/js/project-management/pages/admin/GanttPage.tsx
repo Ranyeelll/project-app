@@ -46,6 +46,14 @@ function getItemColor(item: GanttItem): string {
 }
 
 type ItemState = 'planned' | 'in process' | 'completed';
+type TaskStatus = 'todo' | 'in-progress' | 'review' | 'completed';
+
+const TASK_STATUS_DOT: Record<TaskStatus, string> = {
+  todo: '#94a3b8',
+  'in-progress': '#f59e0b',
+  review: '#60a5fa',
+  completed: '#63D44A',
+};
 
 function progressToState(progress: number): ItemState {
   if (progress >= 100) return 'completed';

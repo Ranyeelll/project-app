@@ -20,13 +20,8 @@ import {
   SettingsIcon,
   CalendarIcon,
   ActivityIcon,
-  CopyIcon,
-  SlidersIcon,
-  WebhookIcon,
   TrendingUpIcon,
-  TargetIcon,
   LayoutGridIcon,
-  HistoryIcon,
 } from 'lucide-react';
 import { useAuth, useNavigation } from '../../context/AppContext';
 import { isElevatedRole, isSupervisor } from '../../utils/roles';
@@ -53,6 +48,7 @@ const DEPARTMENT_NAV: Record<string, NavItem[]> = {
     { id: 'admin-reviews', label: 'Task Reviews', icon: <ClipboardCheckIcon size={16} /> },
     { id: 'admin-activity-feed', label: 'Activity Feed', icon: <ActivityIcon size={16} /> },
     { id: 'admin-audit-logs', label: 'Audit Logs', icon: <ShieldIcon size={16} /> },
+    { id: 'employee-board', label: 'Kanban Board', icon: <LayoutGridIcon size={16} /> },
     { id: 'admin-archive', label: 'Archive', icon: <ArchiveIcon size={16} /> },
     { id: 'calendar', label: 'Calendar', icon: <CalendarIcon size={16} /> },
     { id: 'settings', label: 'Settings', icon: <SettingsIcon size={16} /> },
@@ -71,6 +67,7 @@ const DEPARTMENT_NAV: Record<string, NavItem[]> = {
     { id: 'admin-gantt', label: 'Gantt Chart', icon: <GanttChartIcon size={16} /> },
     { id: 'admin-projects', label: 'Projects', icon: <FolderKanbanIcon size={16} /> },
     { id: 'technical-tasks', label: 'Task Management', icon: <CheckSquareIcon size={16} /> },
+    { id: 'employee-board', label: 'Kanban Board', icon: <LayoutGridIcon size={16} /> },
     { id: 'technical-review', label: 'Technical Review', icon: <ClipboardCheckIcon size={16} /> },
     { id: 'calendar', label: 'Calendar', icon: <CalendarIcon size={16} /> },
     { id: 'settings', label: 'Settings', icon: <SettingsIcon size={16} /> },
@@ -78,6 +75,7 @@ const DEPARTMENT_NAV: Record<string, NavItem[]> = {
   Employee: [
     { id: 'employee-dashboard', label: 'My Dashboard', icon: <LayoutDashboardIcon size={16} /> },
     { id: 'employee-tasks', label: 'My Tasks', icon: <CheckSquareIcon size={16} /> },
+    { id: 'employee-board', label: 'Kanban Board', icon: <LayoutGridIcon size={16} /> },
     { id: 'employee-gantt', label: 'View Gantt', icon: <GanttChartIcon size={16} /> },
     { id: 'employee-budget', label: 'Budget Request', icon: <WalletIcon size={16} /> },
     { id: 'employee-time', label: 'Log Time', icon: <ClockIcon size={16} /> },
@@ -99,6 +97,7 @@ const SUPERVISOR_NAV: NavItem[] = [
   { id: 'admin-workload', label: 'Workload', icon: <UsersIcon size={16} /> },
   { id: 'admin-reviews', label: 'Task Reviews', icon: <ClipboardCheckIcon size={16} /> },
   { id: 'admin-activity-feed', label: 'Activity Feed', icon: <ActivityIcon size={16} /> },
+  { id: 'employee-board', label: 'Kanban Board', icon: <LayoutGridIcon size={16} /> },
   { id: 'calendar', label: 'Calendar', icon: <CalendarIcon size={16} /> },
   { id: 'settings', label: 'Settings', icon: <SettingsIcon size={16} /> },
 ];

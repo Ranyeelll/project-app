@@ -8,10 +8,17 @@
  */
 
 let onSessionExpired: (() => void) | null = null;
+let sessionExpiredFired = false;
 
 /** Register a callback that fires when a 401 is received (set by AppContext). */
 export function setSessionExpiredHandler(handler: () => void) {
   onSessionExpired = handler;
+  sessionExpiredFired = false;
+}
+
+/** Reset the debounce flag (e.g. after a successful login). */
+export function resetSessionExpiredFlag() {
+  sessionExpiredFired = false;
 }
 
 function getCsrfToken(): string {
@@ -51,8 +58,9 @@ export async function apiFetch(
     credentials: 'include',
   });
 
-  // Handle session expiry globally
-  if (response.status === 401 && onSessionExpired) {
+  // Handle session expiry globally (fire only once per session)
+  if (response.status === 401 && onSessionExpired && !sessionExpiredFired) {
+    sessionExpiredFired = true;
     onSessionExpired();
   }
 

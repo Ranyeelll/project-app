@@ -500,6 +500,7 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
     'admin-archive': 'Archive',
     'employee-dashboard': 'My Dashboard',
     'employee-tasks': 'My Tasks',
+    'employee-board': 'Kanban Board',
     'employee-gantt': 'View Gantt',
     'employee-budget': 'Budget Request',
     'employee-time': 'Log Time',

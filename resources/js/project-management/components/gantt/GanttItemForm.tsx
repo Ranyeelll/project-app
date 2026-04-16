@@ -1,8 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { VisibilityEditor } from './VisibilityEditor';
 import { GanttItem, GanttItemType, User } from '../../data/mockData';
+
+/** Extract YYYY-MM-DD from an ISO 8601 or date string. */
+function toYmd(dateStr?: string): string {
+  if (!dateStr?.trim()) return '';
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  // ISO 8601 — take the date portion
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
+/** Format a YYYY-MM-DD string for display. */
+function formatDate(ymd: string): string {
+  if (!ymd) return '—';
+  const d = new Date(ymd + 'T00:00:00');
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 interface GanttItemFormProps {
   isOpen: boolean;
@@ -39,36 +58,32 @@ export function GanttItemForm({
 }: GanttItemFormProps) {
   const types = editItem ? [editItem.type] : allowedTypes(parentItem);
 
-  const [form, setForm] = useState<Partial<GanttItem>>({
+  // Normalize project dates to YYYY-MM-DD for <input type="date"> min/max
+  const projStart = useMemo(() => toYmd(projectStartDate), [projectStartDate]);
+  const projEnd = useMemo(() => toYmd(projectEndDate), [projectEndDate]);
+
+  const makeDefaults = (): Partial<GanttItem> => ({
     type: (editItem?.type || types[0]) as GanttItemType,
     name: editItem?.name || '',
     description: editItem?.description || '',
-    startDate: editItem?.startDate || '',
-    endDate: editItem?.endDate || '',
+    startDate: editItem?.startDate || projStart,
+    endDate: editItem?.endDate || projEnd,
     progress: editItem?.progress ?? 0,
     assigneeIds: editItem?.assigneeIds ?? [],
     visibleToRoles: editItem?.visibleToRoles ?? [],
     visibleToUsers: editItem?.visibleToUsers ?? [],
   });
+
+  const [form, setForm] = useState<Partial<GanttItem>>(makeDefaults);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
-      setForm({
-        type: (editItem?.type || types[0]) as GanttItemType,
-        name: editItem?.name || '',
-        description: editItem?.description || '',
-        startDate: editItem?.startDate || '',
-        endDate: editItem?.endDate || '',
-        progress: editItem?.progress ?? 0,
-        assigneeIds: editItem?.assigneeIds ?? [],
-        visibleToRoles: editItem?.visibleToRoles ?? [],
-        visibleToUsers: editItem?.visibleToUsers ?? [],
-      });
+      setForm(makeDefaults());
       setError('');
     }
-  }, [isOpen, editItem]);
+  }, [isOpen, editItem, projStart, projEnd]);
 
   const isMilestone = (form.type as GanttItemType) === 'milestone';
 
@@ -79,18 +94,25 @@ export function GanttItemForm({
     if (!isMilestone && (form.endDate as string) < (form.startDate as string)) { setError('End date must be the same as or after start date.'); return; }
 
     const effectiveEndDate = isMilestone ? form.startDate : form.endDate;
-    if (projectStartDate && (form.startDate as string) < projectStartDate) {
-      setError(`Start date must be on or after project start date (${projectStartDate}).`);
+    if (projStart && (form.startDate as string) < projStart) {
+      setError(`Start date must be on or after project start (${formatDate(projStart)}).`);
       return;
     }
-    if (projectEndDate && (effectiveEndDate as string) > projectEndDate) {
-      setError(`End date must be on or before project end date (${projectEndDate}).`);
+    if (projEnd && (effectiveEndDate as string) > projEnd) {
+      setError(`End date must be on or before project end (${formatDate(projEnd)}).`);
       return;
     }
 
     setLoading(true);
     setError('');
     try {
+      // Auto-include assigned users in visibility so they can always see the item
+      const assignees = form.assigneeIds ?? [];
+      const explicitUsers = form.visibleToUsers ?? [];
+      const mergedVisibleUsers = (form.visibleToRoles?.length || explicitUsers.length)
+        ? [...new Set([...explicitUsers, ...assignees])]
+        : explicitUsers;
+
       await onSave({
         type: form.type,
         name: form.name,
@@ -98,9 +120,9 @@ export function GanttItemForm({
         startDate: form.startDate,
         endDate: isMilestone ? form.startDate : form.endDate,
         progress: typeof form.progress === 'number' ? form.progress : 0,
-        assigneeIds: form.assigneeIds ?? [],
+        assigneeIds: assignees,
         visibleToRoles: form.visibleToRoles ?? [],
-        visibleToUsers: form.visibleToUsers ?? [],
+        visibleToUsers: mergedVisibleUsers,
       });
       onClose();
     } catch (e: any) {
@@ -174,8 +196,8 @@ export function GanttItemForm({
             type="date"
             value={form.startDate as string}
             onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
-            min={projectStartDate}
-            max={projectEndDate}
+            min={projStart || undefined}
+            max={projEnd || undefined}
             className="w-full px-3 py-2 text-sm rounded-lg dark:bg-dark-bg dark:border-dark-border dark:text-dark-text bg-gray-50 border border-light-border text-light-text focus:outline-none focus:ring-1 focus:ring-green-primary/50"
           />
         </div>
@@ -186,15 +208,20 @@ export function GanttItemForm({
               type="date"
               value={form.endDate as string}
               onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-              min={projectStartDate}
-              max={projectEndDate}
+              min={(form.startDate as string) || projStart || undefined}
+              max={projEnd || undefined}
               className="w-full px-3 py-2 text-sm rounded-lg dark:bg-dark-bg dark:border-dark-border dark:text-dark-text bg-gray-50 border border-light-border text-light-text focus:outline-none focus:ring-1 focus:ring-green-primary/50"
             />
           </div>
         )}
       </div>
+      {(projStart || projEnd) && (
+        <p className="text-xs dark:text-gray-400 text-gray-500 -mt-1">
+          Project timeline: {formatDate(projStart)} – {formatDate(projEnd)}
+        </p>
+      )}
 
-      {!isMilestone && (
+      {!isMilestone && editItem && (
         <div>
           <label className="block text-xs font-medium dark:text-dark-text text-light-text mb-1.5">
             Progress: {form.progress}%

@@ -23,8 +23,9 @@ class BudgetRequest extends Model
     ];
 
     protected $casts = [
-        'amount'      => 'decimal:2',
-        'reviewed_at' => 'datetime',
+        'amount'          => 'decimal:2',
+        'original_amount' => 'decimal:2',
+        'reviewed_at'     => 'datetime',
     ];
 
     public function project(): BelongsTo

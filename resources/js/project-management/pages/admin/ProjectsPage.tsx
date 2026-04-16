@@ -15,7 +15,8 @@ import {
   DownloadIcon,
   RefreshCwIcon,
   FileTextIcon,
-  TableIcon } from
+  TableIcon,
+  MessageSquareIcon } from
 'lucide-react';
 import { useData, useAuth, useNavigation } from '../../context/AppContext';
 import { Project, Task, ApprovalStatus } from '../../data/mockData';
@@ -30,9 +31,10 @@ import { isSupervisor } from '../../utils/roles';
 import { apiFetch } from '../../utils/apiFetch';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { TaskActivityTimeline } from '../../components/projects/TaskActivityTimeline';
+import { TaskComments } from '../../components/projects/TaskComments';
 type ModalMode = 'create' | 'edit' | 'view' | null;
 export function ProjectsPage() {
-  const { projects, setProjects, users, tasks, setTasks, refreshTasks, refreshProjects } = useData();
+  const { projects, setProjects, users, tasks, setTasks, refreshTasks, refreshProjects, ganttItems } = useData();
   const { currentUser } = useAuth();
   const { setCurrentPage } = useNavigation();
   const isAdmin = currentUser?.department === 'Admin';
@@ -53,6 +55,7 @@ export function ProjectsPage() {
   const [showBudgetWarning, setShowBudgetWarning] = useState(false);
   const [budgetWarningProjects, setBudgetWarningProjects] = useState<Project[]>([]);
   const [taskActivityTarget, setTaskActivityTarget] = useState<{ id: string; title: string } | null>(null);
+  const [taskCommentsTarget, setTaskCommentsTarget] = useState<{ id: string; title: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const initialLoadRef = useRef(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -73,7 +76,8 @@ export function ProjectsPage() {
     assignedTo: '',
     startDate: '',
     endDate: '',
-    estimatedHours: ''
+    estimatedHours: '',
+    ganttPhaseId: '',
   });
   const [form, setForm] = useState({
     name: '',
@@ -301,7 +305,7 @@ export function ProjectsPage() {
     setSelectedProject(p);
     setShowTaskForm(false);
     setTaskActionError('');
-    setTaskForm({ title: '', description: '', priority: 'medium', assignedTo: '', startDate: '', endDate: '', estimatedHours: '' });
+    setTaskForm({ title: '', description: '', priority: 'medium', assignedTo: '', startDate: '', endDate: '', estimatedHours: '', ganttPhaseId: '' });
     refreshTasks();
     refreshProjects();
     setModalMode('view');
@@ -403,7 +407,7 @@ export function ProjectsPage() {
     }
   };
   const resetTaskForm = () => {
-    setTaskForm({ title: '', description: '', priority: 'medium', assignedTo: '', startDate: '', endDate: '', estimatedHours: '' });
+    setTaskForm({ title: '', description: '', priority: 'medium', assignedTo: '', startDate: '', endDate: '', estimatedHours: '', ganttPhaseId: '' });
     setShowTaskForm(false);
     setEditingTaskId(null);
   };
@@ -418,6 +422,7 @@ export function ProjectsPage() {
       startDate: task.startDate || '',
       endDate: task.endDate || '',
       estimatedHours: task.estimatedHours ? String(task.estimatedHours) : '',
+      ganttPhaseId: task.ganttPhaseId || '',
     });
   };
   const handleEditTask = async () => {
@@ -434,6 +439,7 @@ export function ProjectsPage() {
           start_date: taskForm.startDate || null,
           end_date: taskForm.endDate || null,
           estimated_hours: Number(taskForm.estimatedHours) || 0,
+          gantt_phase_id: taskForm.ganttPhaseId || null,
         }),
       });
       if (!res.ok) {
@@ -462,6 +468,7 @@ export function ProjectsPage() {
           start_date: taskForm.startDate || null,
           end_date: taskForm.endDate || null,
           estimated_hours: Number(taskForm.estimatedHours) || 0,
+          gantt_phase_id: taskForm.ganttPhaseId || null,
         }),
       });
       if (!res.ok) {
@@ -1402,7 +1409,7 @@ export function ProjectsPage() {
                 </h4>
                 <Button variant="primary" size="sm" icon={<PlusIcon size={12} />} onClick={() => {
                   const teamMembers = users.filter((u) => selectedProject?.teamIds?.includes(u.id));
-                  setTaskForm({ title: '', description: '', priority: 'medium', assignedTo: teamMembers.length === 1 ? teamMembers[0].id : '', startDate: '', endDate: '', estimatedHours: '' });
+                  setTaskForm({ title: '', description: '', priority: 'medium', assignedTo: teamMembers.length === 1 ? teamMembers[0].id : '', startDate: '', endDate: '', estimatedHours: '', ganttPhaseId: '' });
                   setShowTaskForm(true);
                 }}>
                   Add Task
@@ -1457,6 +1464,17 @@ export function ProjectsPage() {
                   <p className="text-[10px] dark:text-dark-subtle text-light-subtle -mt-1">
                     Tasks are visible to all team members. Use "Assign To" to designate a specific person.
                   </p>
+                  <Select
+                    label="Gantt Phase (Optional)"
+                    value={taskForm.ganttPhaseId}
+                    onChange={(e) => setTaskForm({ ...taskForm, ganttPhaseId: e.target.value })}
+                    options={[
+                      { value: '', label: 'None — standalone task' },
+                      ...ganttItems
+                        .filter((g) => g.projectId === selectedProject?.id && (g.type === 'phase' || g.type === 'step'))
+                        .map((g) => ({ value: g.id, label: `${g.type === 'step' ? '  └ ' : ''}${g.name}` })),
+                    ]}
+                  />
                   <div className="grid grid-cols-3 gap-3">
                     <Input
                       label="Start Date"
@@ -1534,6 +1552,17 @@ export function ProjectsPage() {
                           ]}
                         />
                       </div>
+                      <Select
+                        label="Gantt Phase (Optional)"
+                        value={taskForm.ganttPhaseId}
+                        onChange={(e) => setTaskForm({ ...taskForm, ganttPhaseId: e.target.value })}
+                        options={[
+                          { value: '', label: 'None — standalone task' },
+                          ...ganttItems
+                            .filter((g) => g.projectId === selectedProject?.id && (g.type === 'phase' || g.type === 'step'))
+                            .map((g) => ({ value: g.id, label: `${g.type === 'step' ? '  └ ' : ''}${g.name}` })),
+                        ]}
+                      />
                       <div className="grid grid-cols-3 gap-3">
                         <Input
                           label="Start Date"
@@ -1579,6 +1608,13 @@ export function ProjectsPage() {
                         <span className="text-xs dark:text-dark-muted text-light-muted w-8 text-right">
                           {task.progress}%
                         </span>
+                        <button
+                          onClick={() => setTaskCommentsTarget({ id: task.id, title: task.title })}
+                          className="p-1 rounded dark:text-dark-muted dark:hover:bg-dark-card dark:hover:text-green-primary text-light-muted hover:bg-light-card hover:text-green-primary transition-colors"
+                          title="Discussion"
+                        >
+                          <MessageSquareIcon size={12} />
+                        </button>
                         <button
                           onClick={() => setTaskActivityTarget({ id: task.id, title: task.title })}
                           className="p-1 rounded dark:text-dark-muted dark:hover:bg-dark-card dark:hover:text-green-primary text-light-muted hover:bg-light-card hover:text-green-primary transition-colors"
@@ -1664,6 +1700,22 @@ export function ProjectsPage() {
           <div className="max-h-[60vh] overflow-y-auto pr-1">
             <TaskActivityTimeline taskId={taskActivityTarget.id} />
           </div>
+        )}
+      </Modal>
+
+      {/* Task Discussion Modal */}
+      <Modal
+        isOpen={!!taskCommentsTarget}
+        onClose={() => setTaskCommentsTarget(null)}
+        title={taskCommentsTarget ? `Discussion — ${taskCommentsTarget.title}` : 'Discussion'}
+        size="md"
+        footer={
+          <Button variant="secondary" onClick={() => setTaskCommentsTarget(null)}>
+            Close
+          </Button>
+        }>
+        {taskCommentsTarget && (
+          <TaskComments taskId={taskCommentsTarget.id} taskTitle={taskCommentsTarget.title} />
         )}
       </Modal>
     </div>);

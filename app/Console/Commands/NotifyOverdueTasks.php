@@ -32,7 +32,7 @@ class NotifyOverdueTasks extends Command
             $alreadyNotified = $assignee->notifications()
                 ->where('type', OverdueTaskNotification::class)
                 ->whereDate('created_at', now()->toDateString())
-                ->whereJsonContains('data->task_id', $task->id)
+                ->whereRaw("data::jsonb->>'task_id' = ?", [(string) $task->id])
                 ->exists();
 
             if ($alreadyNotified) continue;

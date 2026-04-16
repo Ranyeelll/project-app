@@ -2,14 +2,10 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BudgetRequestController;
-// chat controllers removed
 use App\Http\Controllers\Api\IssueController;
 use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TaskController;
-// use App\Http\Controllers\Api\ChatModerationController;
-// use App\Http\Controllers\Api\DirectMessageController;
-// use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\TaskCompletionController;
 use App\Http\Controllers\Api\TaskReviewController;
 use App\Http\Controllers\Api\TaskBlockerController;
@@ -38,11 +34,8 @@ use App\Http\Controllers\Api\MediaVersionController;
 use App\Http\Controllers\Api\ActivityFeedController;
 use App\Http\Controllers\Api\TwoFactorController;
 use App\Http\Controllers\Api\UserImportController;
-use App\Http\Controllers\ProfileController;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 // Serve a consistent favicon at the root to override cached/missing /favicon.ico behavior
 Route::get('favicon.ico', function () {
@@ -113,8 +106,6 @@ Route::prefix('api')->group(function () {
 
             // Bulk user import (CSV)
             Route::post('/users/import', [UserImportController::class, 'import']);
-
-            // Chat moderation endpoints removed (chat feature disabled)
 
             // Audit logs (superadmin only)
             Route::get('/audit-logs', [AuditLogController::class, 'index']);
@@ -263,8 +254,6 @@ Route::prefix('api')->group(function () {
         // Profile photo upload (authenticated users)
         Route::post('/users/{user}/profile-photo', [UserController::class, 'uploadPhoto']);
 
-        // DM user directory removed with chat feature (use /api/users)
-
         // View projects (filtered based on department in controller)
         Route::get('/projects', [ProjectController::class, 'index']);
 
@@ -343,21 +332,8 @@ Route::prefix('api')->group(function () {
         Route::post('/issues', [IssueController::class, 'store']);
         Route::put('/issues/{issue}', [IssueController::class, 'update']);
 
-        // Chat and direct message endpoints removed (feature disabled)
     });
 });
-
-Route::get('/dashboard', function () {
-    return redirect('/');
-})->middleware(['auth', 'verified'])->name('dashboard');
-
-Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-});
-
-require __DIR__.'/auth.php';
 
 // Legacy photo path fallback for old cached SPA user payloads.
 Route::get('/profile-photos/{path}', function (string $path) {

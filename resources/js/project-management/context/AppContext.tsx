@@ -21,7 +21,7 @@ import {
   ProjectFormSubmission } from
 '../data/mockData';
 import { isElevatedRole } from '../utils/roles';
-import { apiFetch, setSessionExpiredHandler } from '../utils/apiFetch';
+import { apiFetch, setSessionExpiredHandler, resetSessionExpiredFlag } from '../utils/apiFetch';
 // ─── Theme Context ───────────────────────────────────────────────────────────
 interface ThemeContextType {
   isDark: boolean;
@@ -208,6 +208,9 @@ export function AppProvider({ children }: AppProviderProps) {
     return null;
   });
 
+  // Counter that increments when auth is confirmed valid (triggers data loading)
+  const [authReady, setAuthReady] = useState(0);
+
   // Keep localStorage in sync whenever currentUser changes
   useEffect(() => {
     if (currentUser) {
@@ -230,7 +233,10 @@ export function AppProvider({ children }: AppProviderProps) {
         });
         const data = await res.json();
         if (data.success && data.user) {
+          resetSessionExpiredFlag();
+          authValidatedRef.current = true;
           setCurrentUser(data.user as User);
+          setAuthReady((v) => v + 1);
           return { success: true };
         }
         if (data.requires_2fa) {
@@ -253,7 +259,10 @@ export function AppProvider({ children }: AppProviderProps) {
         });
         const data = await res.json();
         if (data.success && data.user) {
+          resetSessionExpiredFlag();
+          authValidatedRef.current = true;
           setCurrentUser(data.user as User);
+          setAuthReady((v) => v + 1);
           return { success: true };
         }
         return { success: false, error: data.error || 'Verification failed.' };
@@ -327,8 +336,10 @@ export function AppProvider({ children }: AppProviderProps) {
   }, [pageToPath]);
 
   // Validate persisted user against current backend session.
+  const authValidatedRef = useRef(false);
   useEffect(() => {
     if (!currentUser) {
+      authValidatedRef.current = false;
       return;
     }
 
@@ -342,11 +353,15 @@ export function AppProvider({ children }: AppProviderProps) {
       .then((data: { success?: boolean; user?: User }) => {
         if (data?.success && data.user) {
           setCurrentUser(data.user);
+          authValidatedRef.current = true;
+          // Trigger data loading now that auth is confirmed
+          setAuthReady((v) => v + 1);
           return;
         }
         throw new Error('No user returned from auth check');
       })
       .catch(() => {
+        authValidatedRef.current = false;
         setCurrentUser(null);
         localStorage.removeItem('maptech-current-user');
         setCurrentPage('login');
@@ -436,9 +451,9 @@ export function AppProvider({ children }: AppProviderProps) {
   const [formSubmissions, setFormSubmissions] = useState<ProjectFormSubmission[]>([]);
 
 
-  // ─── Load users from the database on mount ───────────────────────────────
+  // ─── Load users from the database on mount (only after auth validated) ──
   useEffect(() => {
-    if (!currentUser) {
+    if (!currentUser || !authValidatedRef.current) {
       return;
     }
 
@@ -453,7 +468,7 @@ export function AppProvider({ children }: AppProviderProps) {
         }
       })
       .catch(() => { /* API fetch failed; state remains empty until next retry */ });
-  }, [currentUser]);
+  }, [authReady]);
 
   // ─── Keep currentUser in sync with latest user data from DB ──────────────
   useEffect(() => {
@@ -667,11 +682,12 @@ export function AppProvider({ children }: AppProviderProps) {
   }, []);
 
   // ─── Load all data from the database on mount (only when authenticated)
+  // ─── Load all data from the database on mount (only when auth validated)
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !authValidatedRef.current) return;
     refreshAll();
     refreshNotifications();
-  }, [refreshAll, refreshNotifications, currentUser]);
+  }, [refreshAll, refreshNotifications, authReady]);
 
   // ─── Auto-refresh every 30 seconds (skip while tab is hidden, not authed, or already refreshing)
   const isRefreshingRef = useRef(false);

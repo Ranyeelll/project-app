@@ -3,11 +3,14 @@ import { useData } from '../../context/AppContext';
 import { ActivityFeedItem } from '../../data/mockData';
 import { apiFetch } from '../../utils/apiFetch';
 import { ActivityIcon, RefreshCwIcon } from 'lucide-react';
+import { Pagination } from '../../components/ui/Pagination';
 
 export function ActivityFeedPage() {
   const { users } = useData();
   const [activities, setActivities] = useState<ActivityFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const pageSize = 20;
 
   const load = () => {
     setLoading(true);
@@ -65,7 +68,7 @@ export function ActivityFeedPage() {
           </div>
         ) : (
           <div className="divide-y dark:divide-dark-border divide-light-border">
-            {activities.map((item) => (
+            {activities.slice(page * pageSize, (page + 1) * pageSize).map((item) => (
               <div key={item.id} className="px-4 py-3 flex items-start gap-3 dark:hover:bg-dark-card2 hover:bg-gray-50 transition-colors">
                 <div className="p-1.5 rounded-full dark:bg-dark-card2 bg-gray-100 mt-0.5">
                   <ActivityIcon size={12} className="dark:text-dark-muted text-gray-400" />
@@ -84,6 +87,15 @@ export function ActivityFeedPage() {
           </div>
         )}
       </div>
+
+      <Pagination
+        currentPage={page}
+        totalPages={Math.ceil(activities.length / pageSize)}
+        totalItems={activities.length}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        label="activities"
+      />
     </div>
   );
 }

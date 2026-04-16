@@ -22,6 +22,8 @@ class BulkOperationController extends Controller
      */
     public function updateTaskStatus(Request $request): JsonResponse
     {
+        $user = Auth::user();
+
         $data = $request->validate([
             'task_ids'  => 'required|array|min:1|max:100',
             'task_ids.*' => 'integer|exists:tasks,id',
@@ -29,8 +31,22 @@ class BulkOperationController extends Controller
         ]);
 
         $updated = 0;
-        DB::transaction(function () use ($data, &$updated) {
+        DB::transaction(function () use ($data, &$updated, $user) {
             $tasks = Task::whereIn('id', $data['task_ids'])->get();
+
+            // Verify user has access to all affected projects
+            if ($user && $user->department === Department::Employee) {
+                $projectIds = $tasks->pluck('project_id')->unique();
+                foreach ($projectIds as $projectId) {
+                    $project = Project::find($projectId);
+                    if ($project && !in_array((string) $user->id, $project->team_ids ?? [], true)) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'task_ids' => 'You do not have access to all selected tasks.',
+                        ]);
+                    }
+                }
+            }
+
             foreach ($tasks as $task) {
                 $oldStatus = $task->status;
                 if ($oldStatus !== $data['status']) {

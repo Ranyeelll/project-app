@@ -61,6 +61,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'department' => Department::class,
             'last_login_at' => 'datetime',
+            'two_factor_confirmed_at' => 'datetime',
             'notification_preferences' => 'array',
         ];
     }

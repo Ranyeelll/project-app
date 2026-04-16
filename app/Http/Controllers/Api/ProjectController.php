@@ -214,7 +214,7 @@ class ProjectController extends Controller
             'location'         => 'nullable|string|max:500',
             'objectives'       => 'sometimes|string|max:5000',
             'start_date'  => 'nullable|date',
-            'end_date'    => 'nullable|date',
+            'end_date'    => 'nullable|date|after_or_equal:start_date',
             'budget'      => 'nullable|numeric|min:0',
             'spent'       => 'nullable|numeric|min:0',
             'progress'    => 'nullable|integer|min:0|max:100',

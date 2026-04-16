@@ -35,15 +35,15 @@ class GanttController extends Controller
     {
         $orderedItems = $this->resolveVisibleOrderedItems($request, $project);
 
-        return response()->json(
-            collect($orderedItems)->map(fn ($row) => array_merge(
-                $this->formatItem($row['item']),
-                [
-                    'treeIndex' => $row['treeIndex'],
-                    'depth' => $row['depth'],
-                ]
-            ))->values()
-        );
+        $result = collect($orderedItems)->map(fn ($row) => array_merge(
+            $this->formatItem($row['item']),
+            [
+                'treeIndex' => $row['treeIndex'],
+                'depth' => $row['depth'],
+            ]
+        ))->values()->all();
+
+        return response()->json(array_values($result));
     }
 
     /**

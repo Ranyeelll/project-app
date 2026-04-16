@@ -152,7 +152,7 @@ class ProjectFormController extends Controller
                 'actualValue' => 'Actual Value is required.',
                 'unit'        => 'Unit is required.',
             ]),
-            default => null,
+            default => $errors['form_type'] = "Unknown form type: {$formType}",
         };
 
         return $errors;

@@ -93,6 +93,7 @@ class TaskController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'estimated_hours' => 'nullable|numeric|min:0',
+            'gantt_phase_id' => 'nullable|exists:gantt_items,id',
         ]);
 
         $data['progress'] = 0;
@@ -159,6 +160,7 @@ class TaskController extends Controller
                 'allow_employee_edit' => 'nullable|boolean',
                 'completion_report_status' => 'sometimes|in:none,pending,approved,rejected',
                 'report_cost' => 'nullable|numeric|min:0',
+                'gantt_phase_id' => 'nullable|exists:gantt_items,id',
             ]);
         }
 
@@ -246,6 +248,7 @@ class TaskController extends Controller
         return [
             'id' => (string) $t->id,
             'projectId' => (string) $t->project_id,
+            'ganttPhaseId' => $t->gantt_phase_id ? (string) $t->gantt_phase_id : null,
             'title' => $t->title,
             'description' => $t->description ?? '',
             'status' => $t->status,
