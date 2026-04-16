@@ -74,7 +74,7 @@ Route::get('/login', function () {
 Route::prefix('api')->group(function () {
     // Public routes (no auth required) — rate-limited to prevent brute force
     Route::post('/login', [AuthController::class, 'login'])
-        ->middleware('throttle:10,1');
+        ->middleware('throttle:30,1');
     Route::post('/login/2fa', [AuthController::class, 'login2fa'])
         ->middleware('throttle:5,1');
     Route::post('/verify-recovery', [AuthController::class, 'verifyRecovery'])

@@ -10,7 +10,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use App\Services\TaskActivityLogger;
+use App\Jobs\FanOutWebhooks;
+use App\Jobs\LogTaskActivity;
 
 class MediaController extends Controller
 {
@@ -118,16 +119,18 @@ class MediaController extends Controller
             'visible_to'        => $visibleTo,
         ]);
 
-        // Log file upload activity on the associated task
+        // Queue task activity log so the response is not blocked by a DB write
         if (!empty($data['task_id'])) {
-            TaskActivityLogger::fileUploaded(
+            LogTaskActivity::dispatch(
                 (int) $data['task_id'],
                 $originalFilename ?? $data['title'],
-                $data['type']
+                $data['type'],
+                $actor->id,
             );
         }
 
-        \App\Services\WebhookService::dispatch('media.uploaded', $media->toArray());
+        // Queue webhook fan-out so the response is not blocked by DB queries or HTTP calls
+        FanOutWebhooks::dispatch('media.uploaded', $media->toArray());
 
         return response()->json($this->formatMedia($media), 201);
     }
