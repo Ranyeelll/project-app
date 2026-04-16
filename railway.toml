@@ -1,0 +1,11 @@
+[build]
+# Railway auto-detects the Dockerfile
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Railway injects PORT automatically
+healthcheckPath = "/up"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

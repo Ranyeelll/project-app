@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
     git curl zip unzip libpq-dev libzip-dev libpng-dev libjpeg-dev libfreetype6-dev \
     nodejs npm \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo pdo_pgsql pgsql zip gd bcmath \
+    && docker-php-ext-install pdo pdo_pgsql pgsql zip gd bcmath pcntl \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
     && echo "upload_max_filesize=512M" > /usr/local/etc/php/conf.d/uploads.ini \
     && echo "post_max_size=512M" >> /usr/local/etc/php/conf.d/uploads.ini \
@@ -33,8 +33,14 @@ RUN composer run-script post-autoload-dump
 # Build frontend assets
 RUN npm run build
 
+# Ensure storage and cache directories have correct permissions
+RUN chmod -R 775 storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache
+
 # Cache views only (config/route cache at runtime when env vars are available)
 RUN php artisan view:cache
+
+EXPOSE ${PORT:-8080}
 
 # Start script: cache config, run migrations, seed, link storage, then serve
 CMD php artisan config:cache && \

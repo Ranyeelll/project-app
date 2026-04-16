@@ -1,13 +1,20 @@
+# Nixpacks fallback config (Railway uses Dockerfile by default when present)
+
 [phases.setup]
-nixPkgs = ["...", "php84Extensions.pgsql", "php84Extensions.pdo_pgsql"]
+nixPkgs = ["php84", "php84Extensions.pgsql", "php84Extensions.pdo_pgsql", "php84Extensions.gd", "php84Extensions.zip", "php84Extensions.bcmath", "nodejs_22", "npm"]
+
+[phases.install]
+cmds = [
+    "composer install --no-dev --optimize-autoloader",
+    "npm ci",
+]
 
 [phases.build]
 cmds = [
-    "npm ci",
     "npm run build",
-    "composer install --no-dev --optimize-autoloader",
     "php artisan view:cache",
+    "chmod -R 775 storage bootstrap/cache",
 ]
 
 [start]
-cmd = "php artisan config:clear && php artisan config:cache && php artisan route:cache && php artisan migrate --force && php artisan storage:link && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"
+cmd = "php artisan config:cache && php artisan route:cache && php artisan migrate --force && php artisan db:seed --force && php artisan storage:link 2>/dev/null; php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"

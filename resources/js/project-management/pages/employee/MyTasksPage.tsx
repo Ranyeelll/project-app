@@ -160,7 +160,8 @@ export function MyTasksPage() {
         });
 
         if (!taskRes.ok) {
-          alert('Report uploaded but failed to update task status.');
+          const errBody = await taskRes.json().catch(() => null);
+          alert('Report uploaded but failed to update task status: ' + (errBody?.message || errBody?.error || taskRes.status + ' ' + taskRes.statusText));
         } else {
           // Only update local state when API confirms success
           setTasks((prev) =>

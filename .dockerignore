@@ -1,9 +1,17 @@
 node_modules
 .git
 .env
+.env.*
+!.env.example
 storage/logs/*
 storage/framework/cache/*
 storage/framework/sessions/*
 storage/framework/views/*
 vendor
 public/build
+public/hot
+tests
+.github
+.vscode
+*.md
+!README.md
