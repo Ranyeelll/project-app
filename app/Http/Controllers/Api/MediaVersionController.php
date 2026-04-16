@@ -14,7 +14,9 @@ class MediaVersionController extends Controller
 {
     public function index(int $mediaId): JsonResponse
     {
+        // Exclude binary file_data from listing
         $versions = MediaVersion::where('media_id', $mediaId)
+            ->select(['id', 'media_id', 'version_number', 'file_path', 'file_mime', 'original_filename', 'file_size', 'uploaded_by', 'change_note', 'created_at', 'updated_at'])
             ->orderByDesc('version_number')
             ->get()
             ->map(fn ($v) => $this->formatVersion($v));
@@ -32,7 +34,7 @@ class MediaVersionController extends Controller
         ]);
 
         $file = $request->file('file');
-        $path = $file->store('media-versions', 'public');
+        $path = 'media-versions/' . uniqid() . '_' . $file->getClientOriginalName();
 
         $lastVersion = MediaVersion::where('media_id', $mediaId)->max('version_number') ?? 0;
 
@@ -40,6 +42,8 @@ class MediaVersionController extends Controller
             'media_id' => $mediaId,
             'version_number' => $lastVersion + 1,
             'file_path' => $path,
+            'file_data' => file_get_contents($file->getRealPath()),
+            'file_mime' => $file->getMimeType(),
             'original_filename' => $file->getClientOriginalName(),
             'file_size' => $file->getSize(),
             'uploaded_by' => Auth::id(),
@@ -49,6 +53,8 @@ class MediaVersionController extends Controller
         // Update main media record with latest file info
         $media->update([
             'file_path' => $path,
+            'file_data' => $version->file_data,
+            'file_mime' => $version->file_mime,
             'original_filename' => $file->getClientOriginalName(),
             'file_size' => $file->getSize(),
         ]);
@@ -58,6 +64,15 @@ class MediaVersionController extends Controller
 
     public function download(int $mediaId, MediaVersion $version): mixed
     {
+        // Serve from DB storage
+        if ($version->file_data) {
+            $filename = $version->original_filename ?? basename($version->file_path ?? 'download');
+            return response($version->file_data)
+                ->header('Content-Type', $version->file_mime ?? 'application/octet-stream')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        }
+
+        // Fallback: legacy local disk files
         if (!Storage::disk('public')->exists($version->file_path)) {
             return response()->json(['error' => 'File not found'], 404);
         }

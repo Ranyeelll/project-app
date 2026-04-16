@@ -11,6 +11,8 @@ class MediaVersion extends Model
         'media_id',
         'version_number',
         'file_path',
+        'file_data',
+        'file_mime',
         'original_filename',
         'file_size',
         'uploaded_by',

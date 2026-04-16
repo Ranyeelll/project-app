@@ -1,8 +1,8 @@
 # System Flow Documentation
 
 **Maptech Information Solutions Inc. — Project Management System**
-**Document Version:** 1.0
-**Last Updated:** April 15, 2026
+**Document Version:** 2.0
+**Last Updated:** April 16, 2026
 
 ---
 
@@ -26,10 +26,10 @@
 
 ## 1. System Overview
 
-The Maptech PMS is a Laravel 12 + React single-page application that manages IT projects from creation through completion. The system enforces a multi-stage approval pipeline, role-based access control, budget tracking, task management, and audit logging.
+The Maptech PMS is a Laravel 11 + React single-page application that manages IT projects from creation through completion. The system enforces a multi-stage approval pipeline, role-based access control, budget tracking, task management, and audit logging.
 
 **Technology Stack:**
-- Backend: Laravel 12 (PHP), PostgreSQL
+- Backend: Laravel 11 (PHP 8.2+), PostgreSQL
 - Frontend: React (TypeScript), Vite, Tailwind CSS
 - Real-time: Pusher/Reverb (WebSocket broadcasting)
 - PDF Generation: DomPDF

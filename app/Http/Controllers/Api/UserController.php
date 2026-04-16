@@ -240,16 +240,21 @@ class UserController extends Controller
             'photo' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
 
-        // Delete old photo if it exists
-        if ($user->profile_photo) {
+        // Delete old photo from local disk if it exists (legacy)
+        if ($user->profile_photo && !$user->profile_photo_data) {
             $oldPath = $this->resolveStoredPhotoPath($user->profile_photo);
             if ($oldPath) {
                 Storage::disk('public')->delete($oldPath);
             }
         }
 
-        $path = $request->file('photo')->store('profile-photos', 'public');
-        $user->update(['profile_photo' => $path]);
+        $uploadedFile = $request->file('photo');
+        $path = 'profile-photos/' . uniqid() . '_' . $uploadedFile->getClientOriginalName();
+        $user->update([
+            'profile_photo' => $path,
+            'profile_photo_data' => file_get_contents($uploadedFile->getRealPath()),
+            'profile_photo_mime' => $uploadedFile->getMimeType(),
+        ]);
 
         return response()->json($this->formatUser($user));
     }
@@ -302,6 +307,14 @@ class UserController extends Controller
      */
     public function servePhoto(User $user)
     {
+        // Serve from DB storage
+        if ($user->profile_photo_data) {
+            return response($user->profile_photo_data)
+                ->header('Content-Type', $user->profile_photo_mime ?? 'image/jpeg')
+                ->header('Cache-Control', 'public, max-age=86400');
+        }
+
+        // Fallback: legacy local disk files
         $path = $this->resolveStoredPhotoPath($user->profile_photo);
 
         if (!$path || !Storage::disk('public')->exists($path)) {

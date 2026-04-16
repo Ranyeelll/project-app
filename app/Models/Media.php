@@ -17,6 +17,8 @@ class Media extends Model
         'title',
         'content',
         'file_path',
+        'file_data',
+        'file_mime',
         'original_filename',
         'file_size',
         'visible_to',

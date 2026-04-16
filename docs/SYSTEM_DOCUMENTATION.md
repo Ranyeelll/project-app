@@ -1,8 +1,8 @@
 # MAPTECH Project Management System
 ## Complete System Documentation
 
-**Document Version:** 4.3  
-**Last Updated:** April 15, 2026  
+**Document Version:** 5.0  
+**Last Updated:** April 16, 2026  
 **Classification:** Internal Use Only  
 **Document Owner:** MAPTECH IT Department
 
@@ -54,6 +54,9 @@ The MAPTECH PMS is a web-based application that enables organizations to:
 
 Current release note:
 - Chat and direct-messaging features are currently disabled in both SPA navigation and API routes.
+- Two-factor authentication (TOTP) is available for all users.
+- Webhook integrations, project templates, sprints, custom fields, Kanban boards, and task comments are available as of v5.0.
+- User import (CSV bulk upload) and notification preferences are supported.
 
 ### 1.3 Definitions and Key Terms
 
@@ -101,6 +104,8 @@ mindmap
       Progress Tracking
       Approval Workflow
       Gantt Visualization
+      Project Templates
+      Sprints
     Task Management
       Task Assignment
       Progress Updates
@@ -108,22 +113,32 @@ mindmap
       Completion Reports
       Review & Approval
       Blocker Tracking
+      Task Comments
+      Kanban Board
     Financial Management
       Budget Requests
       Approval Workflow
       Expense Tracking
       Financial Reports
       PDF/Excel Export
+      Budget Variance
     User Management
       Role Assignment
       Department Access
       Profile Management
       Password Recovery
+      Two-Factor Auth
+      User Import (CSV)
     Compliance & Audit
       Immutable Audit Logs
       Action Tracking
       Export Reports
       Sensitive Flagging
+    Integrations
+      Webhooks
+      Custom Fields
+      Dashboard Widgets
+      Notification Preferences
 ```
 
 ### 2.3 Key Business Benefits
@@ -144,7 +159,7 @@ mindmap
 | Backend Framework | Laravel | 11.x |
 | Backend Language | PHP | 8.2+ |
 | Frontend Framework | React | 18.x |
-| Build Tool | Vite | 5.x |
+| Build Tool | Vite | 7.x |
 | CSS Framework | Tailwind CSS | 3.x |
 | Database | MySQL / PostgreSQL | 8.0 / 15.x |
 | Containerization | Docker | 24.x |
@@ -390,6 +405,144 @@ The **Gantt Chart** provides visual timeline representation of project items and
 | Completion Handover | Project completion and handover |
 | Analytics/KPI | Key performance indicators |
 
+### 4.9 Task Comments
+
+**Task Comments** provide discussion threads on individual tasks.
+
+| Feature | Description |
+|---------|-------------|
+| Threaded Replies | Support for parent-child comment threads |
+| Owner Editing | Comment authors can edit their own comments |
+| Superadmin Moderation | Superadmin can delete any comment |
+| Project Access Control | Comments restricted to users with task/project access |
+
+### 4.10 Two-Factor Authentication
+
+**TOTP-based two-factor authentication** adds an extra security layer.
+
+| Feature | Description |
+|---------|-------------|
+| TOTP Standard | RFC 6238 Time-based One-Time Password |
+| QR Code Setup | Generate QR code for authenticator apps |
+| 6-Digit Codes | 30-second window with ±1 step tolerance |
+| Password-Protected Disable | Requires password to disable 2FA |
+
+### 4.11 Project Templates
+
+**Project Templates** allow reusing project configurations.
+
+| Feature | Description |
+|---------|-------------|
+| Template Creation | Save project structure as reusable template |
+| Task Templates | Include predefined tasks within templates |
+| Instantiation | Create new projects from templates with tasks auto-generated |
+
+### 4.12 Sprints
+
+**Sprints** enable agile-style iteration planning within projects.
+
+| Feature | Description |
+|---------|-------------|
+| Sprint Creation | Define time-boxed iterations for projects |
+| Task Assignment | Assign tasks to specific sprints |
+| Sprint Tracking | Track sprint progress and status |
+
+### 4.13 Custom Fields
+
+**Custom Fields** allow extending entity data without schema changes.
+
+| Feature | Description |
+|---------|-------------|
+| Entity Types | Configurable for projects and tasks |
+| Field Types | Text, number, date, select, and other types |
+| Value Storage | JSON-based flexible value storage |
+
+### 4.14 Kanban Board
+
+**Kanban Board** provides visual task management using drag-and-drop columns.
+
+| Feature | Description |
+|---------|-------------|
+| Column Layout | Tasks organized by status (Todo, In Progress, Review, Completed) |
+| Visual Cards | Task cards with priority, assignee, and due date |
+
+### 4.15 Webhooks
+
+**Webhooks** enable external system integrations via HTTP callbacks.
+
+| Feature | Description |
+|---------|-------------|
+| Event Subscription | Subscribe to specific system events |
+| HMAC Signatures | SHA-256 payload signing for verification |
+| Delivery Logs | Track webhook delivery status and responses |
+| Secret Regeneration | Regenerate signing secrets on demand |
+
+### 4.16 Dashboard Widgets
+
+**Dashboard Widgets** allow users to customize their dashboard layout.
+
+| Feature | Description |
+|---------|-------------|
+| User-Specific | Each user controls their own widget layout |
+| Reordering | Drag-and-drop widget arrangement |
+| Multiple Types | Various widget types for different data views |
+
+### 4.17 User Import
+
+**User Import** supports bulk user creation from CSV files.
+
+| Feature | Description |
+|---------|-------------|
+| CSV Upload | Upload CSV file with user data |
+| Validation | Row-level validation with error reporting |
+| Duplicate Detection | Skip rows with duplicate email addresses |
+| Password Policy | Imported users must change password on first login |
+
+### 4.18 Notification Preferences
+
+**Notification Preferences** give users control over their notification settings.
+
+| Feature | Description |
+|---------|-------------|
+| Per-Type Control | Enable/disable specific notification types |
+| User-Specific | Each user manages their own preferences |
+
+### 4.19 Workload & Resource Utilization
+
+**Workload View** provides resource management insights.
+
+| Feature | Description |
+|---------|-------------|
+| Team Overview | Visualize workload distribution across team members |
+| Utilization Metrics | Track resource allocation and availability |
+
+### 4.20 Budget Variance
+
+**Budget Variance** provides financial analysis and burn rate tracking.
+
+| Feature | Description |
+|---------|-------------|
+| Variance Analysis | Compare planned vs actual spending |
+| Burn Rate | Track spending velocity over time |
+
+### 4.21 Activity Feed
+
+**Activity Feed** provides a global view of recent system activity.
+
+| Feature | Description |
+|---------|-------------|
+| Global Feed | Chronological stream of system-wide activities |
+| Filterable | Filter by project, user, or activity type |
+
+### 4.22 Media Versioning
+
+**Media Versions** track file revisions over time.
+
+| Feature | Description |
+|---------|-------------|
+| Version History | Maintain previous versions of uploaded files |
+| Version Download | Download specific file versions |
+
 ---
 
 ## 5. User Roles and Permissions
@@ -491,18 +644,18 @@ project-app/
 │   │   └── Department.php          # Department enum with permissions
 │   ├── Http/
 │   │   ├── Controllers/
-│   │   │   └── Api/                # API controllers (20 controllers)
-│   │   └── Middleware/             # Custom middleware (4 files)
-│   ├── Models/                     # Eloquent models (20 models)
-│   ├── Notifications/              # Laravel notifications
+│   │   │   └── Api/                # API controllers (34 controllers)
+│   │   └── Middleware/             # Custom middleware (3 files)
+│   ├── Models/                     # Eloquent models (27 models)
+│   ├── Notifications/              # Laravel notifications (5 classes)
 │   ├── Providers/                  # Service providers
-│   └── Services/                   # Business logic services (5 services)
+│   └── Services/                   # Business logic services (6 services)
 ├── bootstrap/
 │   └── app.php                     # Middleware registration
 ├── config/                         # Configuration files
 ├── database/
 │   ├── factories/                  # Model factories
-│   ├── migrations/                 # Database migrations (48 files)
+│   ├── migrations/                 # Database migrations (67 files)
 │   └── seeders/                    # Database seeders
 ├── public/                         # Public assets
 ├── resources/
@@ -528,24 +681,40 @@ project-app/
 
 | Controller | Purpose | Key Methods |
 |------------|---------|-------------|
-| `AuthController` | Authentication | login, me, changePassword, verifyRecovery, resetPasswordOffline |
-| `UserController` | User management | index, store, update, destroy, uploadPhoto, regenerateRecovery |
-| `ProjectController` | Project CRUD | index, store, update, destroy |
+| `ActivityFeedController` | Global activity feed | index |
+| `AuthController` | Authentication | login, login2fa, me, changePassword, verifyRecovery, resetPasswordOffline |
+| `AuditLogController` | Audit viewing | index, indexForProject, exportPdf, exportSheet |
+| `BudgetRequestController` | Budget management | index, store, update, destroy, report, exportPdf, exportSheet |
+| `BudgetVarianceController` | Budget variance analysis | index |
+| `BulkOperationController` | Bulk task/budget ops | updateTaskStatus, assignTasks, updateBudgetStatus |
+| `CustomFieldController` | Custom fields | index, store, update, destroy, getValues, setValues |
+| `DashboardController` | Dashboard stats | stats |
+| `DashboardWidgetController` | Dashboard widgets | index, store, update, destroy, reorder |
+| `GanttController` | Gantt chart | index, store, update, destroy, move, indexDependencies, storeDependency, destroyDependency, exportPdf, exportSheet |
+| `IssueController` | Issue tracking | index, store, update, destroy |
+| `MediaController` | File management | index, store, destroy, download, serve |
+| `MediaVersionController` | Media versioning | index, store, download |
+| `NotificationController` | Notifications | index, markAsRead, markAllAsRead, getPreferences, updatePreferences |
 | `ProjectApprovalController` | Approval workflow | transition, history |
+| `ProjectController` | Project CRUD | index, store, update, destroy, exportPdf, exportSheet |
+| `ProjectFormController` | Form submissions | index, store, update |
+| `ProjectTemplateController` | Project templates | index, store, update, destroy, instantiate |
+| `SprintController` | Sprint management | index, store, update, destroy |
+| `SystemSettingsController` | System config | getAuditLogRetention, updateAuditLogRetention |
+| `TaskActivityController` | Activity timeline | index |
+| `TaskBlockerController` | Blocker management | index, store, update, destroy |
+| `TaskCommentController` | Task comments | index, store, update, destroy |
+| `TaskCompletionController` | Completion workflow | index, store, update |
 | `TaskController` | Task CRUD | index, store, update, destroy |
 | `TaskProgressLogController` | Progress tracking | show, update |
-| `TaskTimeLogController` | Time logging | index, store, update, destroy |
-| `TaskCompletionController` | Completion workflow | index, store, update |
 | `TaskReviewController` | Review workflow | index, store, update |
-| `TaskBlockerController` | Blocker management | index, store, update, destroy |
-| `TaskActivityController` | Activity timeline | index |
-| `BudgetRequestController` | Budget management | index, store, update, destroy, report, exportPdf, exportSheet |
-| `GanttController` | Gantt chart | index, store, update, destroy, move, indexDependencies, storeDependency, destroyDependency |
-| `MediaController` | File management | index, store, destroy, download, serve |
-| `IssueController` | Issue tracking | index, store, update, destroy |
-| `ProjectFormController` | Form submissions | index, store, update |
-| `AuditLogController` | Audit viewing | index, indexForProject, exportPdf, exportSheet |
-| `SystemSettingsController` | System config | getAuditLogRetention, updateAuditLogRetention |
+| `TaskTimeLogController` | Time logging | index, store, update, destroy |
+| `TimeLogController` | Legacy time logging | index, store, destroy |
+| `TwoFactorController` | Two-factor auth | status, setup, verify, disable |
+| `UserController` | User management | index, store, update, destroy, uploadPhoto, servePhoto, updateProfile, updatePassword, regenerateRecovery |
+| `UserImportController` | User CSV import | import |
+| `WebhookController` | Webhook management | index, store, update, destroy, logs, regenerateSecret |
+| `WorkloadController` | Workload view | index |
 
 #### 6.2.2 Services
 
@@ -556,6 +725,7 @@ project-app/
 | `ProjectSerialService` | Serial generation | Unique serial creation with concurrency safety |
 | `GanttVisibilityService` | Gantt permissions | Role and assignment-based visibility checks |
 | `TaskActivityLogger` | Task activity | Human-readable activity descriptions for UI timeline |
+| `WebhookService` | Webhook dispatch | Event-based HTTP callbacks with HMAC-SHA256 signatures |
 
 #### 6.2.3 Middleware
 
@@ -564,7 +734,6 @@ project-app/
 | `EnsureApiAuthenticated` | `auth.api` | Validate session, check account status |
 | `EnsureRole` | `role` | Validate user has required role |
 | `EnsureDepartment` | `department` | Validate user in allowed department |
-| `HandleInertiaRequests` | - | Inertia.js SSR integration |
 
 ### 6.3 Frontend Architecture
 
@@ -645,11 +814,14 @@ All frontend-to-backend communication is handled through a centralized fetch wra
 - MonitorControlPage - Project monitoring
 - BudgetApprovalsPage - Budget approval workflow
 - BudgetReportPage - Financial reporting
+- BudgetVariancePage - Budget variance and burn rate analysis
 - TeamManagementPage - User management
 - ReportsMediaPage - Media management
 - TaskReviewsPage - Task review workflow
 - AuditLogPage - Audit log viewing
 - ArchivePage - Archived items
+- ActivityFeedPage - Global activity feed
+- WorkloadPage - Resource utilization view
 
 **Employee Pages:**
 - EmployeeDashboard - Personal dashboard
@@ -659,6 +831,13 @@ All frontend-to-backend communication is handled through a centralized fetch wra
 - LogTimePage - Time logging
 - ReportIssuePage - Issue reporting
 - ResourcesPage - Resource access
+- KanbanPage - Kanban board task management
+
+**Shared Pages:**
+- LoginPage - Authentication
+- ForgotPasswordPage - Password recovery
+- CalendarPage - Calendar view
+- SettingsPage - User settings and preferences
 
 #### 6.3.3 Component Hierarchy
 
@@ -918,9 +1097,21 @@ erDiagram
     tasks ||--o{ task_reviews : "receives"
     tasks ||--o{ task_blockers : "has"
     tasks ||--o{ task_activity_logs : "tracks"
+    tasks ||--o{ task_comments : "discusses"
     
     gantt_items ||--o{ gantt_dependencies : "predecessor"
     gantt_items ||--o{ gantt_items : "parent"
+    
+    projects ||--o{ sprints : "has"
+    sprints ||--o{ tasks : "contains"
+
+    project_templates ||--o{ task_templates : "includes"
+
+    custom_fields ||--o{ custom_field_values : "stores"
+
+    media ||--o{ media_versions : "versioned"
+
+    webhooks ||--o{ webhook_logs : "logs"
     
     users {
         bigint id PK
@@ -1213,6 +1404,142 @@ The `projects` and `tasks` tables support soft deletes via Laravel's `SoftDelete
 - 7 form types (details, planning, progress, issues, approval, completion, KPI)
 - Submission and review workflow
 - Status tracking (submitted → reviewed → approved/rejected)
+- Project team access control (employees can only submit forms for projects they belong to)
+
+### 11.10 Task Comments Module
+
+**Purpose:** Discussion threads on individual tasks
+
+**Components:**
+- `TaskCommentController` - Comment CRUD
+- `TaskComment` model - Comment data with parent-child threading
+
+**Key Features:**
+- Threaded replies (parent_id for nested discussions)
+- Owner-only editing with superadmin moderation
+- Task/project access validation for employees
+
+### 11.11 Two-Factor Authentication Module
+
+**Purpose:** TOTP-based two-factor authentication
+
+**Components:**
+- `TwoFactorController` - 2FA setup/verify/disable
+- User model fields: `two_factor_secret`, `two_factor_enabled`, `two_factor_confirmed_at`
+
+**Key Features:**
+- RFC 6238 TOTP with 20-byte base32 secret
+- QR code URI generation for authenticator apps
+- 6-digit codes with 30-second window (±1 step tolerance)
+- Password-required disable flow
+
+### 11.12 Project Templates Module
+
+**Purpose:** Reusable project configurations
+
+**Components:**
+- `ProjectTemplateController` - Template CRUD + instantiation
+- `ProjectTemplate` model - Template data
+- `TaskTemplate` model - Template task definitions
+
+**Key Features:**
+- Create templates with predefined task lists
+- Instantiate new projects from templates
+- Tasks auto-created from template definitions
+
+### 11.13 Sprint Module
+
+**Purpose:** Agile iteration planning
+
+**Components:**
+- `SprintController` - Sprint CRUD
+- `Sprint` model - Sprint data with project association
+
+**Key Features:**
+- Create sprints within projects
+- Assign tasks to sprints via `sprint_id` foreign key
+- Track sprint status and progress
+
+### 11.14 Custom Fields Module
+
+**Purpose:** Extensible entity attributes
+
+**Components:**
+- `CustomFieldController` - Field definition and value management
+- `CustomField` model - Field definitions
+- `CustomFieldValue` model - Field values
+
+**Key Features:**
+- Define custom fields for projects and tasks
+- Multiple field types supported
+- JSON-based flexible value storage
+
+### 11.15 Webhook Module
+
+**Purpose:** External system integration via HTTP callbacks
+
+**Components:**
+- `WebhookController` - Webhook management
+- `WebhookService` - Event dispatch and payload delivery
+- `Webhook` model - Endpoint configurations
+- `WebhookLog` model - Delivery tracking
+
+**Key Features:**
+- Event-based subscription system
+- HMAC-SHA256 payload signing with 40-char secrets
+- Delivery logging with HTTP status tracking
+- Active/inactive toggle and secret regeneration
+
+### 11.16 Dashboard Widgets Module
+
+**Purpose:** Customizable user dashboards
+
+**Components:**
+- `DashboardWidgetController` - Widget CRUD + reorder
+- `DashboardWidget` model - Widget configuration
+
+**Key Features:**
+- User-specific widget layouts
+- Drag-and-drop reordering
+- Multiple widget types
+
+### 11.17 User Import Module
+
+**Purpose:** Bulk user creation from CSV
+
+**Components:**
+- `UserImportController` - CSV import endpoint
+
+**Key Features:**
+- CSV file upload with header validation
+- Row-level validation and error reporting
+- Duplicate email detection
+- Imported users flagged for mandatory password change
+
+### 11.18 Media Versioning Module
+
+**Purpose:** File revision tracking
+
+**Components:**
+- `MediaVersionController` - Version management
+- `MediaVersion` model - Version storage
+
+**Key Features:**
+- Upload new versions of existing files
+- Version history browsing
+- Individual version download
+
+### 11.19 Bulk Operations Module
+
+**Purpose:** Batch actions for efficiency
+
+**Components:**
+- `BulkOperationController` - Batch endpoints
+
+**Key Features:**
+- Bulk task status update (with project access validation)
+- Bulk task assignment (with project access validation)
+- Bulk budget request status update
 
 ---
 
@@ -1287,17 +1614,28 @@ graph TB
 💰 Budget
 ├── Budget Requests
 ├── Approvals
-└── Reports
+├── Reports
+└── Budget Variance
+
+📈 Activity Feed
 
 👥 Team Management (Superadmin)
 ├── User List
 ├── Create User
+├── Import Users (CSV)
 └── User Settings
 
 📜 Audit Logs (Superadmin)
 ├── Log Viewer
 ├── Filters
 └── Export
+
+🔧 Webhooks (Superadmin)
+├── Webhook List
+├── Create Webhook
+└── Delivery Logs
+
+📊 Workload View
 ```
 
 **Technical Users:**
@@ -1330,7 +1668,12 @@ graph TB
 │   ├── Progress Update
 │   ├── Time Log
 │   ├── Submit Completion
-│   └── Report Blocker
+│   ├── Report Blocker
+│   └── Task Comments
+
+📋 Kanban Board
+├── Visual Task Cards
+└── Status Columns
 
 📈 View Gantt (Read-Only)
 
@@ -1341,6 +1684,10 @@ graph TB
 ⏱️ Log Time
 📝 Report Issue
 📁 Resources
+⚙️ Settings
+├── Profile
+├── Two-Factor Auth
+└── Notification Preferences
 ```
 
 ### 12.3 Key UI Components
@@ -1352,12 +1699,22 @@ graph TB
 | `Sidebar` | Navigation menu (department-aware) |
 | `ProjectFormsPanel` | Multi-form project management with 7 form types |
 | `GanttItemForm` | Create/edit Gantt items with visibility settings |
+| `GanttCalendarView` | Calendar visualization for Gantt items |
+| `VisibilityEditor` | Gantt item visibility configuration |
+| `ApprovalActionModal` | Project approval workflow actions |
+| `TaskActivityTimeline` | Activity feed component for task history |
+| `TaskComments` | Threaded discussion on tasks |
 | `Modal` | Reusable modal dialog wrapper |
 | `Badge` | Status and priority indicators |
 | `ProgressBar` | Visual progress display |
 | `UserAvatar` | User profile photos |
+| `Pagination` | Page navigation for lists |
 | `LoadingSpinner` | Full-page loading indicator shown while data is being fetched |
 | `ErrorBoundary` | React error boundary catching runtime exceptions with a recovery UI |
+| `ChangePasswordModal` | Forced password change dialog |
+| `ProfilePhotoModal` | Profile photo upload dialog |
+| `OverdueWarningModal` | Overdue task warning notification |
+| `RetentionModal` | Audit log retention settings dialog |
 
 ### 12.4 Theme Support
 
@@ -1544,7 +1901,106 @@ GET    /api/audit-logs/export-pdf          # Export PDF
 GET    /api/audit-logs/export-sheet        # Export Excel
 ```
 
-### 13.10 Notification Endpoints
+### 13.10 Task Comment Endpoints
+
+```
+GET    /api/tasks/{id}/comments            # List task comments
+POST   /api/tasks/{id}/comments            # Create comment
+PUT    /api/tasks/{id}/comments/{comment}  # Update comment (owner only)
+DELETE /api/tasks/{id}/comments/{comment}  # Delete comment (owner or superadmin)
+```
+
+### 13.11 Two-Factor Authentication Endpoints
+
+```
+GET    /api/two-factor/status              # Check 2FA status
+POST   /api/two-factor/setup              # Generate TOTP secret and QR URI
+POST   /api/two-factor/verify             # Verify 6-digit code and enable 2FA
+POST   /api/two-factor/disable            # Disable 2FA (requires password)
+```
+
+### 13.12 Project Template Endpoints (Superadmin Only)
+
+```
+GET    /api/project-templates              # List templates
+POST   /api/project-templates              # Create template with tasks
+PUT    /api/project-templates/{id}         # Update template
+DELETE /api/project-templates/{id}         # Delete template
+POST   /api/project-templates/{id}/instantiate  # Create project from template
+```
+
+### 13.13 Sprint Endpoints
+
+```
+GET    /api/projects/{id}/sprints          # List sprints for project
+POST   /api/projects/{id}/sprints          # Create sprint
+PUT    /api/projects/{id}/sprints/{sprint} # Update sprint
+DELETE /api/projects/{id}/sprints/{sprint} # Delete sprint
+```
+
+### 13.14 Custom Field Endpoints
+
+```
+GET    /api/custom-fields                  # List custom field definitions
+POST   /api/custom-fields                  # Create custom field (Superadmin)
+PUT    /api/custom-fields/{field}          # Update custom field
+DELETE /api/custom-fields/{field}          # Delete custom field
+GET    /api/custom-field-values/{entityType}/{entityId}  # Get field values
+POST   /api/custom-field-values/{entityType}/{entityId}  # Set field values
+```
+
+### 13.15 Webhook Endpoints (Superadmin Only)
+
+```
+GET    /api/webhooks                       # List webhooks
+POST   /api/webhooks                       # Create webhook
+PUT    /api/webhooks/{id}                  # Update webhook
+DELETE /api/webhooks/{id}                  # Delete webhook
+GET    /api/webhooks/{id}/logs             # Get delivery logs (last 50)
+POST   /api/webhooks/{id}/regenerate-secret # Regenerate HMAC secret
+```
+
+### 13.16 Dashboard Widget Endpoints
+
+```
+GET    /api/dashboard-widgets              # List user's widgets
+POST   /api/dashboard-widgets              # Create widget
+PUT    /api/dashboard-widgets/{widget}     # Update widget
+DELETE /api/dashboard-widgets/{widget}     # Delete widget
+POST   /api/dashboard-widgets/reorder      # Reorder widgets
+```
+
+### 13.17 Media Version Endpoints
+
+```
+GET    /api/media/{id}/versions            # List versions for media file
+POST   /api/media/{id}/versions            # Upload new version
+GET    /api/media/{id}/versions/{version}/download  # Download specific version
+```
+
+### 13.18 Bulk Operation Endpoints
+
+```
+POST   /api/bulk/tasks/status              # Bulk update task status (Admin/Technical)
+POST   /api/bulk/tasks/assign              # Bulk assign tasks (Admin/Technical)
+POST   /api/bulk/budget-requests/status    # Bulk update budget status (Accounting)
+```
+
+### 13.19 User Import Endpoint (Superadmin Only)
+
+```
+POST   /api/users/import                   # Import users from CSV
+```
+
+### 13.20 Utility Endpoints
+
+```
+GET    /api/activity-feed                  # Global activity feed
+GET    /api/workload                       # Team workload view
+GET    /api/budget-variance                # Budget variance analysis
+```
+
+### 13.21 Notification Endpoints
 
 ```
 GET    /api/notifications                   # List notifications (latest 50)
@@ -1561,7 +2017,7 @@ Notification types:
 
 All notification classes implement `ShouldQueue` for asynchronous processing via the database queue driver.
 
-### 13.11 System Settings Endpoints (Superadmin Only)
+### 13.22 System Settings Endpoints (Superadmin Only)
 
 ```
 GET    /api/settings/audit-log-retention    # Get audit log retention setting
@@ -1570,7 +2026,7 @@ PUT    /api/settings/audit-log-retention    # Update audit log retention setting
 
 System settings are stored in a dedicated `system_settings` table using the `SystemSetting` model (key-value store with `getValue()`/`setValue()` static helpers).
 
-### 13.12 Response Format
+### 13.23 Response Format
 
 **Success Response:**
 ```json
@@ -1619,6 +2075,8 @@ System settings are stored in a dedicated `system_settings` table using the `Sys
 | Rate Limiting | Login: 10 attempts/minute; Password change: 5 attempts/15 minutes |
 | Session Expiry Handling | Global 401 detection via `apiFetch` redirects to login |
 | Server-Side Logout | Session invalidated + CSRF token regenerated on logout |
+| Two-Factor Auth | TOTP (RFC 6238) with authenticator app support; 6-digit codes, 30s window |
+| 2FA Login Flow | Login returns `two_factor_required` flag; second call with code completes auth |
 
 ### 14.2 Authorization Security
 
@@ -1723,12 +2181,15 @@ window.Echo = new Echo({
 | Browser Tests | E2E workflows | Future |
 
 **Current Coverage:**
-- 29 tests, 95 assertions
-- Authentication (login, logout, registration, password reset/update)
-- Email verification
-- Profile management
-- Budget approval flow (multi-stage)
+- 43 tests, 140 assertions
+- Authentication (login, logout, password reset)
+- Budget approval flow (multi-stage: accounting → supervisor → superadmin)
 - Project finish notification (supervisor + superadmin + legacy admin)
+- Project templates (CRUD, instantiation, access control)
+- Task comments (CRUD, threading, ownership, superadmin moderation)
+- Two-factor authentication (setup, verify, disable, status)
+- User import (CSV upload, validation, duplicates, role enforcement)
+- Webhooks (CRUD, auto-secrets, delivery logs, events, access control)
 
 ### 16.2 Test Configuration
 
@@ -1844,6 +2305,7 @@ FILESYSTEM_DISK=local
 | Command | Schedule | Purpose |
 |---------|----------|---------|
 | `tasks:notify-overdue` | Daily at 08:00 | Sends notifications for tasks past their end date with deduplication (won't re-notify the same day) |
+| `digest:send-daily` | Daily | Sends daily digest emails summarizing activity |
 
 **Queue Worker:** Notifications implement `ShouldQueue` and require a running queue worker:
 ```bash
@@ -1948,12 +2410,22 @@ php artisan migrate:status
 | `task_reviews` | Review and approval records |
 | `task_blockers` | Blocker/issue tracking |
 | `task_activity_logs` | Activity timeline |
+| `task_comments` | Task discussion threads |
 | `budget_requests` | Budget request records |
 | `gantt_items` | Gantt chart items |
 | `gantt_dependencies` | Item dependencies |
 | `media` | File attachments |
+| `media_versions` | File version history |
 | `issues` | Project issues/risks |
 | `project_form_submissions` | Form submissions |
+| `project_templates` | Reusable project templates |
+| `task_templates` | Task templates within project templates |
+| `sprints` | Agile sprint iterations |
+| `custom_fields` | User-defined field definitions |
+| `custom_field_values` | Custom field data storage |
+| `webhooks` | Webhook endpoint configurations |
+| `webhook_logs` | Webhook delivery history |
+| `dashboard_widgets` | User dashboard widget layout |
 | `audit_logs` | Immutable audit trail |
 | `system_settings` | Key-value configuration store |
 | `notifications` | Laravel notification records |
@@ -2104,9 +2576,12 @@ The sidebar shows different options based on your role and department:
 - Dashboard
 - Projects
 - Gantt Charts
-- Budget
+- Budget (Approvals, Reports, Variance)
+- Activity Feed
+- Workload
 - Team Management (Superadmin only)
 - Audit Logs (Superadmin only)
+- Webhooks (Superadmin only)
 
 **Technical Users:**
 - Dashboard
@@ -2119,16 +2594,19 @@ The sidebar shows different options based on your role and department:
 - Dashboard
 - Budget Approvals
 - Budget Report
+- Budget Variance
 - Accounting Review
 
 **Employee Users:**
 - My Dashboard
 - My Tasks
+- Kanban Board
 - View Gantt
 - Budget Request
 - Log Time
 - Report Issue
 - Resources
+- Settings
 
 ### 23.5 Project Management
 
@@ -2628,7 +3106,86 @@ The sidebar shows different options based on your role and department:
 - Theme switches immediately
 - Preference saved to browser
 
-### 23.13 Troubleshooting
+### 23.13 Two-Factor Authentication
+
+#### 23.13.1 Setting Up 2FA
+
+**User Action:** Enable two-factor authentication for extra security.
+
+**Steps:**
+1. Navigate to **Settings** or **Security**
+2. Click **Set Up Two-Factor Authentication**
+3. Scan the **QR code** with your authenticator app (Google Authenticator, Authy, etc.)
+4. Enter the **6-digit code** shown in your authenticator app
+5. Click **Verify**
+
+**System Response:**
+- 2FA enabled for your account
+- Future logins will require a code from your authenticator app
+
+#### 23.13.2 Logging In with 2FA
+
+**Steps:**
+1. Enter email and password as usual
+2. When prompted, enter the **6-digit code** from your authenticator app
+3. Click **Verify**
+
+**System Response:**
+- If code is valid, you are logged in
+- If invalid, error is shown (codes rotate every 30 seconds)
+
+#### 23.13.3 Disabling 2FA
+
+**Steps:**
+1. Navigate to **Settings** → **Security**
+2. Click **Disable Two-Factor Authentication**
+3. Enter your **password** to confirm
+4. Click **Disable**
+
+**System Response:**
+- 2FA disabled
+- Future logins require only email and password
+
+### 23.14 Task Comments
+
+#### 23.14.1 Viewing Task Comments
+
+**User Action:** Read discussion threads on a task.
+
+**Steps:**
+1. Open a task detail page
+2. Navigate to the **Comments** section
+3. View threaded discussion list
+
+#### 23.14.2 Adding a Comment
+
+**Steps:**
+1. Open a task detail page
+2. Navigate to the **Comments** section
+3. Type your **comment** in the text field
+4. Optionally select a comment to **Reply** to (for threaded discussion)
+5. Click **Post Comment**
+
+**System Response:**
+- Comment added to the task
+- Visible to all users with access to the task
+
+#### 23.14.3 Editing/Deleting a Comment
+
+**Steps:**
+- **Edit**: Click the edit icon on your own comment, modify text, save
+- **Delete**: Click the delete icon (available for your own comments, or any comment if you are Superadmin)
+
+### 23.15 Kanban Board
+
+**User Action:** View and manage tasks visually.
+
+**Steps:**
+1. Navigate to **Kanban Board** in sidebar
+2. View tasks organized in columns by status: Todo, In Progress, Review, Completed
+3. Tasks display as cards with priority, assignee, and due date information
+
+### 23.16 Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
@@ -2640,7 +3197,7 @@ The sidebar shows different options based on your role and department:
 | Cannot submit project | Ensure project completion prerequisites are met for your approval action (employee submit/resubmit requires all tasks complete). |
 | Missing navigation options | Check your role and department permissions. |
 
-### 23.14 Getting Help
+### 23.17 Getting Help
 
 For additional assistance:
 - Contact your system administrator
@@ -2660,6 +3217,8 @@ For additional assistance:
 | 4.0 | 2026-04-13 | IT Team | API-backed state, security hardening, apiFetch, ShouldQueue notifications, FK cascade fixes |
 | 4.1 | 2026-04-14 | IT Team | 5-step project creation wizard, 9 new project fields, stakeholder tracking |
 | 4.2 | 2026-04-14 | IT Team | Edit modal with wizard fields, project timestamps, audit log formatting, API request/response docs |
+| 4.3 | 2026-04-15 | IT Team | Task comments, project templates, sprints, custom fields, media versions, webhooks, dashboard widgets, 2FA, user import, notification preferences, bulk operations, Kanban board, workload, budget variance, activity feed |
+| 5.0 | 2026-04-16 | IT Team | Comprehensive documentation update: 34 controllers, 27 models, 6 services, 67 migrations, 43 tests. Added all new feature documentation, updated architecture sections, security audit fixes (task comment access control, bulk operation authorization, form submission access checks) |
 
 ---
 

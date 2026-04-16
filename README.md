@@ -8,7 +8,7 @@ A web-based project management application for managing projects, tasks, budgets
 |-------|------------|
 | Backend | Laravel 11 (PHP 8.2+) |
 | Frontend | React 18 + TypeScript |
-| Build | Vite 5 |
+| Build | Vite 7 |
 | Styling | Tailwind CSS 3 |
 | Database | PostgreSQL / MySQL |
 | Auth | Session-based (database driver) |
@@ -25,6 +25,20 @@ A web-based project management application for managing projects, tasks, budgets
 - **Audit Logging** — Immutable, append-only audit trail for compliance (project approvals, budget changes, exports, config updates)
 - **Notifications** — Queued notifications for budget approvals, task reviews, blockers, and overdue tasks
 - **Role-Based Access** — Superadmin, Supervisor, and Employee roles with department-based permissions (Admin, Technical, Accounting, Employee)
+- **Task Comments** — Threaded comments on tasks with reply support
+- **Project Templates** — Create projects from reusable templates
+- **Sprints** — Sprint-based task organization and tracking
+- **Custom Fields** — User-defined custom fields on projects and tasks
+- **Kanban Board** — Drag-and-drop task board view
+- **Two-Factor Authentication** — TOTP-based 2FA for enhanced security
+- **User Import** — Bulk user creation via CSV upload
+- **Webhooks** — External system integration via configurable webhooks
+- **Media Versioning** — File version tracking with history
+- **Dashboard Widgets** — Configurable dashboard with widget preferences
+- **Bulk Operations** — Mass task status updates and assignments
+- **Workload Management** — Team capacity and workload visualization
+- **Budget Variance** — Budget vs. actual cost analysis
+- **Activity Feed** — Real-time project activity timeline
 
 ## Prerequisites
 
@@ -73,7 +87,9 @@ Register the Laravel scheduler in your system crontab:
 * * * * * cd /path-to-project && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-This runs the `tasks:notify-overdue` command daily at 08:00 to send overdue task notifications.
+This runs:
+- `tasks:notify-overdue` — Daily at 08:00, sends overdue task notifications
+- `projects:cleanup-old` — Weekly, archives old completed projects
 
 ## Environment Variables
 
@@ -91,12 +107,15 @@ Key variables to configure in `.env`:
 
 ```
 app/
-├── Console/Commands/       # Artisan commands (NotifyOverdueTasks)
+├── Console/Commands/       # Artisan commands (NotifyOverdueTasks, CleanupOldProjects)
 ├── Enums/                  # PHP enums (ApprovalStatus, Department)
-├── Http/Controllers/Api/   # API controllers
-├── Models/                 # Eloquent models
-├── Notifications/          # Queued notification classes
-└── Services/               # Business logic (AuditService, TaskActivityLogger)
+├── Events/                 # Broadcasting events
+├── Http/Controllers/Api/   # 34 API controllers
+├── Jobs/                   # Queue jobs
+├── Models/                 # 27 Eloquent models
+├── Notifications/          # 5 queued notification classes
+├── Providers/              # Service providers
+└── Services/               # 6 services (AuditService, TaskActivityLogger, GanttExportService, etc.)
 
 resources/js/project-management/
 ├── context/AppContext.tsx   # Central state management & API calls
@@ -123,7 +142,7 @@ resources/js/project-management/
 
 ## Documentation
 
-Comprehensive system documentation is available at [`docs/SYSTEM_DOCUMENTATION.md`](docs/SYSTEM_DOCUMENTATION.md) (v4.2), covering:
+Comprehensive system documentation is available at [`docs/SYSTEM_DOCUMENTATION.md`](docs/SYSTEM_DOCUMENTATION.md) (v5.0), covering:
 
 - System architecture and data models
 - API endpoint reference

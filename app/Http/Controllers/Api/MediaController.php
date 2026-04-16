@@ -33,7 +33,10 @@ class MediaController extends Controller
             $query->where('uploaded_by', $request->input('uploaded_by'));
         }
 
+        // Exclude binary file_data from listing queries for performance
+        $columns = ['id', 'project_id', 'task_id', 'uploaded_by', 'type', 'title', 'content', 'file_path', 'file_mime', 'original_filename', 'file_size', 'visible_to', 'created_at', 'updated_at'];
         $media = $query->with(['project', 'task', 'uploader'])
+            ->select($columns)
             ->orderByDesc('created_at')
             ->limit(500)
             ->get()
@@ -73,13 +76,17 @@ class MediaController extends Controller
         $filePath = null;
         $originalFilename = null;
         $fileSize = null;
+        $fileData = null;
+        $fileMime = null;
 
         if ($request->hasFile('file')) {
             $uploadedFile = $request->file('file');
-            $filePath = $uploadedFile->store('media', 'public');
+            $filePath = 'media/' . uniqid() . '_' . $uploadedFile->getClientOriginalName();
             $originalFilename = $uploadedFile->getClientOriginalName();
             $bytes = $uploadedFile->getSize();
             $fileSize = $this->formatBytes($bytes);
+            $fileData = file_get_contents($uploadedFile->getRealPath());
+            $fileMime = $uploadedFile->getMimeType();
         }
 
         // Parse visible_to from comma-separated string to array of valid user IDs
@@ -104,6 +111,8 @@ class MediaController extends Controller
             'title'             => $data['title'],
             'content'           => $data['content'] ?? '',
             'file_path'         => $filePath,
+            'file_data'         => $fileData,
+            'file_mime'         => $fileMime,
             'original_filename' => $originalFilename,
             'file_size'         => $fileSize,
             'visible_to'        => $visibleTo,
@@ -142,8 +151,8 @@ class MediaController extends Controller
             ], 403);
         }
 
-        // Delete the physical file if it exists
-        if ($medium->file_path) {
+        // Delete the physical file if it exists (legacy local disk files)
+        if ($medium->file_path && !$medium->file_data) {
             Storage::disk('public')->delete($medium->file_path);
         }
 
@@ -159,6 +168,15 @@ class MediaController extends Controller
     {
         $this->authorizeMediaAccess($medium);
 
+        // Serve from DB storage
+        if ($medium->file_data) {
+            $filename = $medium->original_filename ?? basename($medium->file_path ?? 'download');
+            return response($medium->file_data)
+                ->header('Content-Type', $medium->file_mime ?? 'application/octet-stream')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        }
+
+        // Fallback: legacy local disk files
         if (!$medium->file_path || !Storage::disk('public')->exists($medium->file_path)) {
             return response()->json(['error' => 'File not found'], 404);
         }
@@ -176,6 +194,14 @@ class MediaController extends Controller
     {
         $this->authorizeMediaAccess($medium);
 
+        // Serve from DB storage
+        if ($medium->file_data) {
+            return response($medium->file_data)
+                ->header('Content-Type', $medium->file_mime ?? 'application/octet-stream')
+                ->header('Cache-Control', 'public, max-age=86400');
+        }
+
+        // Fallback: legacy local disk files
         if (!$medium->file_path || !Storage::disk('public')->exists($medium->file_path)) {
             return response()->json(['error' => 'File not found'], 404);
         }

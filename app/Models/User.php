@@ -27,6 +27,8 @@ class User extends Authenticatable
         'position',
         'status',
         'profile_photo',
+        'profile_photo_data',
+        'profile_photo_mime',
         'recovery_code',
         'must_change_password',
         'last_login_at',
@@ -47,6 +49,7 @@ class User extends Authenticatable
         'remember_token',
         'recovery_code',
         'two_factor_secret',
+        'profile_photo_data',
     ];
 
     /**
