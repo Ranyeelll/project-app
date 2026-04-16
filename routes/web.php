@@ -84,7 +84,7 @@ Route::prefix('api')->group(function () {
     Route::get('/users/{user}/photo', [UserController::class, 'servePhoto']);
 
     // Authenticated routes
-    Route::middleware(['auth.api', 'throttle:120,1'])->group(function () {
+    Route::middleware(['auth.api', 'throttle:300,1'])->group(function () {
         // Session bootstrap (any authenticated user)
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);

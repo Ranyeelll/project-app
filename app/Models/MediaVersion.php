@@ -19,6 +19,8 @@ class MediaVersion extends Model
         'change_note',
     ];
 
+    protected $hidden = ['file_data'];
+
     public function media(): BelongsTo
     {
         return $this->belongsTo(Media::class);

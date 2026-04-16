@@ -34,10 +34,7 @@ class MediaController extends Controller
             $query->where('uploaded_by', $request->input('uploaded_by'));
         }
 
-        // Exclude binary file_data from listing queries for performance
-        $columns = ['id', 'project_id', 'task_id', 'uploaded_by', 'type', 'title', 'content', 'file_path', 'file_mime', 'original_filename', 'file_size', 'visible_to', 'created_at', 'updated_at'];
         $media = $query->with(['project', 'task', 'uploader'])
-            ->select($columns)
             ->orderByDesc('created_at')
             ->limit(500)
             ->get()

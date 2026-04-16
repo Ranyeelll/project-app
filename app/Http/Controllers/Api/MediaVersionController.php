@@ -14,9 +14,7 @@ class MediaVersionController extends Controller
 {
     public function index(int $mediaId): JsonResponse
     {
-        // Exclude binary file_data from listing
         $versions = MediaVersion::where('media_id', $mediaId)
-            ->select(['id', 'media_id', 'version_number', 'file_path', 'file_mime', 'original_filename', 'file_size', 'uploaded_by', 'change_note', 'created_at', 'updated_at'])
             ->orderByDesc('version_number')
             ->get()
             ->map(fn ($v) => $this->formatVersion($v));

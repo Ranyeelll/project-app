@@ -31,6 +31,8 @@ class Media extends Model
         'visible_to'  => 'array',
     ];
 
+    protected $hidden = ['file_data'];
+
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
